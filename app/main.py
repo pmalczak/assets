@@ -1,16 +1,32 @@
-# This is a sample Python script.
+# -*- coding: utf-8 -*-
+__author__ = "pmalczak@gmail.com"
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+from pathlib import Path
+import pandas as pd
 
 
-# Press the green button in the gutter to run the script.
+def main(name):
+    my_data_path = Path().home() / 'Dropbox' / 'INWESTYCJE' / 'assets'
+    assert my_data_path.is_dir()
+
+    static_data_path = Path(__file__).parent.parent / 'assets'
+    assert static_data_path.is_dir()
+
+    f = my_data_path / 'assets.xlsx'
+    assert f.is_file()
+    assets = pd.read_excel(f)
+
+    print(assets)
+    return
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    pd.options.mode.copy_on_write = True
+    pd.options.future.infer_string = True
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 1000)
+    pd.set_option('display.colheader_justify', 'center')
+
+    main('PyCharm')
