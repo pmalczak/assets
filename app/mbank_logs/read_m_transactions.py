@@ -3,17 +3,12 @@ __author__ = 'pmalczak@gmail.com'
 from pathlib import Path
 import pandas as pd
 
-from m_bank_logs.data_model import mbank_file_structure
-from m_bank_logs.local_extract_csv_table import ForbiddenSign, NoData
-from m_bank_logs.local_read_csv_file import read_mbank_csv_file
+from mbank_logs.data_model import mbank_file_structure
+from mbank_logs.local_extract_csv_table import ForbiddenSign, NoData
+from mbank_logs.local_read_csv_file import read_mbank_csv_file
 
 
-def read_m_transactions(p: Path) -> pd.DataFrame:
-    result = read_all_csv_files(p)
-    return result
-
-
-def read_all_csv_files(input_path: Path) -> pd.DataFrame:
+def read_m_transactions(input_path: Path) -> pd.DataFrame:
     input_files = list(input_path.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=mbank_file_structure)

@@ -13,11 +13,11 @@ iban_mappings = {
     '91922600050051124530000010': 'Rozliczenia:PLN:Agata Kruk',
     '22114020040000390278255957': 'Rozliczenia:PLN:Ewa Cymbor',
 
-    '23114020040000350202832330': 'Aktywa:PLN:m_bank_logs:23 eKonto (karta 5896)',
-    '29114020040000390203424987': 'Aktywa:PLN:m_bank_logs:29 eMax FF',
-    '56114020040000350239788930': 'Aktywa:PLN:m_bank_logs:56 eMax FEG',
-    '43114020040000380239788920': 'Aktywa:PLN:m_bank_logs:43 eMax plus',
-    '34114020040000330239779142': 'Aktywa:PLN:m_bank_logs:34 eMax zakup',
+    '23114020040000350202832330': 'Aktywa:PLN:mbank_logs:23 eKonto (karta 5896)',
+    '29114020040000390203424987': 'Aktywa:PLN:mbank_logs:29 eMax FF',
+    '56114020040000350239788930': 'Aktywa:PLN:mbank_logs:56 eMax FEG',
+    '43114020040000380239788920': 'Aktywa:PLN:mbank_logs:43 eMax plus',
+    '34114020040000330239779142': 'Aktywa:PLN:mbank_logs:34 eMax zakup',
 
     '46114020040000310236992796': 'Aktywa:PLN:m_GM:46 eKonto',
     '23114020040000370241189039': 'Aktywa:PLN:m_GM:23 eMax Plus FEG',
@@ -34,7 +34,7 @@ iban_mappings = {
 
     '24188000090000001150613000': 'Aktywa:EUR:DEGIRO',
     '56114020040000371215483217': 'Aktywa:EUR:m_GM:56 eKonto',
-    '63114020040000381215513209': 'Aktywa:EUR:m_bank_logs:63 eKonto',
+    '63114020040000381215513209': 'Aktywa:EUR:mbank_logs:63 eKonto',
 }
 
 
