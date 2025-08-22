@@ -1,0 +1,44 @@
+# -*- coding: utf-8 -*-
+__author__ = 'pmalczak@gmail.com'
+from pathlib import Path
+import pandas as pd
+
+from m_bank_logs.data_model import mbank_file_structure
+from m_bank_logs.local_extract_csv_table import ForbiddenSign, NoData
+from m_bank_logs.local_read_csv_file import read_mbank_csv_file
+
+
+def read_m_transactions(p: Path) -> pd.DataFrame:
+    result = read_all_csv_files(p)
+    return result
+
+
+def read_all_csv_files(input_path: Path) -> pd.DataFrame:
+    input_files = list(input_path.glob('*.csv'))
+    if not input_files:
+        df = pd.DataFrame(data=None, columns=mbank_file_structure)
+        return df
+
+    forbidden_signs = []
+    result = []
+    for input_file in input_files:
+        try:
+            mbank_transactions = read_mbank_csv_file(input_file)
+        except ForbiddenSign as e:
+            m = f'plik:{input_file} \nznak \" w {e.args[0]}'
+            print(m)
+            forbidden_signs += [m]
+            continue
+
+        except NoData:
+            print(f'PLIK:{input_file}      brak danych ')
+            continue
+
+        print(f'PLIK:{input_file} {len(mbank_transactions):>4} rekord/ów')
+        result += [mbank_transactions]
+
+    if forbidden_signs:
+        raise ForbiddenSign(forbidden_signs)
+
+    result = pd.concat(result)
+    return result

@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+__author__ = 'pmalczak@gmail.com'
+
+import pandas as pd
+from pathlib import Path
+from io import StringIO
+import platform
+
+from m_bank_logs.data_model import MBANK_TITLE, MBANK_EFFECTIVE_DATE, MBANK_DEBIT_ACCOUNT, MBANK_TRANSACTION_DATE
+from m_bank_logs.data_model import MBANK_ACCOUNT_NUMBER, MBANK_DATA_FILE
+from m_bank_logs.data_model import mbank_file_structure
+from .local_extract_csv_table import extract_csv_table
+
+
+def read_mbank_csv_file(input_file: Path) -> pd.DataFrame:
+    sys = platform.system()
+    if sys == 'Linux':
+        arg = {'encoding': 'Windows-1250'}
+    elif sys == 'Windows':
+        arg = {}
+    else:
+        raise ValueError(sys)
+    with open(input_file, 'r', **arg) as f:   # , encoding='Windows-1250'
+        in_content = f.read()
+
+        in_content = in_content.replace('""SKY MARCHE" ', '"SKY MARCHE ')
+        in_content = in_content.replace('""PIJ""', '"PIJ"')
+        in_content = in_content.replace('""PIJ" ', '"PIJ')
+        in_content = in_content.replace('""Super-Sam" ', '"Super-Sam')
+        in_content = in_content.replace('""VISION" ', '"VISION ')
+        in_content = in_content.replace('""MADEX" ', '"MADEX ')
+        in_content = in_content.replace('""VIET-THAI" ', '"VIET-THAI ')
+        in_content = in_content.replace('"Salon " GRENO HOME', '"Salon  GRENO HOME')
+        in_content = in_content.replace('Hala "Tecza" ', 'Hala Tecza ')
+        #
+
+        str_io = StringIO(in_content)
+        base_account, result = extract_csv_table(str_io)
+
+    result = pd.DataFrame(result)
+    result = result.drop(columns=[''])
+
+    result[MBANK_DATA_FILE] = str(input_file)
+    result[MBANK_EFFECTIVE_DATE] = result.apply(_effective_date, axis=1)
+    result[MBANK_DEBIT_ACCOUNT] = base_account
+    result[MBANK_ACCOUNT_NUMBER] = result[MBANK_ACCOUNT_NUMBER].apply(_clear_brackets_)
+
+    diff = set(mbank_file_structure).symmetric_difference(set(result.columns))
+    if diff:
+        raise ValueError(diff)
+
+    return result
+
+
+def _clear_brackets_(x):
+    if len(x) == 0:
+        return x
+
+    if x[0] == "'":
+        if x[-1] == "'":
+            return x[1:-1]
+    raise ValueError(x)
+
+
+def _effective_date(record):
+    result = record[MBANK_TRANSACTION_DATE]
+    title = record[MBANK_TITLE]
+    idx = title.find('DATA TRANSAKCJI:')
+    if idx >= 0:
+        result = title[(idx + 17):]
+    return result
