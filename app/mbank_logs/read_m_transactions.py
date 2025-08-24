@@ -3,12 +3,20 @@ __author__ = 'pmalczak@gmail.com'
 from pathlib import Path
 import pandas as pd
 
+from data_step.data_step import DATA_STEP
 from mbank_logs.data_model import mbank_file_structure
 from mbank_logs.local_extract_csv_table import ForbiddenSign, NoData
 from mbank_logs.local_read_csv_file import read_mbank_csv_file
 
 
-def read_m_transactions(input_path: Path) -> pd.DataFrame:
+def read_m_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
+    resource = f'{asset_id}.parquet'
+    r = DATA_STEP.obtain(resource, _read_m_transactions, input_path=input_path)
+    result = r.data_frame()
+    return result
+
+
+def _read_m_transactions(input_path: Path = None) -> pd.DataFrame:
     input_files = list(input_path.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=mbank_file_structure)

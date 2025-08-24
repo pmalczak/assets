@@ -4,34 +4,49 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 import pandas as pd
 
-from evaluate_assets import evaluate_assets
+from assest.read_assets import read_assets
+from check_wrong_catalogs import check_wrong_catalogs
+from data_step.data_step import DATA_STEP
+from assest.evaluate_assets import evaluate_assets
+from mbank_logs.data_model import MBANK_DESCRIPTION, MBANK_TITLE, MbankOperationType, MBANK_AMOUNT
+from mbank_logs.read_m_transactions import read_m_transactions
+
 
 #todo najpierw ustalmy wartość aktywów
 #todo ustalić wartość lokat w mbank
 #todo ustalić wartość lokat w R
 
 
-def check_wrong_catalogs(my_data_path: Path, assets: pd.DataFrame):
-    # todo sprawdzić strukturę katalogów w assets tj. pokazać martwe katalogi
-    return
+def evaluate_deposits(data_root, assets):
+    result = evaluate_mbank_deposits(data_root, 'p_m_23')
+    return result
 
+
+def evaluate_mbank_deposits(data_root, asset_id):
+    p = data_root / asset_id
+    df = read_m_transactions(p, asset_id)
+
+    pattern = r"(NR 0\d{14})"
+    df['lokata'] = df[MBANK_TITLE].str.extract(pattern, expand=False)   #.fillna('')
+
+    result = df[df['lokata'].notnull()]
+    # result.to_excel('deposits.xlsx')
+    # piv = result.pivot(index='lokata', columns=MBANK_DESCRIPTION, values=MBANK_AMOUNT)
+    return result
 
 def main(name):
-    my_data_path = Path().home() / 'Dropbox' / 'INWESTYCJE' / 'assets'
-    assert my_data_path.is_dir()
+    proj_root = Path(__file__).parent.parent
+    DATA_STEP.init_steps(root=proj_root)
 
-    # static_data_path = Path(__file__).parent.parent / 'assets'
-    # assert static_data_path.is_dir()
+    data_root = Path().home() / 'Dropbox' / 'INWESTYCJE' / 'assets'
+    assert data_root.is_dir()
 
-    f = my_data_path / 'assets.xlsx'
-    assert f.is_file()
-    assets = pd.read_excel(f)
-
-    check_wrong_catalogs(my_data_path, assets)
-
-    assets_valuation = evaluate_assets(my_data_path, assets)
+    assets = read_assets(data_root)
+    check_wrong_catalogs(data_root, assets)
+    assets_valuation = evaluate_assets(data_root, assets)
 
     assets = assets.merge(assets_valuation, on='id', how='left')
+    deposits = evaluate_deposits(data_root, assets)
     print(assets)
 
     a1 = assets[['opis', 'waluta', 'wartość']]
@@ -48,5 +63,4 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 1000)
     pd.set_option('display.colheader_justify', 'center')
-
     main('PyCharm')
