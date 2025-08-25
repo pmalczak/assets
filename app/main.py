@@ -4,35 +4,33 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 import pandas as pd
 
-from assest.read_assets import read_assets
+from assets.read_assets import read_assets
 from check_wrong_catalogs import check_wrong_catalogs
 from data_step.data_step import DATA_STEP
-from assest.evaluate_assets import evaluate_assets
-from mbank_logs.data_model import MBANK_DESCRIPTION, MBANK_TITLE, MbankOperationType, MBANK_AMOUNT
-from mbank_logs.read_m_transactions import read_m_transactions
+from assets.evaluate_assets import evaluate_assets
+from mbank_importer.evaluate_mbank_deposit import evaluate_mbank_deposits
 
 
 #todo najpierw ustalmy wartość aktywów
-#todo ustalić wartość lokat w mbank
 #todo ustalić wartość lokat w R
 
 
 def evaluate_deposits(data_root, assets):
-    result = evaluate_mbank_deposits(data_root, 'p_m_23')
+    _assets = assets['typ'] == 'ror'
+    _assets = assets[_assets]
+
+    result = []
+    for i, rec in _assets.iterrows():
+        a = rec['id']
+        waluta = rec['waluta']
+        r = evaluate_mbank_deposits(data_root, a, waluta)
+        if len(r) > 0:
+            result += [r]
+
+    result = pd.concat(result)
+
     return result
 
-
-def evaluate_mbank_deposits(data_root, asset_id):
-    p = data_root / asset_id
-    df = read_m_transactions(p, asset_id)
-
-    pattern = r"(NR 0\d{14})"
-    df['lokata'] = df[MBANK_TITLE].str.extract(pattern, expand=False)   #.fillna('')
-
-    result = df[df['lokata'].notnull()]
-    # result.to_excel('deposits.xlsx')
-    # piv = result.pivot(index='lokata', columns=MBANK_DESCRIPTION, values=MBANK_AMOUNT)
-    return result
 
 def main(name):
     proj_root = Path(__file__).parent.parent
@@ -46,7 +44,12 @@ def main(name):
     assets_valuation = evaluate_assets(data_root, assets)
 
     assets = assets.merge(assets_valuation, on='id', how='left')
-    deposits = evaluate_deposits(data_root, assets)
+
+    deposits_valuation = evaluate_deposits(data_root, assets)
+    assets = pd.concat([assets, deposits_valuation])
+    assets = assets.sort_values(by=['grupa', 'id'])
+
+    assets = assets[assets['wartość'] != 0]
     print(assets)
 
     a1 = assets[['opis', 'waluta', 'wartość']]

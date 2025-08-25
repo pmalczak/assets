@@ -4,7 +4,7 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from mbank_importer.mbank_evaluate import mbank_evaluate
+from mbank_importer.evaluate_mbank import evaluate_mbank
 
 
 def evaluate_assets(data_root, assets: pd.DataFrame) -> pd.DataFrame:
@@ -18,10 +18,14 @@ def _evaluate_assets(data_root = None, assets: pd.DataFrame = None) -> pd.DataFr
 
     a = assets[assets['rodzaj'].notnull()]
     for i, row in a.iterrows():
-        if row['rodzaj'] == 'mbank_import':
+        rodzaj_importu = row['rodzaj']
+        if rodzaj_importu == 'mbank_import':
             asset_id: str = row['id']
-            r = mbank_evaluate(data_root, asset_id)
+            r = evaluate_mbank(data_root, asset_id)
             result += [r]
+        else:
+            print(f'brakujący typ: {rodzaj_importu}')
+
 
     result = pd.concat(result)
     return result
