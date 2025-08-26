@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from mbank_importer.evaluate_mbank import rec_as_asset
+from mbank_importer.evaluate_mbank import m_rec_as_asset, r_rec_as_asset
 from mbank_logs.data_model import MBANK_TITLE, MBANK_AMOUNT
 from mbank_logs.read_m_transactions import read_m_transactions
+from revolut_importer.read_r_transactions import read_revolut_transactions
 
 KOL_LOKATA = 'lokata'
 
@@ -32,7 +33,31 @@ def evaluate_mbank_deposits(data_root: Path, asset_id: str, waluta: str):
     result = []
     for i, row in r.iterrows():
         value = - row[MBANK_AMOUNT]
-        d = rec_as_asset(row, asset_id, value, '')
+        d = m_rec_as_asset(row, asset_id, value, '')
+        result += [d]
+
+    if result:
+        result = pd.DataFrame(result)
+        result['typ'] = 'depozyt'
+        result['opis'] = 'lokata'
+        result['rodzaj'] = ''
+        result['waluta'] = waluta
+        result['grupa'] = '0 środki pieniężne'
+
+    return result
+
+
+def evaluate_r_deposits(data_root: Path, asset_id: str, waluta: str):
+    p = data_root / asset_id
+    df = read_revolut_transactions(p, asset_id)
+
+    cond = df['Opis'] == 'Depositing savings'
+    df = df[cond]
+
+    result = []
+    for i, row in df.iterrows():
+        value = - row['Kwota']
+        d = r_rec_as_asset(row, asset_id, value, '')
         result += [d]
 
     if result:

@@ -8,7 +8,7 @@ from assets.read_assets import read_assets
 from check_wrong_catalogs import check_wrong_catalogs
 from data_step.data_step import DATA_STEP
 from assets.evaluate_assets import evaluate_assets
-from mbank_importer.evaluate_mbank_deposit import evaluate_mbank_deposits
+from mbank_importer.evaluate_mbank_deposit import evaluate_mbank_deposits, evaluate_r_deposits
 
 
 #todo najpierw ustalmy wartość aktywów
@@ -21,11 +21,17 @@ def evaluate_deposits(data_root, assets):
 
     result = []
     for i, rec in _assets.iterrows():
+        rodzaj = rec['rodzaj']
         a = rec['id']
         waluta = rec['waluta']
-        r = evaluate_mbank_deposits(data_root, a, waluta)
-        if len(r) > 0:
-            result += [r]
+        if rodzaj == 'mbank_import':
+            r = evaluate_mbank_deposits(data_root, a, waluta)
+            if len(r) > 0:
+                result += [r]
+        elif rodzaj == 'revolut_import':
+            r = evaluate_r_deposits(data_root, a, waluta)
+            if len(r) > 0:
+                result += [r]
 
     result = pd.concat(result)
 
@@ -50,11 +56,17 @@ def main(name):
     assets = assets.sort_values(by=['grupa', 'id'])
 
     assets = assets[assets['wartość'] != 0]
+    assets = assets.drop(columns=['rodzaj'])
     print(assets)
 
     a1 = assets[['opis', 'waluta', 'wartość']]
     g1 = a1.groupby(['waluta', 'opis']).sum().round().astype('int')
     print(g1)
+
+    a1 = assets[['waluta', 'grupa', 'wartość']]
+    g1 = a1.groupby(['waluta', 'grupa']).sum().round().astype('int')
+    print(g1)
+
     return
 
 

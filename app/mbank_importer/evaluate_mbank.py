@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from mbank_logs.data_model import MBANK_TRANSACTION_DATE, MBANK_OUTSTANDING_BALANCE, MBANK_DEBIT_ACCOUNT, MBANK_AMOUNT
+from mbank_logs.data_model import MBANK_TRANSACTION_DATE, MBANK_OUTSTANDING_BALANCE, MBANK_DEBIT_ACCOUNT
 from mbank_logs.read_m_transactions import read_m_transactions
 
 
@@ -26,17 +26,28 @@ def _evaluate_mbank(data_root: Path = None, asset_id: str = None):
     for i, row in last.iterrows():
         iban = row[MBANK_DEBIT_ACCOUNT]
         value = row[MBANK_OUTSTANDING_BALANCE]
-        d = rec_as_asset(row, asset_id, value, iban)
+        d = m_rec_as_asset(row, asset_id, value, iban)
         break
     data = [d]
     df_m_23 = pd.DataFrame(data=data)
     return df_m_23
 
 
-def rec_as_asset(row, asset_id, value, iban):
+def m_rec_as_asset(row, asset_id, value, iban):
     d = {
         'id': asset_id,
         'data wyceny': row[MBANK_TRANSACTION_DATE],
+        'wartość': value,
+        'IBAN': iban
+    }
+    return d
+
+
+def r_rec_as_asset(row, asset_id, value, iban):
+    data = row['Data zrealizowania']
+    d = {
+        'id': asset_id,
+        'data wyceny': data,
         'wartość': value,
         'IBAN': iban
     }
