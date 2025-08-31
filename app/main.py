@@ -8,7 +8,8 @@ from assets.read_assets import read_assets
 from check_wrong_catalogs import check_wrong_catalogs
 from data_step.data_step import DATA_STEP
 from assets.evaluate_assets import evaluate_assets
-from mbank_importer.evaluate_mbank_deposit import evaluate_mbank_deposits, evaluate_r_deposits
+from importers.evaluate_mbank_deposit import evaluate_mbank_deposits
+from importers.evaluate_r_deposits import evaluate_r_deposits
 
 
 #todo najpierw ustalmy wartość aktywów
@@ -56,7 +57,7 @@ def main(name):
     assets = assets.sort_values(by=['grupa', 'id'])
 
     assets = assets[assets['wartość'] != 0]
-    assets = assets.drop(columns=['rodzaj'])
+    assets = assets.drop(columns=['rodzaj', 'dostęp'])
     print(assets)
 
     a1 = assets[['opis', 'waluta', 'wartość']]

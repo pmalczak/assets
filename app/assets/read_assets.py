@@ -19,5 +19,6 @@ def read_assets(data_root: Path) -> pd.DataFrame:
 def _read_assets(source_file = None) -> pd.DataFrame:
     # f = data_root / 'assets.xlsx'
     assert source_file.is_file()
-    assets = pd.read_excel(source_file)
+    assets = pd.read_excel(source_file, sheet_name='assets')
+    print(f'aktualizacja pliku {source_file}')
     return assets
