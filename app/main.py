@@ -4,39 +4,16 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 import pandas as pd
 
+from assets.data_model import AssetsFile, AssetsDef
 from assets.read_assets import read_assets
 from check_wrong_catalogs import check_wrong_catalogs
 from data_step.data_step import DATA_STEP
-from assets.evaluate_assets import evaluate_assets
-from importers.evaluate_mbank_deposit import evaluate_mbank_deposits
-from importers.evaluate_r_deposits import evaluate_r_deposits
+from evaluators.evaluate_assets import evaluate_assets
+from int_formatter import int_formatter
 
 
 #todo najpierw ustalmy wartość aktywów
 #todo ustalić wartość lokat w R
-
-
-def evaluate_deposits(data_root, assets):
-    _assets = assets['typ'] == 'ror'
-    _assets = assets[_assets]
-
-    result = []
-    for i, rec in _assets.iterrows():
-        rodzaj = rec['rodzaj']
-        a = rec['id']
-        waluta = rec['waluta']
-        if rodzaj == 'mbank_import':
-            r = evaluate_mbank_deposits(data_root, a, waluta)
-            if len(r) > 0:
-                result += [r]
-        elif rodzaj == 'revolut_import':
-            r = evaluate_r_deposits(data_root, a, waluta)
-            if len(r) > 0:
-                result += [r]
-
-    result = pd.concat(result)
-
-    return result
 
 
 def main(name):
@@ -48,25 +25,21 @@ def main(name):
 
     assets = read_assets(data_root)
     check_wrong_catalogs(data_root, assets)
-    assets_valuation = evaluate_assets(data_root, assets)
+    assets = evaluate_assets(data_root, assets)
+    AssetsDef.check_structure(assets)
 
-    assets = assets.merge(assets_valuation, on='id', how='left')
-
-    deposits_valuation = evaluate_deposits(data_root, assets)
-    assets = pd.concat([assets, deposits_valuation])
-    assets = assets.sort_values(by=['grupa', 'id'])
-
-    assets = assets[assets['wartość'] != 0]
+    assets = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
+    assets = assets[assets[AssetsDef.VALUE] != 0]
     assets = assets.drop(columns=['rodzaj', 'dostęp'])
     print(assets)
 
-    a1 = assets[['opis', 'waluta', 'wartość']]
-    g1 = a1.groupby(['waluta', 'opis']).sum().round().astype('int')
-    print(g1)
+    a1 = assets[[AssetsDef.TYPE, AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
+    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE]).sum().round().astype('int')
+    print(int_formatter(g1))
 
     a1 = assets[['waluta', 'grupa', 'wartość']]
     g1 = a1.groupby(['waluta', 'grupa']).sum().round().astype('int')
-    print(g1)
+    print(int_formatter(g1))
 
     return
 

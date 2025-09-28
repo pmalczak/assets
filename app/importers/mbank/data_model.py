@@ -1,38 +1,48 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Piotr'
 
-MBANK_BOOKING_DATE = '#Data księgowania'
-MBANK_TRANSACTION_DATE = '#Data operacji'
-MBANK_DESCRIPTION = '#Opis operacji'
-MBANK_TITLE = '#Tytuł'
-MBANK_TRANSACTION_PARTY = '#Nadawca/Odbiorca'
-MBANK_ACCOUNT_NUMBER = '#Numer konta'
-MBANK_AMOUNT = '#Kwota'
-MBANK_OUTSTANDING_BALANCE = '#Saldo po operacji'
-
-MBANK_EFFECTIVE_DATE = 'Data transakcji'
-MBANK_DEBIT_ACCOUNT = 'Konto bazowe'
-# MBANK_TRANS_GUID = 'trans_guid'
-MBANK_DATA_FILE = 'PLIK'
+from assets.data_model import GenericAsset
 
 
+class MBankFileCls(GenericAsset):
+    MBANK_BOOKING_DATE = '#Data księgowania'
+    MBANK_TRANSACTION_DATE = '#Data operacji'
+    MBANK_DESCRIPTION = '#Opis operacji'
+    MBANK_TITLE = '#Tytuł'
+    MBANK_TRANSACTION_PARTY = '#Nadawca/Odbiorca'
+    MBANK_ACCOUNT_NUMBER = '#Numer konta'
+    MBANK_AMOUNT = '#Kwota'
+    MBANK_OUTSTANDING_BALANCE = '#Saldo po operacji'
 
-mbank_file_structure = [
-    MBANK_BOOKING_DATE,
-    MBANK_TRANSACTION_DATE,
-    MBANK_DESCRIPTION,
-    MBANK_TITLE,
-    MBANK_TRANSACTION_PARTY,
-    MBANK_ACCOUNT_NUMBER,
-    MBANK_AMOUNT,
-    MBANK_OUTSTANDING_BALANCE,
+    MBANK_EFFECTIVE_DATE = 'Data transakcji'
+    MBANK_DEBIT_ACCOUNT = 'Konto bazowe'
+    # MBANK_TRANS_GUID = 'trans_guid'
+    MBANK_DATA_FILE = 'PLIK'
 
-    # added
-    MBANK_EFFECTIVE_DATE,
-    MBANK_DEBIT_ACCOUNT,
-    # MBANK_TRANS_GUID,
-    MBANK_DATA_FILE,
-]
+    def __init__(self):
+        super().__init__()
+
+    def expected_columns(self) -> set:
+        result = {
+            self.MBANK_BOOKING_DATE,
+            self.MBANK_TRANSACTION_DATE,
+            self.MBANK_DESCRIPTION,
+            self.MBANK_TITLE,
+            self.MBANK_TRANSACTION_PARTY,
+            self.MBANK_ACCOUNT_NUMBER,
+            self.MBANK_AMOUNT,
+            self.MBANK_OUTSTANDING_BALANCE,
+
+            # added
+            self.MBANK_EFFECTIVE_DATE,
+            self.MBANK_DEBIT_ACCOUNT,
+            # MBANK_TRANS_GUID,
+            self.MBANK_DATA_FILE,
+        }
+        return result
+
+
+MBankFile = MBankFileCls()
 
 
 # DESCRIPTION VALUES

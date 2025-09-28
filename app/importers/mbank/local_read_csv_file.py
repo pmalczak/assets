@@ -6,10 +6,7 @@ from pathlib import Path
 from io import StringIO
 import platform
 
-from mbank_logs.data_model import MBANK_TITLE, MBANK_EFFECTIVE_DATE, MBANK_DEBIT_ACCOUNT, MBANK_TRANSACTION_DATE, \
-    MBANK_AMOUNT, MBANK_OUTSTANDING_BALANCE
-from mbank_logs.data_model import MBANK_ACCOUNT_NUMBER, MBANK_DATA_FILE
-from mbank_logs.data_model import mbank_file_structure
+from .data_model import MBankFile
 from .local_extract_csv_table import extract_csv_table
 
 
@@ -47,17 +44,14 @@ def read_mbank_csv_file(input_file: Path) -> pd.DataFrame:
     result = pd.DataFrame(result)
     result = result.drop(columns=[''])
 
-    result[MBANK_DATA_FILE] = str(input_file)
-    result[MBANK_EFFECTIVE_DATE] = result.apply(_effective_date, axis=1)
-    result[MBANK_DEBIT_ACCOUNT] = base_account
-    result[MBANK_ACCOUNT_NUMBER] = result[MBANK_ACCOUNT_NUMBER].apply(_clear_brackets_)
-    result[MBANK_AMOUNT] = result[MBANK_AMOUNT].apply(_as_float_)
-    result[MBANK_OUTSTANDING_BALANCE] = result[MBANK_OUTSTANDING_BALANCE].apply(_as_float_)
+    result[MBankFile.MBANK_DATA_FILE] = str(input_file)
+    result[MBankFile.MBANK_EFFECTIVE_DATE] = result.apply(_effective_date, axis=1)
+    result[MBankFile.MBANK_DEBIT_ACCOUNT] = base_account
+    result[MBankFile.MBANK_ACCOUNT_NUMBER] = result[MBankFile.MBANK_ACCOUNT_NUMBER].apply(_clear_brackets_)
+    result[MBankFile.MBANK_AMOUNT] = result[MBankFile.MBANK_AMOUNT].apply(_as_float_)
+    result[MBankFile.MBANK_OUTSTANDING_BALANCE] = result[MBankFile.MBANK_OUTSTANDING_BALANCE].apply(_as_float_)
 
-    diff = set(mbank_file_structure).symmetric_difference(set(result.columns))
-    if diff:
-        raise ValueError(diff)
-
+    MBankFile.check_structure(result)
     return result
 
 
@@ -78,8 +72,8 @@ def _clear_brackets_(x):
 
 
 def _effective_date(record):
-    result = record[MBANK_TRANSACTION_DATE]
-    title = record[MBANK_TITLE]
+    result = record[MBankFile.MBANK_TRANSACTION_DATE]
+    title = record[MBankFile.MBANK_TITLE]
     idx = title.find('DATA TRANSAKCJI:')
     if idx >= 0:
         result = title[(idx + 17):]
