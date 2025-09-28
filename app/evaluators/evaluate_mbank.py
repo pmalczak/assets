@@ -13,7 +13,7 @@ from importers.mbank.read_m_transactions import read_m_transactions
 
 def evaluate_mbank(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.DataFrame:
     assert isinstance(asset_id, str)
-    r = DATA_STEP.obtain(f'mbank/{asset_id}_evaluation.parquet', _evaluate_mbank,
+    r = DATA_STEP.obtain(f'02 eveluated/{asset_id}.parquet', _evaluate_mbank,
                          data_root=data_root, asset_id=asset_id, assets_file_row=assets_file_row)
     return r.data_frame()
 
@@ -61,12 +61,11 @@ def _evaluate_deposits_mbank(df: pd.DataFrame, assets_file_row: pd.Series, maste
 
     result = []
     for i, _row in r.iterrows():
-        assets_row1 = AssetsDef.as_assets_row(assets_file_row)
-        assets_row1[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
-        assets_row1[AssetsDef.TYPE] = 'depozyt'
-        assets_row1[AssetsDef.DESCR] = _row[KOL_LOKATA]
-
-        assets_row1[AssetsDef.VALUE] = - _row[MBankFile.MBANK_AMOUNT]
-        result += [assets_row1]
+        assets_row = AssetsDef.as_assets_row(assets_file_row)
+        assets_row[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
+        assets_row[AssetsDef.TYPE] = 'depozyt'
+        assets_row[AssetsDef.DESCR] = _row[KOL_LOKATA]
+        assets_row[AssetsDef.VALUE] = - _row[MBankFile.MBANK_AMOUNT]
+        result += [assets_row]
 
     return result

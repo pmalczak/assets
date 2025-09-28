@@ -10,7 +10,7 @@ from importers.mbank.local_read_csv_file import read_mbank_csv_file
 
 
 def read_m_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
-    resource = f'mbank/{asset_id}.parquet'
+    resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain(resource, _read_m_transactions, input_path=input_path)
     result = r.data_frame()
     return result

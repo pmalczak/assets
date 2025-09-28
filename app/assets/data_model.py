@@ -24,7 +24,7 @@ class AssetsFileCls(GenericAsset):
     TYPE = 'typ'
     GROUP = 'grupa'
     DESCR = 'opis'
-    KIND = 'rodzaj'
+    KIND = 'RODZAJ*'
     CURRENCY = 'waluta'
     NOTES = 'dostęp'
 

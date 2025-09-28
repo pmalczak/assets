@@ -13,7 +13,7 @@ from importers.pkobp.import_bonds import import_bonds
 
 def evaluate_obligacjeskarbowe(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.DataFrame:
     assert isinstance(asset_id, str)
-    r = DATA_STEP.obtain(f'{asset_id}_evaluation.parquet', _evaluate_obligacjeskarbowe,
+    r = DATA_STEP.obtain(f'02 eveluated/{asset_id}.parquet', _evaluate_obligacjeskarbowe,
                          data_root=data_root, asset_id=asset_id, assets_file_row=assets_file_row)
     result = r.data_frame()
     return result
@@ -40,7 +40,7 @@ def _evaluate_obligacjeskarbowe(data_root: Path = None, asset_id: str = None, as
 
 
 def read_obligacje(input_path: Path, asset_id: str) -> pd.DataFrame:
-    resource = f'{asset_id}.parquet'
+    resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain(resource, import_bonds, input_path=input_path)
     result = r.data_frame()
     return result

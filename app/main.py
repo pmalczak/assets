@@ -30,15 +30,15 @@ def main(name):
 
     assets = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
     assets = assets[assets[AssetsDef.VALUE] != 0]
-    assets = assets.drop(columns=['rodzaj', 'dostęp'])
+    assets = assets.drop(columns=[AssetsDef.KIND, AssetsDef.NOTES])
     print(assets)
 
     a1 = assets[[AssetsDef.TYPE, AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
     g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE]).sum().round().astype('int')
     print(int_formatter(g1))
 
-    a1 = assets[['waluta', 'grupa', 'wartość']]
-    g1 = a1.groupby(['waluta', 'grupa']).sum().round().astype('int')
+    a1 = assets[[AssetsDef.CURRENCY, AssetsDef.GROUP, AssetsDef.VALUE]]
+    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.GROUP]).sum().round().astype('int')
     print(int_formatter(g1))
 
     return

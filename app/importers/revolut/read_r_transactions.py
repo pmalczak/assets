@@ -8,7 +8,7 @@ from importers.revolut.data_model import RevolutFile
 
 
 def read_revolut_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
-    resource = f'{asset_id}.parquet'
+    resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain(resource, _read_revolut_transactions, input_path=input_path)
     result = r.data_frame()
     return result
