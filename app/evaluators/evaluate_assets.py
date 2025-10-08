@@ -11,7 +11,7 @@ from evaluators.evaluate_revolut import evaluate_revolut
 
 
 def evaluate_assets(data_root, assets: pd.DataFrame) -> pd.DataFrame:
-    r = DATA_STEP.obtain('02 eveluated/assets.parquet', _evaluate_assets, data_root=data_root, assets=assets)
+    r = DATA_STEP.obtain('02 evaluated/assets.parquet', _evaluate_assets, data_root=data_root, assets=assets)
     return r.data_frame()
 
 

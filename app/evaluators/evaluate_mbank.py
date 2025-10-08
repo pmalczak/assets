@@ -13,7 +13,7 @@ from importers.mbank.read_m_transactions import read_m_transactions
 
 def evaluate_mbank(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.DataFrame:
     assert isinstance(asset_id, str)
-    r = DATA_STEP.obtain(f'02 eveluated/{asset_id}.parquet', _evaluate_mbank,
+    r = DATA_STEP.obtain(f'02 evaluated/{asset_id}.parquet', _evaluate_mbank,
                          data_root=data_root, asset_id=asset_id, assets_file_row=assets_file_row)
     return r.data_frame()
 

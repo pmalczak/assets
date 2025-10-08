@@ -11,13 +11,21 @@ from importers.mbank.local_read_csv_file import read_mbank_csv_file
 
 def read_m_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
     resource = f'01 source/{asset_id}.parquet'
+    r = DATA_STEP.obtain_dependent(resource, _read_m_transactions, input_path)
+    result = r.data_frame()
+    return result
+
+
+def read_m_transactions_0(input_path: Path, asset_id: str) -> pd.DataFrame:
+    resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain(resource, _read_m_transactions, input_path=input_path)
     result = r.data_frame()
     return result
 
 
-def _read_m_transactions(input_path: Path = None) -> pd.DataFrame:
-    input_files = list(input_path.glob('*.csv'))
+def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
+    assert source_file.is_dir()
+    input_files = list(source_file.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(MBankFile.expected_columns()))
         return df
