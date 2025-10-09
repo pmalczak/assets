@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from importers.deduplicate_records import deduplicate_records
 from importers.mbank.data_model import MBankFile
 from importers.mbank.local_extract_csv_table import ForbiddenSign, NoData
 from importers.mbank.local_read_csv_file import read_mbank_csv_file
@@ -31,7 +32,7 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
         return df
 
     forbidden_signs = []
-    result = []
+    records = []
     for input_file in input_files:
         try:
             mbank_transactions = read_mbank_csv_file(input_file)
@@ -46,10 +47,17 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
             continue
 
         print(f'PLIK:{input_file} {len(mbank_transactions):>4} rekord/ów')
-        result += [mbank_transactions]
+        records += [mbank_transactions]
 
     if forbidden_signs:
         raise ForbiddenSign(forbidden_signs)
 
-    result = pd.concat(result)
+    result = None
+    for record in records:
+        if result is None:
+            result = record
+            continue
+
+        result = deduplicate_records(result, record, MBankFile.MBANK_TRANSACTION_DATE, MBankFile.unique_key())
+
     return result

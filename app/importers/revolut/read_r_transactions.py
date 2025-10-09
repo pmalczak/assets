@@ -4,30 +4,39 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from importers.deduplicate_records import deduplicate_records
 from importers.revolut.data_model import RevolutFile
 
 
 def read_revolut_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
     resource = f'01 source/{asset_id}.parquet'
-    r = DATA_STEP.obtain(resource, _read_revolut_transactions, input_path=input_path)
+    r = DATA_STEP.obtain_dependent(resource, _read_revolut_transactions, input_path)
     result = r.data_frame()
     return result
 
 
-def _read_revolut_transactions(input_path: Path = None) -> pd.DataFrame:
-    input_files = list(input_path.glob('*.csv'))
+def _read_revolut_transactions(source_file: Path = None) -> pd.DataFrame:
+    input_files = list(source_file.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(RevolutFile.expected_columns()))
         return df
 
-    result = []
+    records = []
     for input_file in input_files:
         r_transactions = pd.read_csv(input_file)
 
         print(f'PLIK:{input_file} {len(r_transactions):>4} rekord/ów')
-        result += [r_transactions]
+        records += [r_transactions]
 
-    result = pd.concat(result)
+    result = None
+    for record in records:
+        if result is None:
+            result = record
+            continue
+
+        result = deduplicate_records(result, record, RevolutFile.DATE, RevolutFile.unique_key())
+
+    # result = pd.concat(result)
     result[RevolutFile.INIT_DATE] = result[RevolutFile.INIT_DATE].apply(_strip_date)
     result[RevolutFile.DATE] = result[RevolutFile.DATE].apply(_strip_date)
     RevolutFile.check_structure(result)

@@ -17,7 +17,7 @@ class MBankFileCls(GenericAsset):
     MBANK_EFFECTIVE_DATE = 'Data transakcji'
     MBANK_DEBIT_ACCOUNT = 'Konto bazowe'
     # MBANK_TRANS_GUID = 'trans_guid'
-    MBANK_DATA_FILE = 'PLIK'
+    # MBANK_DATA_FILE = 'PLIK'
 
     def __init__(self):
         super().__init__()
@@ -37,8 +37,27 @@ class MBankFileCls(GenericAsset):
             self.MBANK_EFFECTIVE_DATE,
             self.MBANK_DEBIT_ACCOUNT,
             # MBANK_TRANS_GUID,
-            self.MBANK_DATA_FILE,
+            # self.MBANK_DATA_FILE,
         }
+        return result
+
+    def unique_key(self) -> list:
+        result = [
+            self.MBANK_BOOKING_DATE,
+            self.MBANK_TRANSACTION_DATE,
+            self.MBANK_DESCRIPTION,
+            self.MBANK_TITLE,
+            self.MBANK_TRANSACTION_PARTY,
+            self.MBANK_ACCOUNT_NUMBER,
+            self.MBANK_AMOUNT,
+            self.MBANK_OUTSTANDING_BALANCE,
+
+            # added
+            # self.MBANK_EFFECTIVE_DATE,
+            # self.MBANK_DEBIT_ACCOUNT,
+            # MBANK_TRANS_GUID,
+            # self.MBANK_DATA_FILE,
+        ]
         return result
 
 

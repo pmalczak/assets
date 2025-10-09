@@ -46,7 +46,7 @@ def _evaluate_mbank(data_root: Path = None, asset_id: str = None, assets_file_ro
 def _evaluate_deposits_mbank(df: pd.DataFrame, assets_file_row: pd.Series, master_asset: pd.Series) -> list:
     KOL_LOKATA = 'lokata'
 
-    pattern = r"(NR 0\d{14})"
+    pattern = r"(NR \d{15})"
     df[KOL_LOKATA] = df[MBankFile.MBANK_TITLE].str.extract(pattern, expand=False)
 
     r = df[df[KOL_LOKATA].notnull()]

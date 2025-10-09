@@ -34,5 +34,20 @@ class RevolutFileCls(GenericAsset):
         }
         return result
 
+    def unique_key(self) -> list:
+        result = [
+            # self.KIND,
+            self.PRODUCT,
+            self.INIT_DATE,
+            self.DATE,
+            self.DESCRIPTION,
+            self.AMOUNT,
+            self.FEE,
+            self.CURRENCY,
+            self.STATE,
+            self.BALANCE
+        ]
+        return result
+
 
 RevolutFile = RevolutFileCls()
