@@ -19,10 +19,7 @@ def evaluate_mbank(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.D
 
 
 def _evaluate_mbank(data_root: Path = None, asset_id: str = None, assets_file_row : pd.Series = None):
-    p = data_root / asset_id
-    if not p.is_dir():
-        raise ValueError(p)
-    df = read_m_transactions(p, asset_id)
+    df = read_m_transactions(data_root, asset_id)
     last =df[-1:]
     for i, _row in last.iterrows():
         assets_row = AssetsDef.as_assets_row(assets_file_row)

@@ -6,10 +6,13 @@ from pathlib import Path
 import pandas as pd
 
 from assets.data_model import AssetsFile
+from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 
 
-def read_assets(data_root: Path) -> pd.DataFrame:
+def read_assets() -> pd.DataFrame:
+    data_root = get_online_data_root()
+
     _in = 'assets.xlsx'
     _out = 'assets.parquet'
     r = DATA_STEP.obtain_dependent(_out, _read_assets, data_root / _in)

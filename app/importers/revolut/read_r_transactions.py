@@ -5,7 +5,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
-from importers.revolut.data_model import RevolutFile
+from importers.revolut.data_model import RevolutFile, RevolutFileState
 
 
 def read_revolut_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
@@ -37,6 +37,7 @@ def _read_revolut_transactions(source_file: Path = None) -> pd.DataFrame:
         result = deduplicate_records(result, record, RevolutFile.DATE, RevolutFile.unique_key())
 
     # result = pd.concat(result)
+    result = result[result[RevolutFile.STATE] == RevolutFileState.CLOSED]
     result[RevolutFile.INIT_DATE] = result[RevolutFile.INIT_DATE].apply(_strip_date)
     result[RevolutFile.DATE] = result[RevolutFile.DATE].apply(_strip_date)
     RevolutFile.check_structure(result)

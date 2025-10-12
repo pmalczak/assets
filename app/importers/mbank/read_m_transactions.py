@@ -10,16 +10,13 @@ from importers.mbank.local_extract_csv_table import ForbiddenSign, NoData
 from importers.mbank.local_read_csv_file import read_mbank_csv_file
 
 
-def read_m_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
+def read_m_transactions(data_root: Path, asset_id: str) -> pd.DataFrame:
+    input_path = data_root / asset_id
+    if not input_path.is_dir():
+        raise ValueError(input_path)
+
     resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain_dependent(resource, _read_m_transactions, input_path)
-    result = r.data_frame()
-    return result
-
-
-def read_m_transactions_0(input_path: Path, asset_id: str) -> pd.DataFrame:
-    resource = f'01 source/{asset_id}.parquet'
-    r = DATA_STEP.obtain(resource, _read_m_transactions, input_path=input_path)
     result = r.data_frame()
     return result
 

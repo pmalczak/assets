@@ -7,9 +7,9 @@ import pandas as pd
 from assets.data_model import AssetsFile, AssetsDef
 from assets.read_assets import read_assets
 from check_wrong_catalogs import check_wrong_catalogs
+from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from evaluators.evaluate_assets import evaluate_assets
-from int_formatter import int_formatter
 
 
 #todo najpierw ustalmy wartość aktywów
@@ -17,13 +17,12 @@ from int_formatter import int_formatter
 
 
 def main(name):
-    proj_root = Path(__file__).parent.parent
-    DATA_STEP.init_steps(root=proj_root)
+    local_data_steps_root = Path(__file__).parent.parent
+    DATA_STEP.init_steps(root=local_data_steps_root)
 
-    data_root = Path().home() / 'Dropbox' / 'INWESTYCJE' / 'assets'
-    assert data_root.is_dir()
+    data_root = get_online_data_root()
 
-    assets = read_assets(data_root)
+    assets = read_assets()
     check_wrong_catalogs(data_root, assets)
     assets = evaluate_assets(data_root, assets)
     AssetsDef.check_structure(assets)
@@ -35,13 +34,19 @@ def main(name):
 
     a1 = assets[[AssetsDef.TYPE, AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
     g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE]).sum().round().astype('int')
-    print(int_formatter(g1))
+    print_groupped_value(g1, AssetsDef.VALUE, AssetsDef.CURRENCY)
 
     a1 = assets[[AssetsDef.CURRENCY, AssetsDef.GROUP, AssetsDef.VALUE]]
     g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.GROUP]).sum().round().astype('int')
-    print(int_formatter(g1))
-
+    print_groupped_value(g1, AssetsDef.VALUE, AssetsDef.CURRENCY)
     return
+
+
+def print_groupped_value(g1, value_column, currency_column):
+    g1[value_column] = g1[value_column].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
+    g1[value_column] = g1[value_column] + ' ' + g1.index.get_level_values(currency_column)
+    print(g1)
+    print()
 
 
 if __name__ == '__main__':
