@@ -1,11 +1,12 @@
 import pandas as pd
 import numpy as np
 import re
-from typing import List, Optional, Iterable
+from typing import List, Optional
 
+from importers.mbank.data_model import MBankFile, MbankOperationType
 
-phrase_in  = "PRZELEW WEWNĘTRZNY PRZYCHODZĄCY"
-phrases_out = ["PRZELEW WEWNĘTRZNY WYCHODZĄCY", "PRZELEW WŁASNY"]  # <= nowy wariant
+phrase_in = MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY
+phrases_out = [MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY, MbankOperationType.PRZELEW_WLASNY]
 
 def _contains_ci(text: str, phrase: str) -> bool:
     if pd.isna(text):
@@ -20,38 +21,29 @@ def _contains_any_ci(text: str, phrases: list[str]) -> bool:
 def consolidate_many_drop_internal_transfers(
     statements: List[pd.DataFrame],
     *,
-    col_konto_bazowe="Konto bazowe",
-    col_numer_konta="#Numer konta",
-    col_kwota="#Kwota",
-    col_data_transakcji="Data transakcji",   # fallback do '#Data operacji' gdy brak
-    col_tytul="#Tytuł",                      # opcjonalne (pomaga w rozróżnianiu wielu podobnych transakcji)
-    col_opis="#Opis operacji",               # kluczowe: IN/OUT
-    phrase_in="PRZELEW WEWNĘTRZNY PRZYCHODZĄCY",
-    phrase_out="PRZELEW WEWNĘTRZNY WYCHODZĄCY",
+    col_konto_bazowe=MBankFile.MBANK_DEBIT_ACCOUNT,
+    col_numer_konta=MBankFile.MBANK_ACCOUNT_NUMBER,
+    col_kwota=MBankFile.MBANK_AMOUNT,
+    col_data_transakcji=MBankFile.MBANK_EFFECTIVE_DATE,
+    col_tytul=MBankFile.MBANK_TITLE,                      # opcjonalne (pomaga w rozróżnianiu wielu podobnych transakcji)
+    col_opis=MBankFile.MBANK_DESCRIPTION,               # kluczowe: IN/OUT
     date_tolerance="D",                      # 'D' dzień, 'H' godzina, 'T' minuty, 'S' sekundy, 'exact'
     require_opposite_sign=True,
-    owned_accounts: Optional[Iterable[str]] = None,  # jeżeli chcesz ograniczyć do własnych kont
+    # owned_accounts: Optional[Iterable[str]] = None,  # jeżeli chcesz ograniczyć do własnych kont
     also_key_by_currency: Optional[str] = None       # np. 'Waluta' jeśli masz multi-currency
 ):
 
     df = pd.concat(statements, ignore_index=True)
 
     df[col_data_transakcji] = pd.to_datetime(df[col_data_transakcji], errors="coerce")
-
     df["_sign"] = np.where(df[col_kwota] >= 0, 1, -1)
     df["_amount_abs"] = df[col_kwota].abs()
-
     df["_bucket_time"] = df[col_data_transakcji].dt.floor(date_tolerance)
 
     # 4) ogranicz do własnych kont (opcjonalnie)
-    if owned_accounts is not None:
-        owned_accounts = set(map(str, owned_accounts))
-        df = df[df[col_konto_bazowe].astype(str).isin(owned_accounts)]
-
-    # 5) wykryj przelewy wewnętrzne z opisu
-    def _contains(text, phrase):
-        if pd.isna(text): return False
-        return re.search(re.escape(phrase), str(text), flags=re.IGNORECASE) is not None
+    # if owned_accounts is not None:
+    #     owned_accounts = set(map(str, owned_accounts))
+    #     df = df[df[col_konto_bazowe].astype(str).isin(owned_accounts)]
 
     df["_internal_in"] = df[col_opis].map(lambda x: _contains_ci(x, phrase_in))
     df["_internal_out"] = df[col_opis].map(lambda x: _contains_any_ci(x, phrases_out))
@@ -63,7 +55,7 @@ def consolidate_many_drop_internal_transfers(
     )
     # po zbudowaniu df i wykryciu _internal_type
     internal = df[df["_internal_type"].isin(["IN", "OUT"])].copy()
-    external = df[~df.index.isin(internal.index)].copy()  # <--- DODAJ TO
+    external = df[~df.index.isin(internal.index)].copy()
 
     # odfiltruj samo-przelewy
     mask_self = internal[col_konto_bazowe].astype(str) != internal[col_numer_konta].astype(str)
@@ -76,12 +68,8 @@ def consolidate_many_drop_internal_transfers(
     internal["_acc_min"] = np.where(a < b, a, b)
     internal["_acc_max"] = np.where(a < b, b, a)
 
-    # (opcjonalnie) normalizacja tytułu, by rozróżniać wiele identycznych pozycji
-    if col_tytul in internal.columns:
-        tkey = (internal[col_tytul].fillna("")
-                .astype(str).str.lower().str.replace(r"\s+", " ", regex=True).str[:40])
-    else:
-        tkey = ""
+    tkey = (internal[col_tytul].fillna("")
+            .astype(str).str.lower().str.replace(r"\s+", " ", regex=True).str[:40])
 
     # (opcjonalnie) klucz po walucie
     # currency_part = ""
@@ -147,10 +135,10 @@ def consolidate_many_drop_internal_transfers(
     cleaned_internal = internal.drop(index=list(to_drop))
     cleaned = pd.concat([external, cleaned_internal], ignore_index=False)
 
-    # cleaned = cleaned.drop(columns=[
-    #     "_sign","_amount_abs","_bucket_time","_acc_min","_acc_max",
-    #     "_internal_in","_internal_out","_internal_type"
-    # ], errors="ignore").sort_values(by=[col_data_transakcji]).reset_index(drop=True)
+    cleaned = cleaned.drop(columns=[
+        "_sign","_amount_abs","_bucket_time","_acc_min","_acc_max",
+        "_internal_in","_internal_out","_internal_type"
+    ], errors="ignore").sort_values(by=[col_data_transakcji]).reset_index(drop=True)
 
     meta = {
         "input_rows": sum(len(x) for x in statements),
@@ -161,7 +149,7 @@ def consolidate_many_drop_internal_transfers(
         "matching": {
             "uses_description": True,
             "phrase_in": phrase_in,
-            "phrase_out": phrase_out,
+            "phrase_out": phrases_out,
             "date_tolerance": date_tolerance,
             "require_opposite_sign": require_opposite_sign,
             "also_key_by_currency": also_key_by_currency is not None
