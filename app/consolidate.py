@@ -3,8 +3,6 @@ __author__ = "pmalczak@gmail.com"
 
 from pathlib import Path
 import pandas as pd
-import numpy as np
-import re
 
 from assets.data_model import AssetsFile
 from assets.read_assets import read_assets
@@ -41,6 +39,9 @@ def main():
     p = Path(__file__).parent
     fout = p / f'mbank_consolidated.xlsx'
     cleaned.to_excel(fout, index=False)
+
+    fout = p / f'mbank_consolidated.parquet'
+    cleaned.to_parquet(fout, compression=None)
     return
 
 
