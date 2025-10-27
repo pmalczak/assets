@@ -10,17 +10,33 @@ from check_wrong_catalogs import check_wrong_catalogs
 from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from evaluators.evaluate_assets import evaluate_assets
+from nbp_fx_repo.nbp_fx_repository import NbpFxRepository, NBP_API_EUR
+
+
+# from nbp_pl_api.currency_codes import NBP_API_EUR
+# from nbp_pl_api.nbp_fx_provider import NbpFxProvider
 
 
 #todo najpierw ustalmy wartość aktywów
 #todo ustalić wartość lokat w R
 
 
-def main(name):
+def main():
     local_data_steps_root = Path(__file__).parent.parent
     DATA_STEP.init_steps(root=local_data_steps_root)
 
     data_root = get_online_data_root()
+
+    metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / 'fx'
+    if not metadata_root.is_dir():
+        metadata_root.mkdir()
+
+    fx_reader = NbpFxRepository(target_directory=metadata_root, min_year=2005)
+
+    fx_rates = fx_reader.update_to_date()
+    fx_rates = fx_rates[[NBP_API_EUR]].reset_index()
+
+    # fx_rates = read_fx_rates_pln_base(fx_reader, )
 
     assets = read_assets()
     check_wrong_catalogs(data_root, assets)
@@ -57,4 +73,4 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 1000)
     pd.set_option('display.colheader_justify', 'center')
-    main('PyCharm')
+    main()
