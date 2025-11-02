@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
-from assets.data_model import GenericAsset
+from importers.data_model_generic import GenericStructureClass
 
 
-class RevolutFileCls(GenericAsset):
+class RevolutFileCls(GenericStructureClass):
     KIND = 'Rodzaj'
     PRODUCT = 'Produkt'
     INIT_DATE = 'Data rozpoczęcia'
