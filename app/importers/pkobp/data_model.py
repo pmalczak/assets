@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
-from assets.data_model import GenericAsset
+from importers.data_model_generic import GenericStructureClass
 
 
-class PkoBpBondsCls(GenericAsset):
+class PkoBpBondsCls(GenericStructureClass):
     DATE = 'DATA DYSPOZYCJI'
     ORDER_TYPE = 'RODZAJ DYSPOZYCJI'
     CODE = 'KOD OBLIGACJI'
@@ -14,9 +14,6 @@ class PkoBpBondsCls(GenericAsset):
     AMOUNT = 'KWOTA OPERACJI'
     STAT = 'STATUS'
     NOTES = 'UWAGI'
-
-    def __init__(self):
-        super().__init__()
 
     def expected_columns(self) -> set:
         result = {

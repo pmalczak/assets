@@ -4,8 +4,8 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 import pandas as pd
 
-from assets.data_model import AssetsFile
-from assets.read_assets import read_assets
+from importers.assets.data_model import AssetsFile, KindDomain
+from importers.assets.read_assets import read_assets
 from consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
 from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
@@ -20,8 +20,8 @@ def main():
     DATA_STEP.init_steps(root=proj_root)
 
     assets = read_assets()
-    assets = assets[assets[AssetsFile.KIND] == 'mbank_import']
-    assets = assets[assets[AssetsFile.CURRENCY] == 'pln']
+    assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
+    assets = assets[assets[AssetsFile.CURRENCY] == 'PLN']
     assets = assets[AssetsFile.ID].tolist()
 
     data_root = get_online_data_root()

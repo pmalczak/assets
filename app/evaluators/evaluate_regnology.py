@@ -4,7 +4,7 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 
 import pandas as pd
-from assets.data_model import AssetsDef
+from importers.assets.data_model import AssetsDef
 
 
 def evaluate_regnology(data_root: Path = None, asset_id: str = None, assets_file_row: pd.Series = None) -> pd.DataFrame:

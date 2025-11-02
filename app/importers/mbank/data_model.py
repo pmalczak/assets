@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Piotr'
 
-from assets.data_model import GenericAsset
+from importers.data_model_generic import GenericStructureClass
 
 
-class MBankFileCls(GenericAsset):
+class MBankFileCls(GenericStructureClass):
     MBANK_BOOKING_DATE = '#Data księgowania'
     MBANK_TRANSACTION_DATE = '#Data operacji'
     MBANK_DESCRIPTION = '#Opis operacji'

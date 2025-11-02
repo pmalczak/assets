@@ -2,40 +2,39 @@
 __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
-from data_step.data_step import DATA_STEP
-from assets.data_model import AssetsDef
+
+from fx.data_model import LastFx
+from importers.assets.data_model import AssetsDef, KindDomain
+from evaluators.evaluate_assets_file import evaluate_assets_file_content
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
 from evaluators.evaluate_regnology import evaluate_regnology
 from evaluators.evaluate_revolut import evaluate_revolut
+from fx.get_last_fx import get_last_fx
 
 
-def evaluate_assets(data_root, assets: pd.DataFrame) -> pd.DataFrame:
-    r = DATA_STEP.obtain('02 evaluated/assets.parquet', _evaluate_assets, data_root=data_root, assets=assets)
-    return r.data_frame()
+def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> pd.DataFrame:
 
-
-def _evaluate_assets(data_root = None, assets: pd.DataFrame = None) -> pd.DataFrame:
     result = []
-
     a = assets[assets[AssetsDef.KIND].notnull()]
     for i, assets_file_row in a.iterrows():
         assert isinstance(assets_file_row, pd.Series)
         rodzaj_importu: str = assets_file_row[AssetsDef.KIND]
 
-        if rodzaj_importu == 'mbank_import':
+        if rodzaj_importu.startswith(KindDomain.MBANK):
             asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_mbank(data_root, asset_id, assets_file_row)
             AssetsDef.check_structure(r)
             result += [r]
 
-        elif rodzaj_importu == 'revolut_import':
+        elif rodzaj_importu.startswith(KindDomain.REVOLUT):
             asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_revolut(data_root, asset_id, assets_file_row)
-            AssetsDef.check_structure(r)
-            result += [r]
+            if len(r) > 0:
+                AssetsDef.check_structure(r)
+                result += [r]
 
-        elif rodzaj_importu == 'reg_import':
+        elif rodzaj_importu == KindDomain.REGNOLOGY:
             asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_regnology(data_root, asset_id, assets_file_row)
             AssetsDef.check_structure(r)
@@ -47,10 +46,22 @@ def _evaluate_assets(data_root = None, assets: pd.DataFrame = None) -> pd.DataFr
             AssetsDef.check_structure(r)
             result += [r]
 
+        elif rodzaj_importu.startswith('assets.IKE-'):
+            # asset_id: str = assets_file_row[AssetsDef.ID]
+            r = evaluate_assets_file_content(assets_file_row)
+            AssetsDef.check_structure(r)
+            result += [r]
+
         else:
             print(f'brakujący typ: {rodzaj_importu}')
 
-
     result = pd.concat(result)
     AssetsDef.check_structure(result)
-    return result
+
+    last_fx = get_last_fx(fx_rates)
+
+    result1 = pd.merge(result, last_fx, on=AssetsDef.CURRENCY)
+    assert len(result) == len(result1)
+    result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE] * result1[LastFx.FX]
+    result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE_PLN].round().astype('int')
+    return result1

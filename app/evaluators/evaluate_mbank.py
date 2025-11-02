@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from assets.data_model import AssetsDef
+from importers.assets.data_model import AssetsDef, GroupDomain
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 
@@ -18,7 +18,9 @@ def evaluate_mbank(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.D
     return r.data_frame()
 
 
-def _evaluate_mbank(data_root: Path = None, asset_id: str = None, assets_file_row : pd.Series = None):
+def _evaluate_mbank(data_root: Path = None,
+                    asset_id: str = None, assets_file_row : pd.Series = None):
+
     df = read_m_transactions(data_root, asset_id)
     last =df[-1:]
     for i, _row in last.iterrows():
@@ -29,7 +31,7 @@ def _evaluate_mbank(data_root: Path = None, asset_id: str = None, assets_file_ro
         break
     data = [assets_row]
 
-    if assets_file_row[AssetsDef.KIND] == 'mbank_import':
+    if assets_file_row[AssetsDef.KIND].startswith('mbank.'):
         r = _evaluate_deposits_mbank(df, assets_file_row, assets_row)
         if r:
             data += r
@@ -59,6 +61,7 @@ def _evaluate_deposits_mbank(df: pd.DataFrame, assets_file_row: pd.Series, maste
     result = []
     for i, _row in r.iterrows():
         assets_row = AssetsDef.as_assets_row(assets_file_row)
+        assets_row[AssetsDef.GROUP] = GroupDomain.DEPOSIT
         assets_row[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
         assets_row[AssetsDef.TYPE] = 'depozyt'
         assets_row[AssetsDef.DESCR] = _row[KOL_LOKATA]

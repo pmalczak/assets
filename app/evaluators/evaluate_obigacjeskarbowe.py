@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from assets.data_model import AssetsDef
+from importers.assets.data_model import AssetsDef
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.import_bonds import import_bonds
 

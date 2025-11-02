@@ -3,23 +3,11 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-
-class GenericAsset:
-    def __init__(self):
-        return
-
-    def expected_columns(self) -> set:
-        raise NotImplementedError
-
-    def check_structure(self, df: pd.DataFrame):
-        cols = df.columns.tolist()
-        cols = set(cols)
-        diff = cols.symmetric_difference(self.expected_columns())
-        if diff:
-            raise ValueError(diff)
+from importers.assets.data_model_domains import GroupDomainCls, CurrencyDomainCls, TypeDomainCls, KindDomainCls
+from importers.data_model_generic import GenericStructureClass
 
 
-class AssetsFileCls(GenericAsset):
+class AssetsFileCls(GenericStructureClass):
     ID = 'id'
     TYPE = 'typ'
     GROUP = 'grupa'
@@ -42,12 +30,19 @@ class AssetsFileCls(GenericAsset):
             self.NOTES}
         return required
 
-AssetsFile = AssetsFileCls()
+    def check_structure(self, df: pd.DataFrame):
+        super().check_structure(df)
+        GroupDomain.is_in_domain(df)
+        TypeDomain.is_in_domain(df)
+        CurrencyDomain.is_in_domain(df)
+        KindDomain.is_in_domain(df)
 
 
 class AssetsCls(AssetsFileCls):
     EVALUATION_DATE = 'data wyceny'
     VALUE = 'wartość'
+    VALUE_PLN = 'wartość-pln'
+    VALUE_DATE = 'data-waluty'
     IBAN = 'IBAN'
 
     def __init__(self):
@@ -55,7 +50,9 @@ class AssetsCls(AssetsFileCls):
         return
 
     def expected_columns(self) -> set:
-        result = super().expected_columns() | {self.EVALUATION_DATE, self.VALUE, self.IBAN }
+        result = (super().expected_columns() |
+                  {self.EVALUATION_DATE, self.VALUE,
+                   self.IBAN })
         return result
 
     def as_assets_row(self, rec):
@@ -66,4 +63,9 @@ class AssetsCls(AssetsFileCls):
         return result
 
 
+AssetsFile = AssetsFileCls()
 AssetsDef = AssetsCls()
+GroupDomain = GroupDomainCls(AssetsFile.GROUP)
+CurrencyDomain = CurrencyDomainCls(AssetsFile.CURRENCY)
+TypeDomain = TypeDomainCls(AssetsFile.TYPE)
+KindDomain = KindDomainCls(AssetsFile.KIND)
