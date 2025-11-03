@@ -6,6 +6,7 @@ import pandas as pd
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.revolut.data_model import RevolutFile, RevolutFileState
+from importers.revolut.read_revolut_transaction_file import read_revolut_transaction_file
 
 
 def read_revolut_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
@@ -16,17 +17,24 @@ def read_revolut_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
 
 
 def _read_revolut_transactions(source_file: Path = None) -> pd.DataFrame:
-    input_files = list(source_file.glob('*.csv'))
+    # input_files = list(source_file.glob('account-statement_*.{xlsx,csv}'))
+    input_files = [f for f in source_file.rglob("*") if f.suffix in [".xlsx", ".csv"]]
+
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(RevolutFile.expected_columns()))
         return df
 
     records = []
     for input_file in input_files:
-        r_transactions = pd.read_csv(input_file)
+        if input_file.suffix == '.xlsx':
+            df = read_revolut_transaction_file(input_file)
+        elif input_file.suffix == '.csv':
+            df = pd.read_csv(input_file)
+        else:
+            raise ValueError(input_file)
 
-        print(f'PLIK:{input_file} {len(r_transactions):>4} rekord/ów')
-        records += [r_transactions]
+        print(f'PLIK:{input_file} {len(df):>4} rekord/ów')
+        records += [df]
 
     result = None
     for record in records:
