@@ -3,6 +3,7 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 import pandas as pd
 
+from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
 from importers.revolut.data_model import RevolutFile
 from importers.revolut.read_r_transactions import read_revolut_transactions
@@ -25,27 +26,17 @@ def evaluate_revolut(data_root: Path = None, asset_id: str = None, assets_file_r
     data = [assets_row1]
 
     if assets_file_row[AssetsDef.KIND].startswith(KindDomain.REVOLUT):
-        r = _evaluate_deposits(df, assets_file_row)
+        r = evaluate_revolut_deposits(df, assets_file_row, product='lokata',
+                                      depositing_selector='Depositing savings', withdrowing_selector='Withdrawal savings')
+        if r:
+            data += r
+
+        r = evaluate_revolut_deposits(df, assets_file_row, product='robo portfolio',
+                                      depositing_selector='To Robo portfolio',
+                                      withdrowing_selector='From Robo portfolio')
         if r:
             data += r
 
     result = pd.DataFrame(data=data)
     AssetsDef.check_structure(result)
-    return result
-
-
-def _evaluate_deposits(df: pd.DataFrame, assets_file_row: pd.Series) -> list:
-    cond = df[RevolutFile.DESCRIPTION] == 'Depositing savings'
-    df = df[cond]
-
-    result = []
-    for i, row in df.iterrows():
-        assets_row1 = AssetsDef.as_assets_row(assets_file_row)
-        assets_row1[AssetsDef.VALUE] = - row[RevolutFile.AMOUNT]
-        assets_row1[AssetsDef.EVALUATION_DATE] = row[RevolutFile.DATE]
-        assets_row1[AssetsDef.GROUP] = GroupDomain.DEPOSIT
-        assets_row1[AssetsDef.TYPE] = TypeDomain.DEPOSIT
-        assets_row1[AssetsDef.DESCR] = 'lokata'
-        result += [assets_row1]
-
     return result
