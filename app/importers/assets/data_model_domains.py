@@ -5,14 +5,16 @@ from importers.data_model_generic import DomainCheckerGeneric
 
 
 class GroupDomainCls(DomainCheckerGeneric):
-    CASH = '0 środki pieniężne'
-    DEPOSIT = '1 środki pieniężne'
+    CASH = '0 gotówka'
+    BANK_ACCOUNTS = '1 konta bankowe'
+    DEPOSIT = '2 depozyty'
     INVESTMENT = '5 inwestycje finansowe'
     PROPERTY = '9 nieruchomości'
 
     def domain(self) -> set:
         return {
             self.CASH,
+            self.BANK_ACCOUNTS,
             self.DEPOSIT,
             self.INVESTMENT,
             self.PROPERTY
@@ -25,6 +27,7 @@ class CurrencyDomainCls(DomainCheckerGeneric):
 
 
 class TypeDomainCls(DomainCheckerGeneric):
+    CASH = 'cash'
     CURRENT_ACCOUNT = 'ror'
     DEPOSIT = 'depozyt'
     EQUITIES = 'udziały'
@@ -33,6 +36,7 @@ class TypeDomainCls(DomainCheckerGeneric):
 
     def domain(self) -> set:
         return {
+            self.CASH,
             self.CURRENT_ACCOUNT,
             self.DEPOSIT,
             self.EQUITIES,
@@ -47,7 +51,7 @@ class KindDomainCls(DomainCheckerGeneric):
     ASSETS = 'assets'
     BONDS = 'obligacje_skarbowe_import'
     BROKER = 'BROKER'
-    REGNOLOGY = 'reg_import'
+    # REGNOLOGY = 'reg_import'
 
     def domain(self) -> set:
         return {
@@ -57,9 +61,25 @@ class KindDomainCls(DomainCheckerGeneric):
             self.REVOLUT + '.GM',
             self.ASSETS + '.IKE-GM',
             self.ASSETS + '.IKE-PM',
+            self.ASSETS + '.properties',
+            self.ASSETS + '.rocky-iv',
+            self.ASSETS + '.cash',
             self.BONDS,
             self.BROKER,
-            self.REGNOLOGY,
+            # self.REGNOLOGY,
 
             '?'
+        }
+
+
+class OperationDomainCls(DomainCheckerGeneric):
+    SOLD = 'sprzedane'
+    BUY = 'zakup'
+    EVALUATION = 'wycena'
+
+    def domain(self) -> set:
+        return {
+            self.SOLD,
+            self.BUY,
+            self.EVALUATION,
         }

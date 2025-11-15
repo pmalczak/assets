@@ -3,7 +3,8 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-from importers.assets.data_model_domains import GroupDomainCls, CurrencyDomainCls, TypeDomainCls, KindDomainCls
+from importers.assets.data_model_domains import GroupDomainCls, CurrencyDomainCls, TypeDomainCls, KindDomainCls, \
+    OperationDomainCls
 from importers.data_model_generic import GenericStructureClass
 
 
@@ -30,7 +31,7 @@ class AssetsFileCls(GenericStructureClass):
             self.NOTES}
         return required
 
-    def check_structure(self, df: pd.DataFrame):
+    def check_structure(self, df: pd.DataFrame, file=None):
         super().check_structure(df)
         GroupDomain.is_in_domain(df)
         TypeDomain.is_in_domain(df)
@@ -69,3 +70,34 @@ GroupDomain = GroupDomainCls(AssetsFile.GROUP)
 CurrencyDomain = CurrencyDomainCls(AssetsFile.CURRENCY)
 TypeDomain = TypeDomainCls(AssetsFile.TYPE)
 KindDomain = KindDomainCls(AssetsFile.KIND)
+
+
+class PropertiesCls(GenericStructureClass):
+    ID = AssetsDef.ID
+    DATE = 'Data'
+    VALUE = AssetsDef.VALUE
+    CURRENCY = AssetsDef.CURRENCY
+    SIZE = 'metraż'
+    OPERATION = 'operacja'
+    UNIT_PRICE = 'cena za metr'
+
+    def expected_columns(self) -> set:
+        required = {
+            self.ID,
+            self.DATE,
+            self.VALUE,
+            self.CURRENCY,
+            self.SIZE,
+            self.OPERATION,
+            self.UNIT_PRICE,
+        }
+        return required
+
+    def check_structure(self, df: pd.DataFrame, file=None):
+        super().check_structure(df)
+        OperationDomain.is_in_domain(df, file=file)
+
+
+Properties = PropertiesCls()
+
+OperationDomain = OperationDomainCls(Properties.OPERATION)

@@ -14,8 +14,7 @@ from fx.data_model import LastFx
 from nbp_fx_repo.nbp_fx_repository import NbpFxRepository, NBP_API_EUR
 
 
-#todo najpierw ustalmy wartość aktywów
-#todo ustalić wartość lokat w R
+s = '________________________________________________\n'
 
 
 def main():
@@ -42,28 +41,79 @@ def main():
     assets = assets[assets[AssetsDef.VALUE] != 0]
     assets = assets.drop(columns=[AssetsDef.NOTES, LastFx.FX])
     print(assets)
+    print(s)
     assets.to_excel('assets_evaluation.xlsx', index=False)
 
-    a1 = assets[[AssetsDef.TYPE, AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
-    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE]).sum().round().astype('int')
-    print_groupped_value(g1, AssetsDef.VALUE, AssetsDef.CURRENCY)
-
-    a1 = assets[[AssetsDef.TYPE, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_PLN, AssetsDef.CURRENCY]]
-    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE]).sum().round().astype('int')
-    print_groupped_value(g1, AssetsDef.VALUE_PLN, AssetsDef.CURRENCY)
-
-    a1 = assets[[AssetsDef.CURRENCY, AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
-    a1[AssetsDef.CURRENCY] = ''
-    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.GROUP]).sum().round().astype('int')
-    print_groupped_value(g1, AssetsDef.VALUE_PLN, AssetsDef.CURRENCY)
+    rap3(assets)
+    rap2(assets)
+    rap1(assets)
     return
 
 
-def print_groupped_value(g1, value_column, currency_column):
-    g1[value_column] = g1[value_column].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    g1[value_column] = g1[value_column] + ' ' + g1.index.get_level_values(currency_column)
+def rap3(assets):
+    msg = 'RAP 3___________________________________________'
+    print(msg)
+    a1 = assets[[AssetsDef.TYPE,
+                 AssetsDef.CURRENCY,
+                 AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
+    g1 = a1.groupby([
+        AssetsDef.EVALUATION_DATE,
+        AssetsDef.TYPE,
+    ]).agg({
+        AssetsDef.VALUE: 'sum',
+        AssetsDef.CURRENCY: 'first',  # waluta taka jak w grupie
+    })
+
+    g1[AssetsDef.VALUE] = (
+        g1[AssetsDef.VALUE]
+        .round()
+        .astype(int)
+        .map('{:,}'.format)
+        .str.replace(',', ' ')
+    )
+
+    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1[AssetsDef.CURRENCY]
+    g1 = g1.drop(columns=[AssetsDef.CURRENCY])
+    print(g1.to_string(col_space=15))
+
+    # print(g1)
+    print(s)
+
+
+def rap2(assets):
+    msg = 'RAP 2___________________________________________'
+    print(msg)
+    a1 = assets[[AssetsDef.TYPE,
+                 # AssetsDef.EVALUATION_DATE,
+                 AssetsDef.VALUE,
+                 AssetsDef.VALUE_PLN,
+                 AssetsDef.CURRENCY]]
+    a1_g = a1.copy()
+    a1_g[AssetsDef.TYPE] = 'Z RAZEM'
+    a1 = pd.concat([a1, a1_g])
+    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.TYPE]).sum().round().astype('int')
+    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
+    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1.index.get_level_values(AssetsDef.CURRENCY)
+
+    g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
     print(g1)
-    print()
+    print(s)
+
+
+def rap1(assets):
+    msg = 'RAP 1___________________________________________'
+    print(msg)
+    a1 = assets[[AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
+    a2 = a1.copy()
+    a2[AssetsDef.GROUP] = 'Z RAZEM'
+
+    df = pd.concat([a1, a2])
+    g1 = df.groupby([AssetsDef.GROUP]).sum().round().astype('int')
+    g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
+    print(g1)
+    print(s)
+    return
+
 
 
 if __name__ == '__main__':
@@ -72,6 +122,7 @@ if __name__ == '__main__':
 
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', 1000)
+    pd.set_option('display.width', 5000)
     pd.set_option('display.colheader_justify', 'center')
+
     main()

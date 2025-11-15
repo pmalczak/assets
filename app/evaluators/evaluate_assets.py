@@ -5,10 +5,9 @@ import pandas as pd
 
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, KindDomain
-from evaluators.evaluate_assets_file import evaluate_assets_file_content
+from evaluators.evaluate_assets_file import evaluate_assets_file
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
-from evaluators.evaluate_regnology import evaluate_regnology
 from evaluators.evaluate_revolut import evaluate_revolut
 from fx.get_last_fx import get_last_fx
 
@@ -34,23 +33,17 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
                 AssetsDef.check_structure(r)
                 result += [r]
 
-        elif rodzaj_importu == KindDomain.REGNOLOGY:
-            asset_id: str = assets_file_row[AssetsDef.ID]
-            r = evaluate_regnology(data_root, asset_id, assets_file_row)
-            AssetsDef.check_structure(r)
-            result += [r]
-
         elif rodzaj_importu == 'obligacje_skarbowe_import':
             asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row)
             AssetsDef.check_structure(r)
             result += [r]
 
-        elif rodzaj_importu.startswith('assets.IKE-'):
-            # asset_id: str = assets_file_row[AssetsDef.ID]
-            r = evaluate_assets_file_content(assets_file_row)
-            AssetsDef.check_structure(r)
-            result += [r]
+        elif rodzaj_importu.startswith('assets.'):
+            r = evaluate_assets_file(rodzaj_importu, assets_file_row)
+            if r is not None:
+                AssetsDef.check_structure(r)
+                result += [r]
 
         else:
             print(f'brakujący typ: {rodzaj_importu}')
