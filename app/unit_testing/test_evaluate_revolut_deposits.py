@@ -4,7 +4,7 @@ import pandas as pd
 
 from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from importers.assets.data_model import AssetsDef
-from importers.revolut.data_model import RevolutFile
+from importers.revolut.revolut_account_file import RevolutAccountFile
 
 
 class EvaluateDepositsTests(unittest.TestCase):
@@ -15,8 +15,8 @@ class EvaluateDepositsTests(unittest.TestCase):
         Zakładanie lokat: brak wypłat -> każdy 'Depositing savings' tworzy jeden rekord otwarcia.
         """
         df = pd.DataFrame([
-            {RevolutFile.DESCRIPTION: "Depositing savings", RevolutFile.AMOUNT: -100.0, RevolutFile.DATE: "2025-01-10"},
-            {RevolutFile.DESCRIPTION: "Depositing savings", RevolutFile.AMOUNT: -50.0,  RevolutFile.DATE: "2025-02-01"},
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -100.0, RevolutAccountFile.DATE: "2025-01-10"},
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -50.0, RevolutAccountFile.DATE: "2025-02-01"},
         ])
 
         res = evaluate_revolut_deposits(df, self.assets_file_row, product='lokata',
@@ -41,9 +41,9 @@ class EvaluateDepositsTests(unittest.TestCase):
         Przykład: depozyty 100 i 50, wypłata 120 -> zamyka 100 w całości i 20 z drugiej.
         """
         df = pd.DataFrame([
-            {RevolutFile.DESCRIPTION: "Depositing savings",  RevolutFile.AMOUNT: -100.0, RevolutFile.DATE: "2025-01-10"},
-            {RevolutFile.DESCRIPTION: "Depositing savings",  RevolutFile.AMOUNT: -50.0,  RevolutFile.DATE: "2025-02-01"},
-            {RevolutFile.DESCRIPTION: "Withdrawal savings",  RevolutFile.AMOUNT: 120.0,  RevolutFile.DATE: "2025-03-01"},
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -100.0, RevolutAccountFile.DATE: "2025-01-10"},
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -50.0, RevolutAccountFile.DATE: "2025-02-01"},
+            {RevolutAccountFile.DESCRIPTION: "Withdrawal savings", RevolutAccountFile.AMOUNT: 120.0, RevolutAccountFile.DATE: "2025-03-01"},
         ])
 
         res = evaluate_revolut_deposits(df, self.assets_file_row, product='lokata',
@@ -70,9 +70,9 @@ class EvaluateDepositsTests(unittest.TestCase):
         Algorytm ignoruje nadwyżkę ponad sumę lokat i nie rzuca błędu.
         """
         df = pd.DataFrame([
-            {RevolutFile.DESCRIPTION: "Depositing savings",  RevolutFile.AMOUNT: -100.0, RevolutFile.DATE: "2025-01-10"},
-            {RevolutFile.DESCRIPTION: "Depositing savings",  RevolutFile.AMOUNT: -50.0,  RevolutFile.DATE: "2025-02-01"},
-            {RevolutFile.DESCRIPTION: "Withdrawal savings",  RevolutFile.AMOUNT: 200.0,  RevolutFile.DATE: "2025-03-01"},  # > 150
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -100.0, RevolutAccountFile.DATE: "2025-01-10"},
+            {RevolutAccountFile.DESCRIPTION: "Depositing savings", RevolutAccountFile.AMOUNT: -50.0, RevolutAccountFile.DATE: "2025-02-01"},
+            {RevolutAccountFile.DESCRIPTION: "Withdrawal savings", RevolutAccountFile.AMOUNT: 200.0, RevolutAccountFile.DATE: "2025-03-01"},  # > 150
         ])
 
         res = evaluate_revolut_deposits(df, self.assets_file_row, product='lokata',

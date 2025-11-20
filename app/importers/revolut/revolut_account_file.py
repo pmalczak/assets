@@ -4,7 +4,7 @@ __author__ = "pmalczak@gmail.com"
 from importers.data_model_generic import GenericStructureClass
 
 
-class RevolutFileCls(GenericStructureClass):
+class RevolutAccountFileCls(GenericStructureClass):
     KIND = 'Rodzaj'
     PRODUCT = 'Produkt'
     INIT_DATE = 'Data rozpoczęcia'
@@ -50,19 +50,4 @@ class RevolutFileCls(GenericStructureClass):
         return result
 
 
-RevolutFile = RevolutFileCls()
-
-
-class RevolutFileStateCls:
-    CLOSED = 'ZAKOŃCZONO'
-    PENDING = 'PENDING'
-    REVERTED = 'REVERTED'
-
-    def __init__(self):
-        return
-
-    def values(self) -> list:
-        return [self.CLOSED, self.PENDING, self.REVERTED]
-
-
-RevolutFileState = RevolutFileStateCls()
+RevolutAccountFile = RevolutAccountFileCls()

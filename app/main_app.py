@@ -177,10 +177,4 @@ if __name__ == "__main__":
     pd.options.mode.copy_on_write = True
     pd.options.future.infer_string = True
 
-    # Te opcje dotyczą tylko printów/konsoli — UI Streamlit jest niezależne:
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', 1000)
-    pd.set_option('display.colheader_justify', 'center')
-
     main()

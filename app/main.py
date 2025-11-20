@@ -15,13 +15,13 @@ from nbp_fx_repo.nbp_fx_repository import NbpFxRepository, NBP_API_EUR
 
 
 s = '________________________________________________\n'
-
+col_space=15
 
 def main():
     local_data_steps_root = Path(__file__).parent.parent
     DATA_STEP.init_steps(root=local_data_steps_root)
 
-    # DATA_STEP.force_read_data()
+    DATA_STEP.force_read_data()
 
     data_root = get_online_data_root()
 
@@ -74,7 +74,7 @@ def rap3(assets):
 
     g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1[AssetsDef.CURRENCY]
     g1 = g1.drop(columns=[AssetsDef.CURRENCY])
-    print(g1.to_string(col_space=15))
+    print(g1.to_string(col_space=col_space))
 
     # print(g1)
     print(s)
@@ -96,7 +96,7 @@ def rap2(assets):
     g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1.index.get_level_values(AssetsDef.CURRENCY)
 
     g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    print(g1)
+    print(g1.to_string(col_space=col_space))
     print(s)
 
 
@@ -110,7 +110,7 @@ def rap1(assets):
     df = pd.concat([a1, a2])
     g1 = df.groupby([AssetsDef.GROUP]).sum().round().astype('int')
     g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    print(g1)
+    print(g1.to_string(col_space=col_space))
     print(s)
     return
 

@@ -10,14 +10,22 @@ from .data_model import MBankFile
 from .local_extract_csv_table import extract_csv_table
 
 
-def read_mbank_csv_file(input_file: Path) -> pd.DataFrame:
-    sys = platform.system()
-    if sys == 'Linux':
-        arg = {'encoding': 'Windows-1250'}
-    elif sys == 'Windows':
-        arg = {}
-    else:
-        raise ValueError(sys)
+def read_mbank_csv_file(input_file: Path, **arg) -> pd.DataFrame:
+    options = (
+        {},
+        {'encoding': 'Windows-1250'},
+        {'encoding': 'utf-8'}
+    )
+    for arg in options:
+        try:
+            result = _read_mbank_csv_file(input_file, **arg)
+            return result
+        except UnicodeDecodeError:
+            continue
+    raise ValueError
+
+
+def _read_mbank_csv_file(input_file: Path, **arg) -> pd.DataFrame:
     with open(input_file, 'r', **arg) as f:   # , encoding='Windows-1250'
         in_content = f.read()
 

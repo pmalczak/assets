@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 __author__ = 'pmalczak@gmail.com'
+
 from pathlib import Path
 import pandas as pd
 
@@ -22,6 +23,7 @@ def read_m_transactions(data_root: Path, asset_id: str) -> pd.DataFrame:
 
 
 def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
+
     assert source_file.is_dir()
     input_files = list(source_file.glob('*.csv'))
     if not input_files:

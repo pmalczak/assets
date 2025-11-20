@@ -49,7 +49,7 @@ Napisz kod realizujący zarówno zakładanie jak też zamykanie depozytów
 """
 
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
-from importers.revolut.data_model import RevolutFile
+from importers.revolut.revolut_account_file import RevolutAccountFile
 
 import pandas as pd
 
@@ -73,15 +73,15 @@ def evaluate_revolut_deposits(df: pd.DataFrame, assets_file_row: pd.Series, prod
     Zwraca: listę wierszy (Series/Dict) przygotowanych przez AssetsDef.as_assets_row(assets_file_row).
     """
     # --- separacja wejść ---
-    dep_mask = df[RevolutFile.DESCRIPTION] == depositing_selector
-    wdr_mask = df[RevolutFile.DESCRIPTION] == withdrowing_selector
+    dep_mask = df[RevolutAccountFile.DESCRIPTION] == depositing_selector
+    wdr_mask = df[RevolutAccountFile.DESCRIPTION] == withdrowing_selector
 
     deposits_df = df.loc[dep_mask].copy()
     withdrawals_df = df.loc[wdr_mask].copy()
 
     # Bez założeń dot. sortowania wejścia – jawnie sortujemy po dacie
-    deposits_df = deposits_df.sort_values(by=[RevolutFile.DATE, RevolutFile.AMOUNT], kind="stable")
-    withdrawals_df = withdrawals_df.sort_values(by=[RevolutFile.DATE, RevolutFile.AMOUNT], kind="stable")
+    deposits_df = deposits_df.sort_values(by=[RevolutAccountFile.DATE, RevolutAccountFile.AMOUNT], kind="stable")
+    withdrawals_df = withdrawals_df.sort_values(by=[RevolutAccountFile.DATE, RevolutAccountFile.AMOUNT], kind="stable")
 
     result = []
 
@@ -91,7 +91,7 @@ def evaluate_revolut_deposits(df: pd.DataFrame, assets_file_row: pd.Series, prod
     lots = []
 
     for _, row in deposits_df.iterrows():
-        amt = row[RevolutFile.AMOUNT]
+        amt = row[RevolutAccountFile.AMOUNT]
         if amt >= 0:
             raise ValueError
 
@@ -99,7 +99,7 @@ def evaluate_revolut_deposits(df: pd.DataFrame, assets_file_row: pd.Series, prod
         # wiersz aktywa dla OTWARCIA
         assets_row_open = AssetsDef.as_assets_row(assets_file_row)
         assets_row_open[AssetsDef.VALUE] = deposit_value
-        assets_row_open[AssetsDef.EVALUATION_DATE] = row[RevolutFile.DATE]
+        assets_row_open[AssetsDef.EVALUATION_DATE] = row[RevolutAccountFile.DATE]
         assets_row_open[AssetsDef.GROUP] = GroupDomain.DEPOSIT
         assets_row_open[AssetsDef.TYPE] = TypeDomain.DEPOSIT
         assets_row_open[AssetsDef.DESCR] = f'{product} (otwarcie)'
@@ -108,12 +108,12 @@ def evaluate_revolut_deposits(df: pd.DataFrame, assets_file_row: pd.Series, prod
         # dodaj "lot" do kolejki FIFO (pozostała kwota = pełna wartość lokaty)
         lots.append({
             "remaining": float(deposit_value),
-            "opened_on": row[RevolutFile.DATE],
+            "opened_on": row[RevolutAccountFile.DATE],
         })
 
     # --- 2) Zamykanie/zmniejszanie lokat wg wypłat, FIFO ---
     for _, row in withdrawals_df.iterrows():
-        amt = row[RevolutFile.AMOUNT]
+        amt = row[RevolutAccountFile.AMOUNT]
         if amt <= 0:
             raise ValueError
 
@@ -132,7 +132,7 @@ def evaluate_revolut_deposits(df: pd.DataFrame, assets_file_row: pd.Series, prod
             # wiersz aktywa dla ZAMKNIĘCIA (zmniejszamy aktywo, więc wartość ujemna)
             assets_row_close = AssetsDef.as_assets_row(assets_file_row)
             assets_row_close[AssetsDef.VALUE] = -applied
-            assets_row_close[AssetsDef.EVALUATION_DATE] = row[RevolutFile.DATE]
+            assets_row_close[AssetsDef.EVALUATION_DATE] = row[RevolutAccountFile.DATE]
             assets_row_close[AssetsDef.GROUP] = GroupDomain.DEPOSIT
             assets_row_close[AssetsDef.TYPE] = TypeDomain.DEPOSIT
             # opiszemy z referencją do daty otwarcia lota

@@ -12,6 +12,7 @@ def deduplicate_records(df1, df2, date_src_col, key_cols):
     df2 = df2.copy()
     df1[date_col] = pd.to_datetime(df1[date_src_col])
     df2[date_col] = pd.to_datetime(df2[date_src_col])
+    # df1 = df1.fi
 
     # zakresy dat
     min1, max1 = df1[date_col].min(), df1[date_col].max()
@@ -46,7 +47,10 @@ def deduplicate_overlapped_records(df1, df2, date_col, key_cols, overlap_start, 
     overlap_combined = pd.concat([df1_overlap, df2_overlap], ignore_index=True)
 
     removed_mask = overlap_combined.duplicated(subset=key_cols, keep='last')
-    dup_keys = overlap_combined.loc[:, key_cols].astype(str).agg('|'.join, axis=1)
+    try:
+        dup_keys = overlap_combined.loc[:, key_cols].astype(str).agg('|'.join, axis=1)
+    except TypeError:
+        raise
     duplicates_report = overlap_combined.loc[removed_mask].copy()
     duplicates_report.loc[:, 'duplicate_key'] = dup_keys.loc[removed_mask]
 
