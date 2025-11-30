@@ -15,15 +15,23 @@ def horbaczewskiego(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
         | (df["#Numer konta"] == "33124067261111001052301556")  # ARKADIUSZ GĄCIARZ -ROR
     )
     m2 = (
-            df["#Numer konta"] == "28114020040000390279513454"
+        (df["#Numer konta"] == "28114020040000390279513454")
+        | (df["#Numer konta"] == "41102052421283117588515063")  #
+        | (df["#Numer konta"] == "45105000996029010194551607")  # TAURON
     )
     m3 = (
         (df["#Tytuł"].str.contains("DEPOZYT NOTARIALNY") &
          df["#Nadawca/Odbiorca"].str.contains("KANCELARIA NOTARIALNA NATALIA ŁYSZCZAK ANNA PIKUŁA-SZUBA")) |
 
         (df["#Tytuł"].str.contains("ZALICZKA MIESZKANIE") &
-         df["#Nadawca/Odbiorca"].str.contains("BEDEKIER JACEK STANISŁAW           I BEDEKIER JUSTYNA"))
-    )
+         df["#Nadawca/Odbiorca"].str.contains("BEDEKIER JACEK STANISŁAW           I BEDEKIER JUSTYNA")) |
 
-    selector = m1 | m2 | m3
+        (df["#Tytuł"].str.contains("ZA MIESZKANIE") &
+         df["#Nadawca/Odbiorca"].str.contains("FILIP MALCZAK  UL.KIEMLICZÓW 9 M.4"))
+    )
+    m4 = (
+        (df["#Tytuł"] == "TAURON HORBACZEWSKIEGO  ")
+    ) #
+
+    selector = m1 | m2 | m3 | m4
     return select_asset(df, selector, fout, result)

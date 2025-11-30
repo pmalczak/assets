@@ -9,6 +9,7 @@ from analyse_assets.aquamarina import aquamarina, _garaz
 from analyse_assets.horbaczewskiego import horbaczewskiego
 from analyse_assets.kiemliczow_1 import kiemliczow_1
 from analyse_assets.kiemliczow_3 import kiemliczow_3
+from analyse_assets.kiemliczow_4 import kiemliczow_4
 from analyse_assets.opoczynska import opoczynska
 from analyse_assets.rumiankowa import rumiankowa
 from analyse_assets.starogajowa import starogajowa
@@ -48,7 +49,7 @@ def main():
 
     df['Data operacji'] = pd.to_datetime(df['#Data operacji'], format='%Y-%m-%d')
 
-    df['ROK'] = df['Data operacji'].dt.year
+    df['ROK'] = df['Data operacji'].dt.year.astype('str')
     df['MIESIAC'] = df['Data operacji'].dt.month
     df['DZIEN'] = df['Data operacji'].dt.day
 
@@ -81,14 +82,14 @@ def analyse_assets_proc(df, p):
     fout = p / f'mbank_starogajowa.xlsx'
     df = starogajowa(df, fout, result)
 
-    fout = p / f'mbank_kieliczow_1.xlsx'
+    fout = p / f'mbank_kiemliczow_1.xlsx'
     df = kiemliczow_1(df, fout, result)
 
-    fout = p / f'mbank_kieliczow_3.xlsx'
+    fout = p / f'mbank_kiemliczow_3.xlsx'
     df = kiemliczow_3(df, fout, result)
 
-    fout = p / f'mbank_kieliczow_4.xlsx'
-    df = kiemliczow_3(df, fout, result)
+    fout = p / f'mbank_kiemliczow_4.xlsx'
+    df = kiemliczow_4(df, fout, result)
 
     fout = p / f'mbank_rumiankowa.xlsx'
     df = rumiankowa(df, fout, result)

@@ -15,6 +15,7 @@ def kiemliczow_3(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     )
     m2 = (
         df["#Tytuł"].str.contains("DEPOZYT DO UMOWY SPRZEDAŻY STAROGAJOWA 23")
+        | df["#Tytuł"].str.contains("KIEMLICZÓW 9/3")
     )
 
     selector = m1 | m2

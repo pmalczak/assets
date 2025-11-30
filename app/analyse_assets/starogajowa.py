@@ -10,15 +10,12 @@ from analyse_assets.select_asset import select_asset
 
 def starogajowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     m1 = (
-            df["#Tytuł"].str.contains("STAROGAJOWA")
-            # df["#Nadawca/Odbiorca"].str.contains("MIĘDZYZDROJE") |
-            # df["#Nadawca/Odbiorca"].str.contains("MARINA INVEST") #
-    )
-    m2 = (
-        df["#Tytuł"].str.contains("DEPOZYT DO UMOWY SPRZEDAŻY STAROGAJOWA 23")
+        df["#Tytuł"].str.contains("STAROGAJOWA")
+        | df["#Tytuł"].str.contains("DEPOZYT DO UMOWY SPRZEDAŻY STAROGAJOWA 23")
         | df["#Tytuł"].str.contains("ZADATEK-UMOWA PRZEDWSTĘPNA-SPRZEDAŻ STAROGAJOWA 23")
         | df["#Tytuł"].str.contains("OPŁATA NOTARIALNA + PODATEK ZA SPRZEDAŻ STAROGAJOWA 23")
+        | df["#Tytuł"].str.contains("FV73/2019")
     )
 
-    selector = m1 | m2
+    selector = m1
     return select_asset(df, selector, fout, result)

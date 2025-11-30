@@ -12,14 +12,15 @@ def aquamarina(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     m1 = (
             df["#Nadawca/Odbiorca"].str.contains("AQUAMARINA") |
             df["#Nadawca/Odbiorca"].str.contains("MIĘDZYZDROJE") |
-            df["#Nadawca/Odbiorca"].str.contains("MARINA INVEST") #
+            df["#Nadawca/Odbiorca"].str.contains("MARINA INVEST") |
+            df["#Nadawca/Odbiorca"].str.contains("KORNELIA ZAJĄCZKOWSKA")  #
     )
     m2 = df["#Numer konta"].str.contains("10124069600163204573190024")
     m3 = (
         df["#Tytuł"].str.contains("ZALICZKA DO ZLECENIA 20020793 ZA NAROŻNIK I MATERAC")
     )
 
-    selector = m1 | m2
+    selector = m1 | m2 | m3
     return select_asset(df, selector, fout, result)
 
 
@@ -29,12 +30,10 @@ def _garaz(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
          (df["#Nadawca/Odbiorca"].str.contains("PODATEK GARAŻ"))
     )
     m2 = (
-        (df["#Tytuł"].str.contains("GARAŻ") &
-         (df["ROK"] >= 2020))
-    )
-    m3 = (
-        (df["#Tytuł"] == 'OPŁATA ZA ZAKUP GARAŻU - UL. RUMIANKOWA')
+        (df["#Tytuł"].str.contains("GARAŻ") & (df["ROK"] >= '2020'))
+        | (df["#Tytuł"] == 'OPŁATA ZA ZAKUP GARAŻU - UL. RUMIANKOWA')
+        | (df["#Tytuł"].str.contains("GARAŻ ZA"))
     )
 
-    selector = m1 | m2 | m3
+    selector = m1 | m2
     return select_asset(df, selector, fout, result)

@@ -7,13 +7,18 @@ import pandas as pd
 
 
 def select_asset(df: pd.DataFrame, selector, fout: Path, result: dict) -> pd.DataFrame:
-    df_aquamarina, df = _split(df, selector)
+    selected, remaining = _split(df, selector)
 
-    df_aquamarina.to_excel(fout, index=False)
-    df_aquamarina = df_aquamarina[['ROK', '#Kwota', '#Opis operacji']]
-    total = df_aquamarina.copy()
+    selected.to_excel(fout, index=False)
+    selected = selected[['ROK', '#Kwota', '#Opis operacji']]
+    total = selected.copy()
     total['#Opis operacji'] = 'TOTAL'
-    piv = pd.concat([df_aquamarina, total])
+    piv = pd.concat([selected, total])
+
+    total = piv.copy()
+    total['ROK'] = 'RAZEM'
+    piv = pd.concat([piv, total])
+
     tabela = piv.pivot_table(
         index='ROK',
         columns='#Opis operacji',
@@ -28,7 +33,7 @@ def select_asset(df: pd.DataFrame, selector, fout: Path, result: dict) -> pd.Dat
     print(tabela.to_string(col_space=15))
     print()
 
-    return df
+    return remaining
 
 
 def _split(df, selector):
