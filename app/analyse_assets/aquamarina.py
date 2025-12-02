@@ -5,19 +5,20 @@ from pathlib import Path
 
 import pandas as pd
 
+from analyse_assets.data_model import AssetRw
 from analyse_assets.select_asset import select_asset
 
 
 def aquamarina(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     m1 = (
-            df["#Nadawca/Odbiorca"].str.contains("AQUAMARINA") |
-            df["#Nadawca/Odbiorca"].str.contains("MIĘDZYZDROJE") |
-            df["#Nadawca/Odbiorca"].str.contains("MARINA INVEST") |
-            df["#Nadawca/Odbiorca"].str.contains("KORNELIA ZAJĄCZKOWSKA")  #
+            df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("AQUAMARINA") |
+            df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("MIĘDZYZDROJE") |
+            df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("MARINA INVEST") |
+            df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("KORNELIA ZAJĄCZKOWSKA")  #
     )
-    m2 = df["#Numer konta"].str.contains("10124069600163204573190024")
+    m2 = df[AssetRw.MBANK_ACCOUNT_NUMBER].str.contains("10124069600163204573190024")
     m3 = (
-        df["#Tytuł"].str.contains("ZALICZKA DO ZLECENIA 20020793 ZA NAROŻNIK I MATERAC")
+        df[AssetRw.MBANK_TITLE].str.contains("ZALICZKA DO ZLECENIA 20020793 ZA NAROŻNIK I MATERAC")
     )
 
     selector = m1 | m2 | m3
@@ -26,13 +27,13 @@ def aquamarina(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
 
 def _garaz(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     m1 = (
-         (df["#Nadawca/Odbiorca"].str.contains("IGLICA GARAŻ")) |
-         (df["#Nadawca/Odbiorca"].str.contains("PODATEK GARAŻ"))
+         (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("IGLICA GARAŻ")) |
+         (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("PODATEK GARAŻ"))
     )
     m2 = (
-        (df["#Tytuł"].str.contains("GARAŻ") & (df["ROK"] >= '2020'))
-        | (df["#Tytuł"] == 'OPŁATA ZA ZAKUP GARAŻU - UL. RUMIANKOWA')
-        | (df["#Tytuł"].str.contains("GARAŻ ZA"))
+        (df[AssetRw.MBANK_TITLE].str.contains("GARAŻ") & (df["ROK"] >= '2020'))
+        | (df[AssetRw.MBANK_TITLE] == 'OPŁATA ZA ZAKUP GARAŻU - UL. RUMIANKOWA')
+        | (df[AssetRw.MBANK_TITLE].str.contains("GARAŻ ZA"))
     )
 
     selector = m1 | m2

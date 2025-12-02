@@ -28,6 +28,7 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
     input_files = list(source_file.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(MBankFile.expected_columns()))
+        MBankFile.check_structure(df)
         return df
 
     forbidden_signs = []
@@ -59,4 +60,5 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
         result = deduplicate_records(result, record, MBankFile.MBANK_TRANSACTION_DATE, MBankFile.unique_key())
 
+    MBankFile.check_structure(result)
     return result

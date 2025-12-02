@@ -5,17 +5,18 @@ from pathlib import Path
 
 import pandas as pd
 
+from analyse_assets.data_model import AssetRw
 from analyse_assets.select_asset import select_asset
 
 
 def kiemliczow_4(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     m1 = (
-        df["#Tytuł"].str.contains("KIEMLICZÓW 9/4")
-        | df["#Tytuł"].str.contains("CZYNSZ + POMIESZCZENIE GOSPODARCZE (51,00)")
-        | (df["#Tytuł"] == "TAURON KIEMLICZÓW 4 ")
+        df[AssetRw.MBANK_TITLE].str.contains("KIEMLICZÓW 9/4")
+        | df[AssetRw.MBANK_TITLE].str.contains("CZYNSZ + POMIESZCZENIE GOSPODARCZE (51,00)")
+        | (df[AssetRw.MBANK_TITLE] == "TAURON KIEMLICZÓW 4 ")
     ) #
     m2 = (
-            df["#Numer konta"] == "5110205242676676767"
+            df[AssetRw.MBANK_ACCOUNT_NUMBER] == "5110205242676676767"
     )
 
     selector = m1 | m2

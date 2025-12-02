@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from analyse_assets.aquamarina import aquamarina, _garaz
+from analyse_assets.data_model import AssetRw
 from analyse_assets.horbaczewskiego import horbaczewskiego
 from analyse_assets.kiemliczow_1 import kiemliczow_1
 from analyse_assets.kiemliczow_3 import kiemliczow_3
@@ -18,13 +19,14 @@ from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.read_assets import read_assets
+from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 
 
 def main():
     proj_root = Path(__file__).parent.parent
     DATA_STEP.init_steps(root=proj_root)
-
+    # DATA_STEP.force_read_data()
     assets = read_assets()
     assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
     assets = assets[assets[AssetsFile.CURRENCY] == 'PLN']
@@ -40,18 +42,14 @@ def main():
 
     df, report, meta = consolidate_many_drop_internal_transfers(result)
 
-    df['#Opis operacji'] = df['#Opis operacji'].replace({'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-                                                         'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-                                                         'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-                                                         'PRZELEW WEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-                                                         'PRZELEW SORBNET WYCHODZĄCY': ' WYDATKI',
-                                                         })
-
-    df['Data operacji'] = pd.to_datetime(df['#Data operacji'], format='%Y-%m-%d')
-
-    df['ROK'] = df['Data operacji'].dt.year.astype('str')
-    df['MIESIAC'] = df['Data operacji'].dt.month
-    df['DZIEN'] = df['Data operacji'].dt.day
+    df[MBankFile.MBANK_DESCRIPTION] = (df[MBankFile.MBANK_DESCRIPTION]
+                                       .replace({'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
+                                                 'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
+                                                 'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
+                                                 'PRZELEW WEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
+                                                 'PRZELEW SORBNET WYCHODZĄCY': ' WYDATKI',
+                                                 }))
+    df = AssetRw.x(df)
 
     p = Path(__file__).parent
 

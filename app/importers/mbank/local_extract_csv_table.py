@@ -19,7 +19,7 @@ class WrongFileFormat(BaseException):
 
 
 def extract_csv_table(f) -> Tuple[str, list]:
-    header = '#Data księgowania;#Data operacji;#Opis operacji;#Tytuł;#Nadawca/Odbiorca;#Numer konta;' \
+    header = f'#Data księgowania;#Data operacji;#Opis operacji;#Tytuł;#Nadawca/Odbiorca;#Numer konta;' \
              '#Kwota;#Saldo po operacji'
     base_account = ''
     while True:
