@@ -1,28 +1,41 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-
-from pathlib import Path
-
 import pandas as pd
 
+from analyse_assets.data_model import AssetRw
 
-def select_asset(df: pd.DataFrame, selector, fout: Path, result: dict) -> pd.DataFrame:
-    selected, remaining = _split(df, selector)
 
-    selected.to_excel(fout, index=False)
-    selected = selected[['ROK', '#Kwota', '#Opis operacji']]
+def select_asset(df: pd.DataFrame, selector, mapping: dict) -> tuple:
+    selected = df[selector].copy()
+    remaining = df[~selector].copy()
+
+    if selected.empty:
+        raise ValueError()
+
+    cond = selected[AssetRw.MBANK_DESCRIPTION].isin(mapping.keys())
+    missing = selected.loc[~cond, AssetRw.MBANK_DESCRIPTION].unique()
+
+    if len(missing) > 0:
+        raise ValueError(f"Brakujące wartości w mapowaniu: {missing}")
+
+    selected[AssetRw.CAT] = selected[AssetRw.MBANK_DESCRIPTION].replace(mapping)
+    return remaining, selected
+
+
+def print_asset(selected, fout, result: dict):
+    selected = selected[[AssetRw.YEAR, AssetRw.MBANK_AMOUNT, AssetRw.CAT]]
     total = selected.copy()
-    total['#Opis operacji'] = 'TOTAL'
+    total[AssetRw.CAT] = 'TOTAL'
     piv = pd.concat([selected, total])
 
     total = piv.copy()
-    total['ROK'] = 'RAZEM'
+    total[AssetRw.YEAR] = 'RAZEM'
     piv = pd.concat([piv, total])
 
     tabela = piv.pivot_table(
-        index='ROK',
-        columns='#Opis operacji',
-        values='#Kwota',
+        index=AssetRw.YEAR,
+        columns=AssetRw.CAT,
+        values=AssetRw.MBANK_AMOUNT,
         aggfunc='sum',
         fill_value=0
     )
@@ -32,8 +45,6 @@ def select_asset(df: pd.DataFrame, selector, fout: Path, result: dict) -> pd.Dat
     print(fout.name)
     print(tabela.to_string(col_space=15))
     print()
-
-    return remaining
 
 
 def _split(df, selector):

@@ -25,7 +25,7 @@ def _evaluate_mbank(data_root: Path = None,
     last =df[-1:]
     for i, _row in last.iterrows():
         assets_row = AssetsDef.as_assets_row(assets_file_row)
-        assets_row[AssetsDef.IBAN] = _row[MBankFile.MBANK_DEBIT_ACCOUNT]
+        assets_row[AssetsDef.IBAN] = _row[MBankFile.DEBIT_ACCOUNT]
         assets_row[AssetsDef.VALUE] = _row[MBankFile.MBANK_OUTSTANDING_BALANCE]
         assets_row[AssetsDef.EVALUATION_DATE] = _row[MBankFile.MBANK_TRANSACTION_DATE]
         break

@@ -21,10 +21,10 @@ def _contains_any_ci(text: str, phrases: list[str]) -> bool:
 def consolidate_many_drop_internal_transfers(
     statements: List[pd.DataFrame],
     *,
-    col_konto_bazowe=MBankFile.MBANK_DEBIT_ACCOUNT,
+    col_konto_bazowe=MBankFile.DEBIT_ACCOUNT,
     col_numer_konta=MBankFile.MBANK_ACCOUNT_NUMBER,
     col_kwota=MBankFile.MBANK_AMOUNT,
-    col_data_transakcji=MBankFile.MBANK_EFFECTIVE_DATE,
+    col_data_transakcji=MBankFile.EFFECTIVE_DATE,
     col_tytul=MBankFile.MBANK_TITLE,                      # opcjonalne (pomaga w rozróżnianiu wielu podobnych transakcji)
     col_opis=MBankFile.MBANK_DESCRIPTION,               # kluczowe: IN/OUT
     date_tolerance="D",                      # 'D' dzień, 'H' godzina, 'T' minuty, 'S' sekundy, 'exact'

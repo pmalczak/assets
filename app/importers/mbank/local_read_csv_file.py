@@ -53,8 +53,8 @@ def _read_mbank_csv_file(input_file: Path, **arg) -> pd.DataFrame:
     result = result.drop(columns=[''])
 
     # result[MBankFile.MBANK_DATA_FILE] = str(input_file)
-    result[MBankFile.MBANK_EFFECTIVE_DATE] = result.apply(_effective_date, axis=1)
-    result[MBankFile.MBANK_DEBIT_ACCOUNT] = base_account
+    result[MBankFile.EFFECTIVE_DATE] = result.apply(_effective_date, axis=1)
+    result[MBankFile.DEBIT_ACCOUNT] = base_account
     result[MBankFile.MBANK_ACCOUNT_NUMBER] = result[MBankFile.MBANK_ACCOUNT_NUMBER].apply(_clear_brackets_)
     result[MBankFile.MBANK_AMOUNT] = result[MBankFile.MBANK_AMOUNT].apply(_as_float_)
     result[MBankFile.MBANK_OUTSTANDING_BALANCE] = result[MBankFile.MBANK_OUTSTANDING_BALANCE].apply(_as_float_)

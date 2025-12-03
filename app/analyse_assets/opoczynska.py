@@ -6,20 +6,25 @@ from pathlib import Path
 import pandas as pd
 
 from analyse_assets.data_model import AssetRw
-from analyse_assets.select_asset import select_asset
+from analyse_assets.select_asset import select_asset, print_asset
 
 
 def opoczynska(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
-    m1 = (
+    m = (
         (df[AssetRw.MBANK_TITLE] == "UMOWA KREDYTOWA E0891681 KREDYTOBIORCA MARCIN TYNECKI")
         | (df[AssetRw.MBANK_TITLE] == "KUPNO MIESZKANIA OPOCZYŃSKA 14/14")
-        | (df[AssetRw.MBANK_TITLE] == "ZAUŁEK ZŁOTNICKI III")
-        | (df[AssetRw.MBANK_TITLE] == "TAURON OPOCZYŃSKA")
-    ) #
-    m2 = (
-        (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "43105000996029010240832283") # TAURON
-        # | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "41102052421283117588515063")  #
     )
+    df, r1 = select_asset(df, m, AssetRw.initial_investment_mapping)
+    # m = (
+    #     (df[AssetRw.MBANK_TITLE] == "ZAUŁEK ZŁOTNICKI III")
+    #     | (df[AssetRw.MBANK_TITLE] == "TAURON OPOCZYŃSKA")
+    # )
+    # df, r2 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
+    m = (
+        (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "43105000996029010240832283") # TAURON
+    )
+    df, r3 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
 
-    selector = m1 | m2
-    return select_asset(df, selector, fout, result)
+    r = pd.concat([r1, r3])
+    print_asset(r, fout, result)
+    return df

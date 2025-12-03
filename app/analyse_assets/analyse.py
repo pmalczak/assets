@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-
 from pathlib import Path
-
 import pandas as pd
 
-from analyse_assets.aquamarina import aquamarina, _garaz
+from analyse_assets.aquamarina import aquamarina
+from analyse_assets.garaz import garaz
 from analyse_assets.data_model import AssetRw
 from analyse_assets.horbaczewskiego import horbaczewskiego
 from analyse_assets.kiemliczow_1 import kiemliczow_1
@@ -42,14 +41,7 @@ def main():
 
     df, report, meta = consolidate_many_drop_internal_transfers(result)
 
-    df[MBankFile.MBANK_DESCRIPTION] = (df[MBankFile.MBANK_DESCRIPTION]
-                                       .replace({'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-                                                 'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-                                                 'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-                                                 'PRZELEW WEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-                                                 'PRZELEW SORBNET WYCHODZĄCY': ' WYDATKI',
-                                                 }))
-    df = AssetRw.x(df)
+    df = AssetRw.extract_ymd(df)
 
     p = Path(__file__).parent
 
@@ -75,7 +67,7 @@ def analyse_assets_proc(df, p):
     df = horbaczewskiego(df, fout, result)
 
     fout = p / f'mbank_garaz.xlsx'
-    df = _garaz(df, fout, result)
+    df = garaz(df, fout, result)
 
     fout = p / f'mbank_starogajowa.xlsx'
     df = starogajowa(df, fout, result)

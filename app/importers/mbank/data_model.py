@@ -14,8 +14,8 @@ class MBankFileCls(GenericStructureClass):
     MBANK_AMOUNT = '#Kwota'
     MBANK_OUTSTANDING_BALANCE = '#Saldo po operacji'
 
-    MBANK_EFFECTIVE_DATE = 'Data transakcji'
-    MBANK_DEBIT_ACCOUNT = 'Konto bazowe'
+    EFFECTIVE_DATE = 'Data transakcji'
+    DEBIT_ACCOUNT = 'Konto bazowe'
     # MBANK_TRANS_GUID = 'trans_guid'
     # MBANK_DATA_FILE = 'PLIK'
 
@@ -34,8 +34,8 @@ class MBankFileCls(GenericStructureClass):
             self.MBANK_OUTSTANDING_BALANCE,
 
             # added
-            self.MBANK_EFFECTIVE_DATE,
-            self.MBANK_DEBIT_ACCOUNT,
+            self.EFFECTIVE_DATE,
+            self.DEBIT_ACCOUNT,
             # MBANK_TRANS_GUID,
             # self.MBANK_DATA_FILE,
         }
