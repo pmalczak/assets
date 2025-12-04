@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-
-from pathlib import Path
-
 import pandas as pd
 
 from analyse_assets.data_model import AssetRw
-from analyse_assets.select_asset import select_asset, print_asset
+from analyse_assets.select_asset import select_asset
 
 
-def starogajowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
+def starogajowa(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     m = (
         df[AssetRw.MBANK_TITLE].str.contains("ZADATEK-UMOWA PRZEDWSTĘPNA-SPRZEDAŻ STAROGAJOWA 23")
         | df[AssetRw.MBANK_TITLE].str.contains("DEPOZYT DO UMOWY SPRZEDAŻY STAROGAJOWA 23")
@@ -20,9 +17,12 @@ def starogajowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
 
     m = (
         df[AssetRw.MBANK_TITLE].str.contains("STAROGAJOWA")
+        | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("PGNIG STAROGAJOWA INDYWIDUALNE KONTO")
+        | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("TAURON STAROGAJOWA")
+        | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "06102010269321202107100005") # PGNIG STAROGAJOWA
     )
     df, r2 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
 
     r = pd.concat([r1, r2])
-    print_asset(r, fout, result)
-    return df
+    # print_asset(r, fout, result)
+    return df, r

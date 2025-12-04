@@ -22,8 +22,18 @@ def select_asset(df: pd.DataFrame, selector, mapping: dict) -> tuple:
     return remaining, selected
 
 
-def print_asset(selected, fout, result: dict):
-    selected = selected[[AssetRw.YEAR, AssetRw.MBANK_AMOUNT, AssetRw.CAT]]
+def print_asset(_selected, fout, result: dict):
+    selected = _selected[[AssetRw.YEAR, AssetRw.MBANK_AMOUNT, AssetRw.CAT]]
+    result[fout] = _selected
+
+    x = _print_asset(selected)
+
+    print(fout.name)
+    print(x)
+    print()
+
+
+def _print_asset(selected):
     total = selected.copy()
     total[AssetRw.CAT] = 'TOTAL'
     piv = pd.concat([selected, total])
@@ -40,14 +50,4 @@ def print_asset(selected, fout, result: dict):
         fill_value=0
     )
     tabela = tabela.round().astype('int').map('{:,}'.format).replace(',', ' ')
-    result[fout] = tabela
-
-    print(fout.name)
-    print(tabela.to_string(col_space=15))
-    print()
-
-
-def _split(df, selector):
-    _selected = df[selector].copy()
-    _remains = df[~selector].copy()
-    return _selected, _remains
+    return tabela.to_string(col_space=15)

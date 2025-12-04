@@ -10,22 +10,28 @@ class AssetRWCls(MBankFileCls):
     DAY = 'DZIEN'
     CAT = 'category'
 
-    inflow_outflow_mapping = {
-        'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-        'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' WPŁYWY',
-        'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-        'PRZELEW WEWNĘTRZNY WYCHODZĄCY': ' WYDATKI',
-        'PRZELEW SORBNET WYCHODZĄCY': ' WYDATKI',
-    }
-    initial_investment_mapping = {
-        'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': '  INWESTYCJA',
-        'PRZELEW WEWNĘTRZNY WYCHODZĄCY': '  INWESTYCJA',
-        'PRZELEW SORBNET WYCHODZĄCY': '  INWESTYCJA',
-    }
-    closing_investment_mapping = {
-        'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' ZAMKNIĘCIE',
-        'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' ZAMKNIĘCIE',
-    }
+    CAT_INVESTMENT = '  INWESTYCJA'
+    CAT_INFLOW = ' WPŁYWY'
+    CAT_OUTFLOW = ' WYDATKI'
+
+    def __init__(self):
+        super().__init__()
+        self.inflow_outflow_mapping = {
+            'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': self.CAT_INFLOW,
+            'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': self.CAT_INFLOW,
+            'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': self.CAT_OUTFLOW,
+            'PRZELEW WEWNĘTRZNY WYCHODZĄCY': self.CAT_OUTFLOW,
+            'PRZELEW SORBNET WYCHODZĄCY': self.CAT_OUTFLOW,
+        }
+        self.initial_investment_mapping = {
+            'PRZELEW ZEWNĘTRZNY WYCHODZĄCY': self.CAT_INVESTMENT,
+            'PRZELEW WEWNĘTRZNY WYCHODZĄCY': self.CAT_INVESTMENT,
+            'PRZELEW SORBNET WYCHODZĄCY': self.CAT_INVESTMENT,
+        }
+        self.closing_investment_mapping = {
+            'PRZELEW WEWNĘTRZNY PRZYCHODZĄCY': ' ZAMKNIĘCIE',
+            'PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY': ' ZAMKNIĘCIE',
+        }
 
     def extract_ymd(self, df):
         # df['Data operacji'] = pd.to_datetime(df[self.MBANK_TRANSACTION_DATE], format='%Y-%m-%d')

@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-
-from pathlib import Path
-
 import pandas as pd
 
 from analyse_assets.data_model import AssetRw
-from analyse_assets.select_asset import print_asset, select_asset
+from analyse_assets.select_asset import select_asset
 
 
-def horbaczewskiego(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
+def horbaczewskiego(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     #
     m   = (
         (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "07124067263111001055248115") # PEKAOSA - ARKADIUSZ GĄCIARZ KREDYT
@@ -44,5 +41,4 @@ def horbaczewskiego(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     df, r5 = select_asset(df, m, AssetRw.closing_investment_mapping)
 
     r = pd.concat([r1, r2, r3, r5])
-    print_asset(r, fout, result)
-    return df
+    return df, r

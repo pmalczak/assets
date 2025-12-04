@@ -12,13 +12,13 @@ from analyse_assets.kiemliczow_3 import kiemliczow_3
 from analyse_assets.kiemliczow_4 import kiemliczow_4
 from analyse_assets.opoczynska import opoczynska
 from analyse_assets.rumiankowa import rumiankowa
+from analyse_assets.select_asset import print_asset
 from analyse_assets.starogajowa import starogajowa
 from consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
 from data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.read_assets import read_assets
-from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 
 
@@ -49,43 +49,36 @@ def main():
 
     print(meta)
 
-    fout = p / f'mbank_consolidated.xlsx'
-    df.to_excel(fout, index=False)
+    file_out = p / f'mbank_consolidated.xlsx'
+    df.to_excel(file_out, index=False)
 
-    # fout = p / f'mbank_consolidated.parquet'
-    # df.to_parquet(fout, compression=None)
+    # file_out = p / f'mbank_consolidated.parquet'
+    # df.to_parquet(file_out, compression=None)
     return
 
 
 def analyse_assets_proc(df, p):
     result = {}
 
-    fout = p / f'mbank_aquamarina.xlsx'
-    df = aquamarina(df, fout, result)
+    x = {
+        'mbank_aquamarina.xlsx': aquamarina,
+        'mbank_horbaczewskiego.xlsx':horbaczewskiego,
+        'mbank_garaz.xlsx': garaz,
+        'mbank_starogajowa.xlsx': starogajowa,
+        'mbank_kiemliczow_1.xlsx': kiemliczow_1,
+        'mbank_kiemliczow_3.xlsx': kiemliczow_3,
+        'mbank_kiemliczow_4.xlsx': kiemliczow_4,
+        'mbank_rumiankowa.xlsx': rumiankowa,
+        'mbank_opoczynska.xlsx': opoczynska,
+    }
+    for file_name, proc in x.items():
+        file_out = p / file_name
+        df, r = proc(df)
+        result[file_out] = r
+        print_asset(r, file_out, result)
 
-    fout = p / f'mbank_horbaczewskiego.xlsx'
-    df = horbaczewskiego(df, fout, result)
-
-    fout = p / f'mbank_garaz.xlsx'
-    df = garaz(df, fout, result)
-
-    fout = p / f'mbank_starogajowa.xlsx'
-    df = starogajowa(df, fout, result)
-
-    fout = p / f'mbank_kiemliczow_1.xlsx'
-    df = kiemliczow_1(df, fout, result)
-
-    fout = p / f'mbank_kiemliczow_3.xlsx'
-    df = kiemliczow_3(df, fout, result)
-
-    fout = p / f'mbank_kiemliczow_4.xlsx'
-    df = kiemliczow_4(df, fout, result)
-
-    fout = p / f'mbank_rumiankowa.xlsx'
-    df = rumiankowa(df, fout, result)
-
-    fout = p / f'mbank_opoczynska.xlsx'
-    df = opoczynska(df, fout, result)
+    for file, _df in result.items():
+        _df.to_excel(file, index=False)
 
     return df
 

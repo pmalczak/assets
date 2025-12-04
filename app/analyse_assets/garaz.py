@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-
-from pathlib import Path
-
 import pandas as pd
 
 from analyse_assets.data_model import AssetRw
-from analyse_assets.select_asset import print_asset, select_asset
+from analyse_assets.select_asset import select_asset
 
 
-def garaz(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
+def garaz(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     m = (
          df[AssetRw.MBANK_TITLE].str.contains("OPŁATA ZA ZAKUP GARAŻU - UL. RUMIANKOWA")
     )
@@ -27,5 +24,4 @@ def garaz(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     df, r2 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
 
     r = pd.concat([r0, r1, r2])
-    print_asset(r, fout, result)
-    return df
+    return df, r

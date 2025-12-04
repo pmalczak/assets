@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
-from pathlib import Path
 import pandas as pd
-from analyse_assets.select_asset import select_asset, print_asset
+from analyse_assets.select_asset import select_asset
 from analyse_assets.data_model import AssetRw
 
 
-def rumiankowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
+def rumiankowa(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     m = (
         (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "26234000091290401000003553") # raiffeisen kredyt hipo
         | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "77249000050000400032972350")  # Katarzyna Żaczek
@@ -18,12 +17,17 @@ def rumiankowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
         | df[AssetRw.MBANK_TITLE].str.contains("DEC.129/2017; RUMIANKOWA 57D/4PRZEKSZ. UŻ WIECZ W PRAWO WŁ")
     )
     df, r2 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
+
     m = (
         (df[AssetRw.MBANK_TITLE].str.contains("RUMIANKOWA 57D") & df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("IGLICA"))
         | (df[AssetRw.MBANK_TITLE].str.contains("PRZEKSIĘGOWANIE NADWYŻKI PO SPŁACIEKREDYTU") &
            df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("RAIFFEISEN BANK INT. AG"))
-    )
+        | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("PGNIG-RUMIANKOWA")  # UL RUMIANKOWA 57 D/4 - GAZ ENERGIA ELELKTRYCZNA
+        | df[AssetRw.MBANK_TITLE].str.contains("UL RUMIANKOWA 57 D/4 - GAZ ENERGIA ELELKTRYCZNA")
+        | df[AssetRw.MBANK_TITLE].str.contains("CZYNSZ - LOKAL RUMIANKOWA 57/D")
+    ) #
     df, r3 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
+
     m = (
         (df[AssetRw.MBANK_TITLE].str.contains("WYNAJEM LOKALU") & df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("GPM SYSTEMY"))
         | (df[AssetRw.MBANK_TITLE].str.contains("RACH") & (df["#Kwota"] == 2200.0))
@@ -33,5 +37,5 @@ def rumiankowa(df: pd.DataFrame, fout: Path, result: dict) -> pd.DataFrame:
     df, r4 = select_asset(df, m, AssetRw.inflow_outflow_mapping)
 
     r = pd.concat([r1, r2, r3, r4])
-    print_asset(r, fout, result)
-    return df
+    # print_asset(r, fout, result)
+    return df, r
