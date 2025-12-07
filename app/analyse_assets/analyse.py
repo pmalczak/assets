@@ -36,17 +36,13 @@ def main():
     for asset in assets:
         df = read_m_transactions(data_root, asset)
         df["_source"] = asset
-
         result += [df]
 
     df, report, meta = consolidate_many_drop_internal_transfers(result)
-
     df = AssetRw.extract_ymd(df)
 
     p = Path(__file__).parent
-
     df = analyse_assets_proc(df, p)
-
     print(meta)
 
     file_out = p / f'mbank_consolidated.xlsx'
@@ -74,6 +70,7 @@ def analyse_assets_proc(df, p):
     for file_name, proc in x.items():
         file_out = p / file_name
         df, r = proc(df)
+        # AssetRw.check_values(r)
         result[file_out] = r
         print_asset(r, file_out, result)
 

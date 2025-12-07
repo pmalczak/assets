@@ -3,18 +3,15 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 
 from analyse_assets.data_model import AssetRw
-from analyse_assets.select_asset import select_asset
 
 
 def kiemliczow_1(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    m = (
-        (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "20102052420000250201100809")
-        | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "20102052420000250201100809")
-        | (df[AssetRw.MBANK_TITLE] == "WPŁATA NA FUNDUSZ BUDOWY DROGI PRZY UL. KIEMLICZÓW") #
-    )
-
-    df, r = select_asset(df, m, AssetRw.inflow_outflow_mapping)
-
-    # r = pd.concat([r1, r2])
-    # print_asset(r, fout, result)
-    return df, r
+    r0 = AssetRw.create([
+        ('1997-06-02', -48600.0, AssetRw.CAT_INVESTMENT, 'zakup mieszkania [54m2]'),
+        ('2000-01-03', 156600.0, AssetRw.CAT_CLOSING, 'sprzedaż'),
+        ('2000-04-04', -3700.0, AssetRw.CAT_OUTFLOW, 'opłata skarbowa'),
+        ('2000-04-04', -695.5, AssetRw.CAT_OUTFLOW, 'prowizja'),
+        ('2001-08-20', -572.5, AssetRw.CAT_OUTFLOW, 'hipoteka - opłata sądowa'),
+        ('2001-10-05', -145.0, AssetRw.CAT_OUTFLOW, 'hipoteka - opłata sądowa'),
+    ])
+    return df, r0
