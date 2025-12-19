@@ -17,6 +17,7 @@ def starogajowa(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     df, r2 = select_asset(df, (
             df[AssetRw.MBANK_TITLE].str.contains("STAROGAJOWA")
             | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "06102010269321202107100005")  # PGNIG STAROGAJOWA
+            | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "14109000048377000072886502")  # orange
             ), AssetRw.inflow_outflow_mapping)
 
     df, r3 = select_asset(df, (

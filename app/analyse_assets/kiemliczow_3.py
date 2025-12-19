@@ -27,7 +27,7 @@ def kiemliczow_3(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
                | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("GOŁĘBIOWSKI"))
 
             | (df[AssetRw.MBANK_TITLE].str.contains("CZYNSZ")
-               | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("RUSLAN KOSSAK"))
+               & df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("RUSLAN KOSSAK"))
 
             | (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("KRZYSZTOF TUTAJ"))
             | (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("STANISŁAW EDMUND TUTAJ"))

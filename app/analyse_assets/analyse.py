@@ -62,8 +62,8 @@ def analyse_assets_proc(df, p):
         'mbank_garaz.xlsx': garaz,
         'mbank_starogajowa.xlsx': starogajowa,
         'mbank_kiemliczow_1.xlsx': kiemliczow_1,
-        'mbank_kiemliczow_3.xlsx': kiemliczow_3,
         'mbank_kiemliczow_4.xlsx': kiemliczow_4,
+        'mbank_kiemliczow_3.xlsx': kiemliczow_3,
         'mbank_rumiankowa.xlsx': rumiankowa,
         'mbank_opoczynska.xlsx': opoczynska,
     }
