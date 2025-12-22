@@ -60,8 +60,6 @@ def evaluate_assets_file(rodzaj_importu, assets_file_row):
 
     elif rodzaj_importu == 'assets.cash':
         df = _read_content(f, assets_file_row)
-
-        # leave only one record - the latest one - for each propertie
         df_sorted = df.sort_values(['waluta', 'Data'], ascending=[True, False])
         df = df_sorted.drop_duplicates(subset='waluta', keep="first")
 
@@ -86,7 +84,6 @@ def evaluate_assets_file(rodzaj_importu, assets_file_row):
 
 
 def _read_content(f, assets_file_row: pd.Series = None):
-    # f = get_assets_file()
     kind: str = assets_file_row[AssetsDef.KIND]
     sheet = kind.split('.')[1]
 

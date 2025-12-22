@@ -53,13 +53,17 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
 
     last_fx = get_last_fx(fx_rates)
 
-    result1 = pd.merge(result, last_fx, on=AssetsDef.CURRENCY)
-    assert len(result) == len(result1)
-    result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE] * result1[LastFx.FX]
-    result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE_PLN].round().astype('int')
+    result_fx = pd.merge(result, last_fx, on=AssetsDef.CURRENCY)
+    assert len(result) == len(result_fx)
 
-    value_date = pd.to_datetime(result1[AssetsDef.VALUE_DATE], format="%Y-%m-%d")
-    evaluation_date = pd.to_datetime(result1[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
+    mask = result_fx[AssetsDef.TYPE] == "cash"
+    result_fx.loc[mask, AssetsDef.EVALUATION_DATE] = result_fx.loc[mask, AssetsDef.VALUE_DATE]
+
+    result_fx[AssetsDef.VALUE_PLN] = result_fx[AssetsDef.VALUE] * result_fx[LastFx.FX]
+    result_fx[AssetsDef.VALUE_PLN] = result_fx[AssetsDef.VALUE_PLN].round().astype('int')
+
+    value_date = pd.to_datetime(result_fx[AssetsDef.VALUE_DATE], format="%Y-%m-%d")
+    evaluation_date = pd.to_datetime(result_fx[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
     diff = (value_date - evaluation_date).dt.days
-    result1[AssetsDef.DAYS_AFTER_VALUATION] = diff
-    return result1
+    result_fx[AssetsDef.DAYS_AFTER_VALUATION] = diff
+    return result_fx
