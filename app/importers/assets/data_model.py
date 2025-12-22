@@ -44,6 +44,7 @@ class AssetsCls(AssetsFileCls):
     VALUE = 'wartość'
     VALUE_PLN = 'wartość-pln'
     VALUE_DATE = 'data-waluty'
+    DAYS_AFTER_VALUATION = 'liczba dni od wyceny'
     IBAN = 'IBAN'
 
     def __init__(self):

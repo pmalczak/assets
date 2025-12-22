@@ -7,7 +7,7 @@ import pandas as pd
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.mbank.data_model import MBankFile
-from importers.mbank.local_extract_csv_table import ForbiddenSign, NoData
+from importers.mbank.local_extract_csv_table import ForbiddenSign
 from importers.mbank.local_read_csv_file import read_mbank_csv_file
 
 
@@ -33,17 +33,18 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
     forbidden_signs = []
     records = []
+    ref_date = ''
     for input_file in input_files:
         try:
-            mbank_transactions = read_mbank_csv_file(input_file)
+            mbank_transactions, _ref_date = read_mbank_csv_file(input_file)
+            ref_date = max(ref_date, _ref_date)
+            if len(mbank_transactions) == 0:
+                continue
+
         except ForbiddenSign as e:
             m = f'plik:{input_file} \nznak \" w {e.args[0]}'
             print(m)
             forbidden_signs += [m]
-            continue
-
-        except NoData:
-            print(f'PLIK:{input_file}      brak danych ')
             continue
 
         print(f'PLIK:{input_file} {len(mbank_transactions):>4} rekord/ów')
@@ -60,5 +61,6 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
         result = deduplicate_records(result, record, MBankFile.MBANK_TRANSACTION_DATE, MBankFile.unique_key())
 
+    result[MBankFile.FILE_DATE] = ref_date
     MBankFile.check_structure(result)
     return result

@@ -16,8 +16,7 @@ class MBankFileCls(GenericStructureClass):
 
     EFFECTIVE_DATE = 'Data transakcji'
     DEBIT_ACCOUNT = 'Konto bazowe'
-    # MBANK_TRANS_GUID = 'trans_guid'
-    # MBANK_DATA_FILE = 'PLIK'
+    FILE_DATE = 'ref_date'
 
     def __init__(self):
         super().__init__()
@@ -36,8 +35,7 @@ class MBankFileCls(GenericStructureClass):
             # added
             self.EFFECTIVE_DATE,
             self.DEBIT_ACCOUNT,
-            # MBANK_TRANS_GUID,
-            # self.MBANK_DATA_FILE,
+            self.FILE_DATE,
         }
         return result
 
@@ -51,12 +49,6 @@ class MBankFileCls(GenericStructureClass):
             self.MBANK_ACCOUNT_NUMBER,
             self.MBANK_AMOUNT,
             self.MBANK_OUTSTANDING_BALANCE,
-
-            # added
-            # self.MBANK_EFFECTIVE_DATE,
-            # self.MBANK_DEBIT_ACCOUNT,
-            # MBANK_TRANS_GUID,
-            # self.MBANK_DATA_FILE,
         ]
         return result
 
@@ -106,7 +98,7 @@ MBankFile = MBankFileCls()
     # 'POLECENIE ZAPŁATY - OBCIĄŻENIE': iban_acc,
     # 'PRZELEW PODATKOWY': iban_acc,
     # 'PRZELEW ZEWNĘTRZNY DO ZUS': iban_acc,
-BASE_ACCOUNT = 'Base account'
+# BASE_ACCOUNT = 'Base account'
 
 
 class MbankOperationTypeClass:

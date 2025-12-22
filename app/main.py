@@ -45,6 +45,7 @@ def calculate_assets() -> pd.DataFrame:
 
 
 def main():
+    # DATA_STEP.force_read_data()
     assets = calculate_assets()
     print(assets)
     print(s)

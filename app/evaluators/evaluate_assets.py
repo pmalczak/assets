@@ -57,4 +57,9 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
     assert len(result) == len(result1)
     result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE] * result1[LastFx.FX]
     result1[AssetsDef.VALUE_PLN] = result1[AssetsDef.VALUE_PLN].round().astype('int')
+
+    value_date = pd.to_datetime(result1[AssetsDef.VALUE_DATE], format="%Y-%m-%d")
+    evaluation_date = pd.to_datetime(result1[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
+    diff = (value_date - evaluation_date).dt.days
+    result1[AssetsDef.DAYS_AFTER_VALUATION] = diff
     return result1

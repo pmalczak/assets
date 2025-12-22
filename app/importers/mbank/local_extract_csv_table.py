@@ -5,12 +5,10 @@ import csv
 from io import StringIO
 from typing import Tuple
 
+from importers.mbank.data_model import MBankFile
+
 
 class ForbiddenSign(BaseException):
-    pass
-
-
-class NoData(BaseException):
     pass
 
 
@@ -18,15 +16,31 @@ class WrongFileFormat(BaseException):
     pass
 
 
-def extract_csv_table(f) -> Tuple[str, list]:
-    header = f'#Data księgowania;#Data operacji;#Opis operacji;#Tytuł;#Nadawca/Odbiorca;#Numer konta;' \
-             '#Kwota;#Saldo po operacji'
+header = (f'{MBankFile.MBANK_BOOKING_DATE};{MBankFile.MBANK_TRANSACTION_DATE};{MBankFile.MBANK_DESCRIPTION};'
+          f'{MBankFile.MBANK_TITLE};{MBankFile.MBANK_TRANSACTION_PARTY};{MBankFile.MBANK_ACCOUNT_NUMBER};'
+          f'{MBankFile.MBANK_AMOUNT};{MBankFile.MBANK_OUTSTANDING_BALANCE}')
+
+
+def extract_csv_table(f) -> Tuple[str, str, list]:
     base_account = ''
+    ref_date = ''
+
     while True:
         line = f.readline()
         if line.startswith('#Numer rachunku'):
             base_account = f.readline()
+            base_account = base_account[0:32]
+            base_account = base_account.replace(' ', '')
 
+        elif line.startswith('#Za okres'):
+            ref_date = f.readline()
+            ref_date = ref_date.split(';')
+            assert len(ref_date) == 3
+            ref_date = ref_date[1]
+            ref_date = ref_date.split('.')
+            assert len(ref_date) == 3
+            ref_date = '-'.join(reversed(ref_date))
+        #
         elif line.startswith(header):
             result = [line]
             result += _read_table_part(f)
@@ -42,13 +56,9 @@ def extract_csv_table(f) -> Tuple[str, list]:
                         m = f'pole:"{k}" treść:"{v}"'
                         raise ForbiddenSign(m)
 
-            assert base_account is not None
-            base_account = base_account[0:32]
-            base_account = base_account.replace(' ', '')
-
-            if len(result) == 0:
-                raise NoData
-            return base_account, result
+            assert base_account != ''
+            assert ref_date != ''
+            return base_account, ref_date, result
 
         elif not line:
             raise WrongFileFormat

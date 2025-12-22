@@ -27,7 +27,7 @@ def _evaluate_mbank(data_root: Path = None,
         assets_row = AssetsDef.as_assets_row(assets_file_row)
         assets_row[AssetsDef.IBAN] = _row[MBankFile.DEBIT_ACCOUNT]
         assets_row[AssetsDef.VALUE] = _row[MBankFile.MBANK_OUTSTANDING_BALANCE]
-        assets_row[AssetsDef.EVALUATION_DATE] = _row[MBankFile.MBANK_TRANSACTION_DATE]
+        assets_row[AssetsDef.EVALUATION_DATE] = _row[MBankFile.FILE_DATE]
         break
     data = [assets_row]
 
