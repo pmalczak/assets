@@ -16,6 +16,8 @@ class RevolutAccountFileCls(GenericStructureClass):
     CURRENCY = 'Waluta'
     STATE = 'State'
 
+    FILE_DATE = 'ref_date'
+
     def __init__(self):
         super().__init__()
 
@@ -30,7 +32,8 @@ class RevolutAccountFileCls(GenericStructureClass):
             self.FEE,
             self.CURRENCY,
             self.STATE,
-            self.BALANCE
+            self.BALANCE,
+            self.FILE_DATE
         }
         return result
 

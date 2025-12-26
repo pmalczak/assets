@@ -18,6 +18,7 @@ class RevolutDepositFileCls(GenericStructureClass):
     DATE = RevolutAccountFile.DATE
     BALANCE = RevolutAccountFile.BALANCE
     CURRENCY = RevolutAccountFile.CURRENCY
+    FILE_DATE = RevolutAccountFile.FILE_DATE
 
     def __init__(self):
         super().__init__()
@@ -34,6 +35,7 @@ class RevolutDepositFileCls(GenericStructureClass):
             self.DATE,
             self.BALANCE,
             self.CURRENCY,
+            self.FILE_DATE,
         }
         return result
 
