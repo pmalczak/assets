@@ -51,7 +51,7 @@ def main():
     print(s)
     assets.to_excel('assets_evaluation.xlsx', index=False)
 
-    rap3(assets)
+    # rap3(assets)
     rap2(assets)
     rap1_prn(assets)
     return

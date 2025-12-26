@@ -70,15 +70,7 @@ def _read_revolut_deposit_transactions(source_file: Path = None) -> pd.DataFrame
     records = []
     for input_file in input_files:
         df = pd.read_csv(input_file)
-
-        df[RevolutDepositFile.DATE] = pd.to_datetime(df[RevolutDepositFile.COMPLETED_DATE], format="%d %b %Y")
-        df[RevolutDepositFile.DATE] = df[RevolutDepositFile.DATE].dt.strftime("%Y-%m-%d")
-
-        df[RevolutDepositFile.BALANCE] = (
-            df[RevolutDepositFile.DEP_BALANCE]
-            .replace({'€': '', ',': ''}, regex=True)
-            .astype(float)
-        )
+        df = RevolutDepositFile.normalize_dtypes(df)
 
         print(f'PLIK:{input_file} {len(df):>4} rekord/ów')
         records += [df]

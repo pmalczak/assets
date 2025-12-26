@@ -31,6 +31,7 @@ def evaluate_revolut(data_root: Path = None, asset_id: str = None, assets_file_r
         return df_dep
     # last =df[-1:]
     last = df_dep[df_dep['Description'] == 'Money carried forward']
+    last = last[-1:]
     for i, row in last.iterrows():
         assets_row = AssetsDef.as_assets_row(assets_file_row)
         assets_row[AssetsDef.EVALUATION_DATE] = row[RevolutAccountFile.DATE]
