@@ -90,6 +90,52 @@ def rap3(assets):
 def rap2(assets):
     msg = 'RAP 2___________________________________________'
     print(msg)
+    # wybór kolumn
+    a1 = assets[[
+        AssetsDef.TYPE,
+        AssetsDef.VALUE,
+        AssetsDef.VALUE_PLN,
+        AssetsDef.CURRENCY
+    ]]
+
+    # dodanie wierszy "Z RAZEM"
+    a1_sum = a1.copy()
+    a1_sum[AssetsDef.TYPE] = 'Z RAZEM'
+    a1 = pd.concat([a1, a1_sum])
+
+    # agregacja
+    g1 = (
+        a1
+        .groupby([AssetsDef.TYPE, AssetsDef.CURRENCY])
+        .sum()
+        .round()
+        .astype(int)
+    )
+
+    # pivot: waluta → kolumny
+    g1 = g1.unstack(AssetsDef.CURRENCY)
+
+    # spłaszczenie MultiIndex kolumn
+    g1.columns = [
+        f"{col}_{cur}".lower()
+        for col, cur in g1.columns
+    ]
+
+    # formatowanie liczb
+    for col in g1.columns:
+        g1[col] = (
+            g1[col]
+            .map('{:,}'.format)
+            .str.replace(',', ' ')
+        )
+
+    print(g1.to_string(col_space=col_space))
+    print(s)
+
+
+def rap2_0(assets):
+    msg = 'RAP 2___________________________________________'
+    print(msg)
     a1 = assets[[AssetsDef.TYPE,
                  # AssetsDef.EVALUATION_DATE,
                  AssetsDef.VALUE,
@@ -98,10 +144,10 @@ def rap2(assets):
     a1_g = a1.copy()
     a1_g[AssetsDef.TYPE] = 'Z RAZEM'
     a1 = pd.concat([a1, a1_g])
+
     g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.TYPE]).sum().round().astype('int')
     g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
     g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1.index.get_level_values(AssetsDef.CURRENCY)
-
     g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
     print(g1.to_string(col_space=col_space))
     print(s)
@@ -147,18 +193,6 @@ def rap1(assets: pd.DataFrame) -> pd.DataFrame:
         )
 
     return g1
-
-
-def rap1_0(assets):
-    a1 = assets[[AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
-    a2 = a1.copy()
-    a2[AssetsDef.GROUP] = 'Z RAZEM'
-
-    df = pd.concat([a1, a2])
-    g1 = df.groupby([AssetsDef.GROUP]).sum().round().astype('int')
-    g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    return g1
-
 
 
 if __name__ == '__main__':
