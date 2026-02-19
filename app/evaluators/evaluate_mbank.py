@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from importers.assets.data_model import AssetsDef, GroupDomain
+from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 
@@ -63,7 +63,7 @@ def _evaluate_deposits_mbank(df: pd.DataFrame, assets_file_row: pd.Series, maste
         assets_row = AssetsDef.as_assets_row(assets_file_row)
         assets_row[AssetsDef.GROUP] = GroupDomain.DEPOSIT
         assets_row[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
-        assets_row[AssetsDef.TYPE] = 'depozyt'
+        assets_row[AssetsDef.TYPE] = TypeDomain.DEPOSIT
         assets_row[AssetsDef.DESCR] = _row[KOL_LOKATA]
         assets_row[AssetsDef.VALUE] = - _row[MBankFile.MBANK_AMOUNT]
         result += [assets_row]

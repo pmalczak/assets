@@ -8,6 +8,7 @@ from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Type
 from importers.revolut.revolut_account_file import RevolutAccountFile
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
+from importers.revolut.revolut_deposit_file import RevolutDepositFile
 
 
 def evaluate_revolut(data_root: Path = None, asset_id: str = None, assets_file_row: pd.Series = None):
@@ -29,7 +30,7 @@ def evaluate_revolut(data_root: Path = None, asset_id: str = None, assets_file_r
     df_dep = read_revolut_deposit_transactions(p, asset_id)
     if df_dep.empty:
         return df_dep
-    last = df_dep[df_dep['Description'] == 'Money carried forward']
+    last = df_dep[df_dep[RevolutDepositFile.DESCRIPTION] == 'Money carried forward']
     last = last[-1:]
     ref_date = df_accounts[RevolutAccountFile.FILE_DATE].unique()[0]
     for i, row in last.iterrows():
@@ -38,7 +39,7 @@ def evaluate_revolut(data_root: Path = None, asset_id: str = None, assets_file_r
         assets_row[AssetsDef.VALUE] = row[RevolutAccountFile.BALANCE]
 
         assets_row[AssetsDef.GROUP] = GroupDomain.DEPOSIT
-        assets_row[AssetsDef.TYPE] = 'depozyt'
+        assets_row[AssetsDef.TYPE] = TypeDomain.DEPOSIT
         assets_row[AssetsDef.DESCR] = 'deposit'
         break
 
