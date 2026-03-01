@@ -25,7 +25,8 @@ def read_m_transactions(data_root: Path, asset_id: str) -> pd.DataFrame:
 def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
     assert source_file.is_dir()
-    input_files = list(source_file.glob('*.csv'))
+    input_files = sorted(source_file.glob('*.csv'), key=lambda p: p.name)
+    # input_files = list(source_file.glob('*.csv'))
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(MBankFile.expected_columns()))
         MBankFile.check_structure(df)
