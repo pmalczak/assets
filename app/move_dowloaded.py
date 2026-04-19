@@ -9,7 +9,6 @@ from data_root import get_online_data_root
 from maintenance.move_mbank_files import move_mbank_files
 from maintenance.move_revolut_files import move_revolut_files
 
-pd.options.mode.copy_on_write = True
 pd.options.future.infer_string = True
 
 if __name__ == '__main__':
