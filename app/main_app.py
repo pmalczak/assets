@@ -47,6 +47,8 @@ def build_data():
     assets = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
     assets = assets[assets[AssetsDef.VALUE] != 0]
     assets = assets.drop(columns=[AssetsDef.NOTES, LastFx.FX])
+    snapshot_total_pln = float(pd.to_numeric(assets[AssetsDef.VALUE_PLN], errors="coerce").fillna(0).sum())
+    history = _align_history_to_snapshot(history_data["history"], snapshot_total_pln)
 
     excel_buffer = io.BytesIO()
     assets.to_excel(excel_buffer, index=False)
@@ -86,9 +88,29 @@ def build_data():
         "grouped_value_pln": g2,
         "grouped_by_group_pln": g3,
         "excel_bytes": excel_buffer,
-        "portfolio_history": history_data["history"],
+        "portfolio_history": history,
         "history_skipped_assets": history_data["skipped_assets"],
+        "snapshot_total_pln": snapshot_total_pln,
     }
+
+
+def _align_history_to_snapshot(history: pd.DataFrame, snapshot_total_pln: float) -> pd.DataFrame:
+    aligned = history.copy()
+    today = pd.Timestamp.today().normalize()
+
+    if aligned.empty:
+        return pd.DataFrame({"date": [today], "value_pln": [snapshot_total_pln]})
+
+    aligned["date"] = pd.to_datetime(aligned["date"])
+    aligned = aligned.sort_values("date").reset_index(drop=True)
+
+    last_date = aligned["date"].iloc[-1]
+    if last_date == today:
+        aligned.loc[aligned.index[-1], "value_pln"] = snapshot_total_pln
+        return aligned
+
+    row = pd.DataFrame({"date": [today], "value_pln": [snapshot_total_pln]})
+    return pd.concat([aligned, row], ignore_index=True)
 
 
 def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
@@ -110,8 +132,8 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
         st.line_chart(chart_data, x="Data", y="Portfel PLN", use_container_width=True)
 
         st.caption(
-            "Wykres jest odtwarzany z historii dostepnej w zrodlach danych i kursach NBP dla EUR. "
-            "Jesli dla czesci aktywow nie ma historii, wykres pokazuje tylko obslugiwane serie."
+            "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR, "
+            "a ostatni punkt wykresu jest uzgadniany z biezacym snapshotem z assets_evaluation.xlsx."
         )
 
     if skipped_assets:
