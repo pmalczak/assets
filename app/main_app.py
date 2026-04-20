@@ -157,7 +157,17 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
             .sum()
             .sort_values(["date", "group"])
         )
-        chart = (
+        month_lines = pd.DataFrame(
+            {
+                "date": pd.date_range(
+                    chart_data["date"].min().normalize(),
+                    chart_data["date"].max().normalize(),
+                    freq="MS",
+                )
+            }
+        )
+
+        area_chart = (
             alt.Chart(chart_data)
             .mark_area()
             .encode(
@@ -172,7 +182,12 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
                 ],
             )
         )
-        st.altair_chart(chart, use_container_width=True)
+        month_rules = (
+            alt.Chart(month_lines)
+            .mark_rule(color="#666666", strokeWidth=1, opacity=0.35)
+            .encode(x="date:T")
+        )
+        st.altair_chart((area_chart + month_rules), use_container_width=True)
 
         st.caption(
             "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR. "
