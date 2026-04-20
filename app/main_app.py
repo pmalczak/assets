@@ -240,7 +240,7 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str], t
                 )
                 event_labels = (
                     alt.Chart(visible_events)
-                    .mark_text(color="#f4d03f", angle=-35, align="left", baseline="bottom", dx=6, dy=-4, fontSize=11)
+                    .mark_text(color="#f4d03f", angle=325, align="left", baseline="bottom", dx=6, dy=-4, fontSize=11)
                     .encode(
                         x="date:T",
                         y=alt.Y("label_y:Q"),
