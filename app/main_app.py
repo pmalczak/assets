@@ -103,13 +103,17 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_total_pln: float)
 
     aligned["date"] = pd.to_datetime(aligned["date"])
     aligned = aligned.sort_values("date").reset_index(drop=True)
+    last_history_value = float(pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0).iloc[-1])
+    missing_constant_value = snapshot_total_pln - last_history_value
+    aligned["value_pln"] = pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0) + missing_constant_value
 
     last_date = aligned["date"].iloc[-1]
     if last_date == today:
         aligned.loc[aligned.index[-1], "value_pln"] = snapshot_total_pln
         return aligned
 
-    row = pd.DataFrame({"date": [today], "value_pln": [snapshot_total_pln]})
+    last_visible_value = float(aligned["value_pln"].iloc[-1])
+    row = pd.DataFrame({"date": [today], "value_pln": [last_visible_value]})
     return pd.concat([aligned, row], ignore_index=True)
 
 
@@ -132,8 +136,8 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
         st.line_chart(chart_data, x="Data", y="Portfel PLN", use_container_width=True)
 
         st.caption(
-            "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR, "
-            "a ostatni punkt wykresu jest uzgadniany z biezacym snapshotem z assets_evaluation.xlsx."
+            "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR. "
+            "Aktywa bez szeregow czasowych sa doliczane jako stala wartosc w calym zakresie 12M."
         )
 
     if skipped_assets:
