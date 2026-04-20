@@ -166,7 +166,18 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str], t
     if history.empty:
         st.warning("Brak danych historycznych do zbudowania wykresu portfela.")
     else:
-        totals = history.groupby("date", as_index=False)["value_pln"].sum().sort_values("date")
+        available_groups = sorted(history["group"].dropna().unique().tolist())
+        selected_groups = st.multiselect(
+            "Widoczne grupy",
+            options=available_groups,
+            default=available_groups,
+        )
+        if not selected_groups:
+            st.warning("Wybierz przynajmniej jedna grupe.")
+            return
+
+        visible_history = history[history["group"].isin(selected_groups)].copy()
+        totals = visible_history.groupby("date", as_index=False)["value_pln"].sum().sort_values("date")
         current_value = float(totals["value_pln"].iloc[-1])
         start_value = float(totals["value_pln"].iloc[0])
         delta_value = current_value - start_value
@@ -177,7 +188,7 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str], t
         c3.metric("Poczatek zakresu", totals["date"].iloc[0].strftime("%Y-%m-%d"))
 
         chart_data = (
-            history.groupby(["date", "group"], as_index=False)["value_pln"]
+            visible_history.groupby(["date", "group"], as_index=False)["value_pln"]
             .sum()
             .sort_values(["date", "group"])
         )
