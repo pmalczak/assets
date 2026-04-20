@@ -73,8 +73,12 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.Data
     today = pd.Timestamp.today().normalize()
 
     if aligned.empty:
-        fallback = snapshot_by_group.copy()
-        fallback["date"] = today
+        date_range = pd.date_range(end=today, periods=365, freq="D")
+        fallback = snapshot_by_group.assign(_key=1).merge(
+            pd.DataFrame({"date": date_range, "_key": 1}),
+            on="_key",
+            how="inner",
+        ).drop(columns="_key")
         offsets = snapshot_by_group.copy()
         offsets["history_value_pln"] = 0.0
         offsets["missing_constant_value"] = offsets["value_pln"]
@@ -84,7 +88,13 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.Data
     aligned = aligned.sort_values("date").reset_index(drop=True)
     aligned["value_pln"] = pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0)
 
+    first_date = aligned["date"].min()
     last_date = aligned["date"].max()
+    if last_date < today:
+        full_dates = pd.date_range(first_date, today, freq="D")
+    else:
+        full_dates = pd.date_range(first_date, last_date, freq="D")
+
     last_history_by_group = (
         aligned[aligned["date"] == last_date][["group", "value_pln"]]
         .groupby("group", as_index=False)["value_pln"]
@@ -100,18 +110,25 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.Data
     aligned["value_pln"] = aligned["value_pln"] + aligned["missing_constant_value"]
     aligned = aligned.drop(columns=["missing_constant_value"])
 
-    if last_date != today:
-        last_visible = (
-            aligned[aligned["date"] == last_date][["group", "value_pln"]]
-            .groupby("group", as_index=False)["value_pln"]
-            .sum()
+    missing_groups = sorted(set(snapshot_by_group["group"]) - set(aligned["group"]))
+    if missing_groups:
+        missing_rows = (
+            snapshot_by_group[snapshot_by_group["group"].isin(missing_groups)]
+            .assign(_key=1)
+            .merge(pd.DataFrame({"date": full_dates, "_key": 1}), on="_key", how="inner")
+            .drop(columns="_key")
         )
-        last_visible["date"] = today
-        aligned = pd.concat([aligned, last_visible[["date", "group", "value_pln"]]], ignore_index=True)
-    else:
-        aligned = aligned.merge(snapshot_by_group, on="group", how="left", suffixes=("", "_snapshot"))
-        aligned["value_pln"] = aligned["value_pln_snapshot"].fillna(aligned["value_pln"])
-        aligned = aligned.drop(columns=["value_pln_snapshot"])
+        aligned = pd.concat([aligned, missing_rows[["date", "group", "value_pln"]]], ignore_index=True)
+
+    if last_date < today:
+        last_visible = aligned[aligned["date"] == last_date][["group", "value_pln"]].copy()
+        extension_rows = []
+        for date in pd.date_range(last_date + pd.Timedelta(days=1), today, freq="D"):
+            x = last_visible.copy()
+            x["date"] = date
+            extension_rows.append(x)
+        if extension_rows:
+            aligned = pd.concat([aligned] + extension_rows, ignore_index=True)
 
     return (
         aligned.sort_values(["date", "group"]).reset_index(drop=True),

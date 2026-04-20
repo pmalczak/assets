@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_root import get_online_data_root
-from importers.assets.data_model import AssetsDef, KindDomain, OperationDomain, Properties
+from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, OperationDomain, Properties
 from importers.assets.read_assets import get_assets_file
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
@@ -175,7 +175,7 @@ def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
         deposits = deposits.dropna(subset=["date", "value"])
         deposits = deposits.groupby("date", as_index=False).last()
         deposits["asset_key"] = f"{asset_id}:deposit"
-        deposits["group"] = group_name
+        deposits["group"] = GroupDomain.DEPOSIT
         series_parts.append(deposits[["asset_key", "group", "date", "value", "currency"]])
 
     if not series_parts:
