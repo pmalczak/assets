@@ -51,7 +51,7 @@ def build_data():
         .rename(columns={AssetsDef.GROUP: "group", AssetsDef.VALUE_PLN: "value_pln"})
     )
     snapshot_total_pln = float(snapshot_by_group["value_pln"].sum())
-    history = _align_history_to_snapshot(history_data["history"], snapshot_by_group)
+    history, offsets = _align_history_to_snapshot(history_data["history"], snapshot_by_group)
 
     excel_buffer = io.BytesIO()
     assets.to_excel(excel_buffer, index=False)
@@ -59,20 +59,26 @@ def build_data():
 
     return {
         "excel_bytes": excel_buffer,
+        "portfolio_history_raw": history_data["history"],
         "portfolio_history": history,
+        "portfolio_offsets": offsets,
+        "snapshot_by_group": snapshot_by_group,
         "history_skipped_assets": history_data["skipped_assets"],
         "snapshot_total_pln": snapshot_total_pln,
     }
 
 
-def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.DataFrame) -> pd.DataFrame:
+def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     aligned = history.copy()
     today = pd.Timestamp.today().normalize()
 
     if aligned.empty:
         fallback = snapshot_by_group.copy()
         fallback["date"] = today
-        return fallback[["date", "group", "value_pln"]]
+        offsets = snapshot_by_group.copy()
+        offsets["history_value_pln"] = 0.0
+        offsets["missing_constant_value"] = offsets["value_pln"]
+        return fallback[["date", "group", "value_pln"]], offsets[["group", "value_pln", "history_value_pln", "missing_constant_value"]]
 
     aligned["date"] = pd.to_datetime(aligned["date"])
     aligned = aligned.sort_values("date").reset_index(drop=True)
@@ -107,7 +113,10 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.Data
         aligned["value_pln"] = aligned["value_pln_snapshot"].fillna(aligned["value_pln"])
         aligned = aligned.drop(columns=["value_pln_snapshot"])
 
-    return aligned.sort_values(["date", "group"]).reset_index(drop=True)
+    return (
+        aligned.sort_values(["date", "group"]).reset_index(drop=True),
+        offsets[["group", "value_pln", "history_value_pln", "missing_constant_value"]].sort_values("group").reset_index(drop=True),
+    )
 
 
 def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
@@ -161,6 +170,62 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
         )
 
 
+def render_diagnostics(
+    raw_history: pd.DataFrame,
+    aligned_history: pd.DataFrame,
+    offsets: pd.DataFrame,
+    snapshot_by_group: pd.DataFrame,
+):
+    st.divider()
+    st.subheader("Diagnostyka")
+
+    raw_totals = (
+        raw_history.groupby("date", as_index=False)["value_pln"].sum().sort_values("date")
+        if not raw_history.empty
+        else pd.DataFrame(columns=["date", "value_pln"])
+    )
+    aligned_totals = (
+        aligned_history.groupby("date", as_index=False)["value_pln"].sum().sort_values("date")
+        if not aligned_history.empty
+        else pd.DataFrame(columns=["date", "value_pln"])
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Punktow raw", len(raw_history))
+    c2.metric("Punktow aligned", len(aligned_history))
+    c3.metric("Grup", aligned_history["group"].nunique() if not aligned_history.empty else 0)
+
+    st.markdown("**Offsety dodane do grup**")
+    st.dataframe(offsets, use_container_width=True, hide_index=True)
+
+    st.markdown("**Snapshot per grupa**")
+    st.dataframe(snapshot_by_group.sort_values("group"), use_container_width=True, hide_index=True)
+
+    st.markdown("**Suma portfela po dniach: raw vs aligned**")
+    totals_compare = raw_totals.rename(columns={"value_pln": "raw_total_pln"}).merge(
+        aligned_totals.rename(columns={"value_pln": "aligned_total_pln"}),
+        on="date",
+        how="outer",
+    ).sort_values("date")
+    st.dataframe(totals_compare, use_container_width=True, hide_index=True)
+
+    st.markdown("**Surowa historia per grupa**")
+    st.dataframe(
+        raw_history.sort_values(["date", "group"]),
+        use_container_width=True,
+        hide_index=True,
+        height=280,
+    )
+
+    st.markdown("**Historia po uzgodnieniu per grupa**")
+    st.dataframe(
+        aligned_history.sort_values(["date", "group"]),
+        use_container_width=True,
+        hide_index=True,
+        height=280,
+    )
+
+
 def main():
     st.title("Assets Dashboard")
 
@@ -184,6 +249,12 @@ def main():
         )
 
     render_portfolio_history(data["portfolio_history"], data["history_skipped_assets"])
+    render_diagnostics(
+        data["portfolio_history_raw"],
+        data["portfolio_history"],
+        data["portfolio_offsets"],
+        data["snapshot_by_group"],
+    )
 
 
 if __name__ == "__main__":
