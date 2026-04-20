@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import altair as alt
 
 project_root = Path().home() / r"PycharmProjects\github_common_py"
 sys.path.append(str(project_root))
@@ -126,10 +127,26 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
         c3.metric("Poczatek zakresu", totals["date"].iloc[0].strftime("%Y-%m-%d"))
 
         chart_data = (
-            history.pivot_table(index="date", columns="group", values="value_pln", aggfunc="sum", fill_value=0)
-            .sort_index()
+            history.groupby(["date", "group"], as_index=False)["value_pln"]
+            .sum()
+            .sort_values(["date", "group"])
         )
-        st.area_chart(chart_data, use_container_width=True)
+        chart = (
+            alt.Chart(chart_data)
+            .mark_area()
+            .encode(
+                x=alt.X("date:T", title="Data"),
+                y=alt.Y("value_pln:Q", title="Wartosc portfela (PLN)", stack="zero"),
+                color=alt.Color("group:N", title="Grupa"),
+                order=alt.Order("group:N"),
+                tooltip=[
+                    alt.Tooltip("date:T", title="Data"),
+                    alt.Tooltip("group:N", title="Grupa"),
+                    alt.Tooltip("value_pln:Q", title="Wartosc", format=",.0f"),
+                ],
+            )
+        )
+        st.altair_chart(chart, use_container_width=True)
 
         st.caption(
             "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR. "
