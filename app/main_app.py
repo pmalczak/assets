@@ -21,11 +21,6 @@ from portfolio_history import build_portfolio_history
 st.set_page_config(page_title="Assets Dashboard", layout="wide")
 
 
-def number_config(label: str, suffix: str | None = None):
-    fmt = "%.0f" + (f" {suffix}" if suffix else "")
-    return st.column_config.NumberColumn(label=label, format=fmt)
-
-
 def build_data():
     local_data_steps_root = Path(__file__).parent.parent
     DATA_STEP.init_steps(root=local_data_steps_root)
@@ -47,46 +42,21 @@ def build_data():
     assets = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
     assets = assets[assets[AssetsDef.VALUE] != 0]
     assets = assets.drop(columns=[AssetsDef.NOTES, LastFx.FX])
-    snapshot_total_pln = float(pd.to_numeric(assets[AssetsDef.VALUE_PLN], errors="coerce").fillna(0).sum())
-    history = _align_history_to_snapshot(history_data["history"], snapshot_total_pln)
+    snapshot_by_group = (
+        assets[[AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
+        .assign(**{AssetsDef.VALUE_PLN: pd.to_numeric(assets[AssetsDef.VALUE_PLN], errors="coerce").fillna(0)})
+        .groupby(AssetsDef.GROUP, as_index=False)[AssetsDef.VALUE_PLN]
+        .sum()
+        .rename(columns={AssetsDef.GROUP: "group", AssetsDef.VALUE_PLN: "value_pln"})
+    )
+    snapshot_total_pln = float(snapshot_by_group["value_pln"].sum())
+    history = _align_history_to_snapshot(history_data["history"], snapshot_by_group)
 
     excel_buffer = io.BytesIO()
     assets.to_excel(excel_buffer, index=False)
     excel_buffer.seek(0)
 
-    g1 = (
-        assets[[AssetsDef.TYPE, AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
-        .groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE], as_index=False)
-        .sum(numeric_only=True)
-        .round(0)
-    )
-
-    g2 = (
-        assets[[AssetsDef.TYPE, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_PLN, AssetsDef.CURRENCY]]
-        .groupby([AssetsDef.CURRENCY, AssetsDef.EVALUATION_DATE, AssetsDef.TYPE], as_index=False)
-        .sum(numeric_only=True)
-        .round(0)
-    )
-
-    g3 = (
-        assets[[AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
-        .groupby([AssetsDef.GROUP], as_index=False)
-        .sum(numeric_only=True)
-        .round(0)
-    )
-
-    for col in [AssetsDef.VALUE, AssetsDef.VALUE_PLN]:
-        if col in assets.columns and not pd.api.types.is_numeric_dtype(assets[col]):
-            assets[col] = pd.to_numeric(assets[col], errors="coerce")
-        for df in (g1, g2, g3):
-            if col in df.columns and not pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
     return {
-        "assets": assets,
-        "grouped_value_orig": g1,
-        "grouped_value_pln": g2,
-        "grouped_by_group_pln": g3,
         "excel_bytes": excel_buffer,
         "portfolio_history": history,
         "history_skipped_assets": history_data["skipped_assets"],
@@ -94,27 +64,49 @@ def build_data():
     }
 
 
-def _align_history_to_snapshot(history: pd.DataFrame, snapshot_total_pln: float) -> pd.DataFrame:
+def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.DataFrame) -> pd.DataFrame:
     aligned = history.copy()
     today = pd.Timestamp.today().normalize()
 
     if aligned.empty:
-        return pd.DataFrame({"date": [today], "value_pln": [snapshot_total_pln]})
+        fallback = snapshot_by_group.copy()
+        fallback["date"] = today
+        return fallback[["date", "group", "value_pln"]]
 
     aligned["date"] = pd.to_datetime(aligned["date"])
     aligned = aligned.sort_values("date").reset_index(drop=True)
-    last_history_value = float(pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0).iloc[-1])
-    missing_constant_value = snapshot_total_pln - last_history_value
-    aligned["value_pln"] = pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0) + missing_constant_value
+    aligned["value_pln"] = pd.to_numeric(aligned["value_pln"], errors="coerce").fillna(0)
 
-    last_date = aligned["date"].iloc[-1]
-    if last_date == today:
-        aligned.loc[aligned.index[-1], "value_pln"] = snapshot_total_pln
-        return aligned
+    last_date = aligned["date"].max()
+    last_history_by_group = (
+        aligned[aligned["date"] == last_date][["group", "value_pln"]]
+        .groupby("group", as_index=False)["value_pln"]
+        .sum()
+        .rename(columns={"value_pln": "history_value_pln"})
+    )
 
-    last_visible_value = float(aligned["value_pln"].iloc[-1])
-    row = pd.DataFrame({"date": [today], "value_pln": [last_visible_value]})
-    return pd.concat([aligned, row], ignore_index=True)
+    offsets = snapshot_by_group.merge(last_history_by_group, on="group", how="outer").fillna(0)
+    offsets["missing_constant_value"] = offsets["value_pln"] - offsets["history_value_pln"]
+
+    aligned = aligned.merge(offsets[["group", "missing_constant_value"]], on="group", how="left")
+    aligned["missing_constant_value"] = aligned["missing_constant_value"].fillna(0)
+    aligned["value_pln"] = aligned["value_pln"] + aligned["missing_constant_value"]
+    aligned = aligned.drop(columns=["missing_constant_value"])
+
+    if last_date != today:
+        last_visible = (
+            aligned[aligned["date"] == last_date][["group", "value_pln"]]
+            .groupby("group", as_index=False)["value_pln"]
+            .sum()
+        )
+        last_visible["date"] = today
+        aligned = pd.concat([aligned, last_visible[["date", "group", "value_pln"]]], ignore_index=True)
+    else:
+        aligned = aligned.merge(snapshot_by_group, on="group", how="left", suffixes=("", "_snapshot"))
+        aligned["value_pln"] = aligned["value_pln_snapshot"].fillna(aligned["value_pln"])
+        aligned = aligned.drop(columns=["value_pln_snapshot"])
+
+    return aligned.sort_values(["date", "group"]).reset_index(drop=True)
 
 
 def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
@@ -123,21 +115,25 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str]):
     if history.empty:
         st.warning("Brak danych historycznych do zbudowania wykresu portfela.")
     else:
-        current_value = float(history["value_pln"].iloc[-1])
-        start_value = float(history["value_pln"].iloc[0])
+        totals = history.groupby("date", as_index=False)["value_pln"].sum().sort_values("date")
+        current_value = float(totals["value_pln"].iloc[-1])
+        start_value = float(totals["value_pln"].iloc[0])
         delta_value = current_value - start_value
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Biezaca wartosc", f"{current_value:,.0f} PLN".replace(",", " "))
         c2.metric("Zmiana 12M", f"{delta_value:,.0f} PLN".replace(",", " "))
-        c3.metric("Poczatek zakresu", history["date"].iloc[0].strftime("%Y-%m-%d"))
+        c3.metric("Poczatek zakresu", totals["date"].iloc[0].strftime("%Y-%m-%d"))
 
-        chart_data = history.rename(columns={"date": "Data", "value_pln": "Portfel PLN"})
-        st.line_chart(chart_data, x="Data", y="Portfel PLN", use_container_width=True)
+        chart_data = (
+            history.pivot_table(index="date", columns="group", values="value_pln", aggfunc="sum", fill_value=0)
+            .sort_index()
+        )
+        st.area_chart(chart_data, use_container_width=True)
 
         st.caption(
             "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR. "
-            "Aktywa bez szeregow czasowych sa doliczane jako stala wartosc w calym zakresie 12M."
+            "Aktywa bez szeregow czasowych sa doliczane jako stala wartosc w calym zakresie 12M, per grupa."
         )
 
     if skipped_assets:
@@ -161,7 +157,7 @@ def main():
 
     left, right = st.columns([1, 1])
     with left:
-        st.metric("Rekordy w assets", len(data["assets"]))
+        st.metric("Biezacy snapshot", f"{data['snapshot_total_pln']:,.0f} PLN".replace(",", " "))
     with right:
         st.download_button(
             label="Pobierz assets_evaluation.xlsx",
@@ -170,63 +166,7 @@ def main():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    tabs = st.tabs(
-        [
-            "Portfolio 12M",
-            "Assets (raw)",
-            "Waluta + data + typ (orig.)",
-            "Waluta + data + typ (PLN)",
-            "Grupa (PLN)",
-        ]
-    )
-
-    with tabs[0]:
-        render_portfolio_history(data["portfolio_history"], data["history_skipped_assets"])
-
-    with tabs[1]:
-        st.subheader("Assets po filtrach i bez kolumn NOTES i FX")
-        st.dataframe(
-            data["assets"],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                AssetsDef.VALUE: number_config("Wartosc (oryg.)"),
-                AssetsDef.VALUE_PLN: number_config("Wartosc (PLN)", "PLN"),
-            },
-        )
-
-    with tabs[2]:
-        st.subheader("Suma wartosci wg waluty, daty i typu")
-        st.dataframe(
-            data["grouped_value_orig"],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                AssetsDef.VALUE: number_config("Wartosc (oryg.)"),
-            },
-        )
-
-    with tabs[3]:
-        st.subheader("Suma wartosci wg waluty, daty i typu w PLN")
-        st.dataframe(
-            data["grouped_value_pln"],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                AssetsDef.VALUE_PLN: number_config("Wartosc (PLN)", "PLN"),
-            },
-        )
-
-    with tabs[4]:
-        st.subheader("Suma wartosci wg grupy w PLN")
-        st.dataframe(
-            data["grouped_by_group_pln"],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                AssetsDef.VALUE_PLN: number_config("Wartosc (PLN)", "PLN"),
-            },
-        )
+    render_portfolio_history(data["portfolio_history"], data["history_skipped_assets"])
 
 
 if __name__ == "__main__":

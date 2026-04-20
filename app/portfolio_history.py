@@ -59,7 +59,7 @@ def build_portfolio_history(
 
     if not history_points:
         return {
-            "history": pd.DataFrame(columns=["date", "value_pln"]),
+            "history": pd.DataFrame(columns=["date", "group", "value_pln"]),
             "supported_assets": supported_assets,
             "skipped_assets": skipped_assets,
             "start_date": start_date,
@@ -76,9 +76,9 @@ def build_portfolio_history(
     history["value_pln"] = history["value"] * history["fx"]
 
     portfolio = (
-        history.groupby("date", as_index=False)["value_pln"]
+        history.groupby(["date", "group"], as_index=False)["value_pln"]
         .sum()
-        .sort_values("date")
+        .sort_values(["date", "group"])
     )
 
     return {
@@ -101,7 +101,7 @@ def _build_asset_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
         return _bonds_history(data_root, asset_row)
     if kind.startswith(f"{KindDomain.ASSETS}."):
         return _assets_sheet_history(asset_row)
-    return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+    return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
 
 def _mbank_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
@@ -110,7 +110,7 @@ def _mbank_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
 
     df = read_m_transactions(data_root, asset_id)
     if df.empty:
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     history = (
         df[[MBankFile.MBANK_TRANSACTION_DATE, MBankFile.MBANK_OUTSTANDING_BALANCE]]
@@ -127,8 +127,9 @@ def _mbank_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
     history = history.dropna(subset=["date", "value"])
     history = history.groupby("date", as_index=False)["value"].last()
     history["asset_key"] = asset_id
+    history["group"] = str(asset_row[AssetsDef.GROUP])
     history["currency"] = currency
-    return history[["asset_key", "date", "value", "currency"]]
+    return history[["asset_key", "group", "date", "value", "currency"]]
 
 
 def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
@@ -137,6 +138,7 @@ def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
     currency = str(asset_row[AssetsDef.CURRENCY]).upper()
 
     series_parts: list[pd.DataFrame] = []
+    group_name = str(asset_row[AssetsDef.GROUP])
 
     df_accounts = read_revolut_account_transactions(input_path, asset_id)
     if not df_accounts.empty:
@@ -150,8 +152,9 @@ def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
         accounts = accounts.dropna(subset=["date", "value"])
         accounts = accounts.groupby("date", as_index=False)["value"].last()
         accounts["asset_key"] = f"{asset_id}:account"
+        accounts["group"] = group_name
         accounts["currency"] = currency
-        series_parts.append(accounts[["asset_key", "date", "value", "currency"]])
+        series_parts.append(accounts[["asset_key", "group", "date", "value", "currency"]])
 
     df_deposits = read_revolut_deposit_transactions(input_path, asset_id)
     if not df_deposits.empty:
@@ -172,10 +175,11 @@ def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
         deposits = deposits.dropna(subset=["date", "value"])
         deposits = deposits.groupby("date", as_index=False).last()
         deposits["asset_key"] = f"{asset_id}:deposit"
-        series_parts.append(deposits[["asset_key", "date", "value", "currency"]])
+        deposits["group"] = group_name
+        series_parts.append(deposits[["asset_key", "group", "date", "value", "currency"]])
 
     if not series_parts:
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     return pd.concat(series_parts, ignore_index=True)
 
@@ -187,7 +191,7 @@ def _bonds_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
 
     df = read_obligacje(input_path, asset_id)
     if df.empty:
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     history = (
         df[[PkoBpBonds.DATE, PkoBpBonds.AMOUNT]]
@@ -200,8 +204,9 @@ def _bonds_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
     history = history.groupby("date", as_index=False)["value"].sum()
     history["value"] = history["value"].cumsum()
     history["asset_key"] = asset_id
+    history["group"] = str(asset_row[AssetsDef.GROUP])
     history["currency"] = currency
-    return history[["asset_key", "date", "value", "currency"]]
+    return history[["asset_key", "group", "date", "value", "currency"]]
 
 
 def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
@@ -213,6 +218,7 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
         return _single_series_history(
             sheet=sheet,
             asset_key=str(asset_row[AssetsDef.ID]),
+            group_name=str(asset_row[AssetsDef.GROUP]),
             currency=str(asset_row[AssetsDef.CURRENCY]).upper(),
         )
 
@@ -222,13 +228,14 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
             history = _single_series_history(
                 sheet=group,
                 asset_key=f"{asset_row[AssetsDef.ID]}:{str(currency).upper()}",
+                group_name=str(asset_row[AssetsDef.GROUP]),
                 currency=str(currency).upper(),
             )
             if not history.empty:
                 result.append(history)
         if result:
             return pd.concat(result, ignore_index=True)
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     if kind == "assets.properties":
         Properties.check_structure(sheet, file=get_assets_file())
@@ -246,21 +253,22 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
             history = history.rename(columns={Properties.DATE: "date", Properties.CURRENCY: "currency"})
             history = history.groupby("date", as_index=False).last()
             history["asset_key"] = f"{asset_row[AssetsDef.ID]}:{property_id}"
+            history["group"] = str(asset_row[AssetsDef.GROUP])
             history["currency"] = history["currency"].astype(str).str.upper()
-            result.append(history[["asset_key", "date", "value", "currency"]])
+            result.append(history[["asset_key", "group", "date", "value", "currency"]])
 
         if result:
             return pd.concat(result, ignore_index=True)
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
-    return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+    return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
 
-def _single_series_history(sheet: pd.DataFrame, asset_key: str, currency: str) -> pd.DataFrame:
+def _single_series_history(sheet: pd.DataFrame, asset_key: str, group_name: str, currency: str) -> pd.DataFrame:
     date_column = "Data"
     value_column = AssetsDef.VALUE
     if date_column not in sheet.columns or value_column not in sheet.columns:
-        return pd.DataFrame(columns=["asset_key", "date", "value", "currency"])
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     history = sheet[[date_column, value_column]].copy()
     history["date"] = pd.to_datetime(history[date_column])
@@ -268,8 +276,9 @@ def _single_series_history(sheet: pd.DataFrame, asset_key: str, currency: str) -
     history = history.dropna(subset=["date", "value"])
     history = history.groupby("date", as_index=False)["value"].last()
     history["asset_key"] = asset_key
+    history["group"] = group_name
     history["currency"] = currency
-    return history[["asset_key", "date", "value", "currency"]]
+    return history[["asset_key", "group", "date", "value", "currency"]]
 
 
 def _daily_asset_values(raw_history: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
@@ -287,6 +296,7 @@ def _daily_asset_values(raw_history: pd.DataFrame, start_date: pd.Timestamp, end
             {
                 "date": index,
                 "asset_key": asset_key,
+                "group": group["group"].iloc[-1],
                 "currency": group["currency"].iloc[-1],
                 "value": series.values,
             }
