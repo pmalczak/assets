@@ -95,14 +95,20 @@ def _read_timeline_events() -> pd.DataFrame:
 def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     aligned = history.copy()
     today = pd.Timestamp.today().normalize()
+    snapshot_map = snapshot_by_group.set_index("group")["value_pln"]
 
     if aligned.empty:
         date_range = pd.date_range(end=today, periods=365, freq="D")
-        fallback = snapshot_by_group.assign(_key=1).merge(
-            pd.DataFrame({"date": date_range, "_key": 1}),
-            on="_key",
-            how="inner",
-        ).drop(columns="_key")
+        fallback_rows = [
+            {
+                "date": date,
+                "group": row["group"],
+                "value_pln": row["value_pln"] if date == today else 0.0,
+            }
+            for date in date_range
+            for _, row in snapshot_by_group.iterrows()
+        ]
+        fallback = pd.DataFrame(fallback_rows)
         offsets = snapshot_by_group.copy()
         offsets["history_value_pln"] = 0.0
         offsets["missing_constant_value"] = offsets["value_pln"]
@@ -129,30 +135,38 @@ def _align_history_to_snapshot(history: pd.DataFrame, snapshot_by_group: pd.Data
     offsets = snapshot_by_group.merge(last_history_by_group, on="group", how="outer").fillna(0)
     offsets["missing_constant_value"] = offsets["value_pln"] - offsets["history_value_pln"]
 
-    aligned = aligned.merge(offsets[["group", "missing_constant_value"]], on="group", how="left")
-    aligned["missing_constant_value"] = aligned["missing_constant_value"].fillna(0)
-    aligned["value_pln"] = aligned["value_pln"] + aligned["missing_constant_value"]
-    aligned = aligned.drop(columns=["missing_constant_value"])
-
-    missing_groups = sorted(set(snapshot_by_group["group"]) - set(aligned["group"]))
-    if missing_groups:
-        missing_rows = (
-            snapshot_by_group[snapshot_by_group["group"].isin(missing_groups)]
-            .assign(_key=1)
-            .merge(pd.DataFrame({"date": full_dates, "_key": 1}), on="_key", how="inner")
-            .drop(columns="_key")
-        )
-        aligned = pd.concat([aligned, missing_rows[["date", "group", "value_pln"]]], ignore_index=True)
-
     if last_date < today:
-        last_visible = aligned[aligned["date"] == last_date][["group", "value_pln"]].copy()
+        last_raw = aligned[aligned["date"] == last_date][["group", "value_pln"]].copy()
         extension_rows = []
         for date in pd.date_range(last_date + pd.Timedelta(days=1), today, freq="D"):
-            x = last_visible.copy()
+            x = last_raw.copy()
             x["date"] = date
             extension_rows.append(x)
         if extension_rows:
             aligned = pd.concat([aligned] + extension_rows, ignore_index=True)
+
+    missing_groups = sorted(set(snapshot_by_group["group"]) - set(aligned["group"].unique()))
+    if missing_groups:
+        missing_rows = [
+            {
+                "date": date,
+                "group": group,
+                "value_pln": float(snapshot_map[group]) if date == today else 0.0,
+            }
+            for date in full_dates
+            for group in missing_groups
+        ]
+        aligned = pd.concat([aligned, pd.DataFrame(missing_rows)], ignore_index=True)
+
+    today_rows = []
+    for group, snap_value in snapshot_map.items():
+        group_today_mask = (aligned["date"] == today) & (aligned["group"] == group)
+        if group_today_mask.any():
+            aligned.loc[group_today_mask, "value_pln"] = snap_value
+        else:
+            today_rows.append({"date": today, "group": group, "value_pln": float(snap_value)})
+    if today_rows:
+        aligned = pd.concat([aligned, pd.DataFrame(today_rows)], ignore_index=True)
 
     return (
         aligned.sort_values(["date", "group"]).reset_index(drop=True),
@@ -181,11 +195,13 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str], t
         current_value = float(totals["value_pln"].iloc[-1])
         start_value = float(totals["value_pln"].iloc[0])
         delta_value = current_value - start_value
+        delta_pct = (delta_value / start_value * 100) if start_value else 0.0
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("Biezaca wartosc", f"{current_value:,.0f} PLN".replace(",", " "))
-        c2.metric("Zmiana 12M", f"{delta_value:,.0f} PLN".replace(",", " "))
-        c3.metric("Poczatek zakresu", totals["date"].iloc[0].strftime("%Y-%m-%d"))
+        c2.metric("Wartosc 12M temu", f"{start_value:,.0f} PLN".replace(",", " "))
+        c3.metric("Zmiana 12M", f"{delta_value:,.0f} PLN".replace(",", " "), f"{delta_pct:+.1f}%")
+        c4.metric("Zakres dat", totals["date"].iloc[0].strftime("%Y-%m-%d"))
 
         chart_data = (
             visible_history.groupby(["date", "group"], as_index=False)["value_pln"]
@@ -264,7 +280,8 @@ def render_portfolio_history(history: pd.DataFrame, skipped_assets: list[str], t
 
         st.caption(
             "Historia jest odtwarzana z danych zrodlowych i kursow NBP dla EUR. "
-            "Aktywa bez szeregow czasowych sa doliczane jako stala wartosc w calym zakresie 12M, per grupa."
+            "Biezacy snapshot jest uzgadniany tylko na ostatni dzien wykresu; wczesniejsze punkty pokazuja "
+            "wartosc wyliczona z historii transakcji (bez retroaktywnego doliczania roznicy do snapshotu)."
         )
 
     if skipped_assets:
