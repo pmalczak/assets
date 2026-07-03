@@ -12,10 +12,11 @@ from analyse_assets.kiemliczow_3 import kiemliczow_3
 from analyse_assets.kiemliczow_4 import kiemliczow_4
 from analyse_assets.opoczynska import opoczynska
 from analyse_assets.rumiankowa import rumiankowa
+from analyse_assets.karpacz import karpacz
 from analyse_assets.select_asset import print_asset
 from analyse_assets.starogajowa import starogajowa
 from consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
-from data_root import get_online_data_root
+from main_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.read_assets import read_assets
@@ -66,6 +67,7 @@ def analyse_assets_proc(df, p):
         'mbank_kiemliczow_3.xlsx': kiemliczow_3,
         'mbank_rumiankowa.xlsx': rumiankowa,
         'mbank_opoczynska.xlsx': opoczynska,
+        'mbank_karpacz.xlsx': karpacz,
     }
     for file_name, proc in x.items():
         file_out = p / file_name

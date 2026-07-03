@@ -19,8 +19,8 @@ def kiemliczow_4(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             ), AssetRw.inflow_outflow_mapping)
 
     df, r2 = select_asset(df, (
-            # (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "5110205242676676767")
-            (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "47114010100000531029001001")  # ENIGMA
+            (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "78102010264322424265110059")  # TAURON KIEMLICZÓW 4 NOWY
+            | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "47114010100000531029001001")  # ENIGMA
             | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "31105000996029010224308549")  # TAURON
             ), AssetRw.inflow_outflow_mapping)
 

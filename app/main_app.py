@@ -10,15 +10,15 @@ from openpyxl import load_workbook
 project_root = Path().home() / r"PycharmProjects\github_common_py"
 sys.path.append(str(project_root))
 
-from check_wrong_catalogs import check_wrong_catalogs
-from data_root import get_online_data_root
+from main_proc.check_wrong_catalogs import check_wrong_catalogs
+from main_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from evaluators.evaluate_assets import evaluate_assets
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, AssetsFile
 from importers.assets.read_assets import get_assets_file, read_assets
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
-from portfolio_history import build_portfolio_history
+from main_app_proc.portfolio_history import build_portfolio_history
 
 st.set_page_config(page_title="Assets Dashboard", layout="wide")
 

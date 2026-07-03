@@ -3,8 +3,6 @@ __author__ = "pmalczak@gmail.com"
 
 from pathlib import Path
 
-from data_root import get_online_data_root
-
 
 def get_downloaded(download) -> list:
 

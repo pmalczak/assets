@@ -1,26 +1,26 @@
 import unittest
 import importlib
-import sys
-import types
+# import sys
+# import types
 from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 
 
-data_step_package = types.ModuleType("data_step")
-data_step_module = types.ModuleType("data_step.data_step")
-data_step_module.DATA_STEP = object()
-data_step_package.data_step = data_step_module
-sys.modules.setdefault("data_step", data_step_package)
-sys.modules.setdefault("data_step.data_step", data_step_module)
+# data_step_package = types.ModuleType("data_step")
+# data_step_module = types.ModuleType("data_step.data_step")
+# data_step_module.DATA_STEP = object()
+# data_step_package.data_step = data_step_module
+# sys.modules.setdefault("data_step", data_step_package)
+# sys.modules.setdefault("data_step.data_step", data_step_module)
 
-nbp_fx_package = types.ModuleType("nbp_fx_repo")
-nbp_fx_module = types.ModuleType("nbp_fx_repo.nbp_fx_repository")
-nbp_fx_module.NBP_API_EUR = "eur"
-nbp_fx_package.nbp_fx_repository = nbp_fx_module
-sys.modules.setdefault("nbp_fx_repo", nbp_fx_package)
-sys.modules.setdefault("nbp_fx_repo.nbp_fx_repository", nbp_fx_module)
+# nbp_fx_package = types.ModuleType("nbp_fx_repo")
+# nbp_fx_module = types.ModuleType("nbp_fx_repo.nbp_fx_repository")
+# nbp_fx_module.NBP_API_EUR = "eur"
+# nbp_fx_package.nbp_fx_repository = nbp_fx_module
+# sys.modules.setdefault("nbp_fx_repo", nbp_fx_package)
+# sys.modules.setdefault("nbp_fx_repo.nbp_fx_repository", nbp_fx_module)
 
 build_portfolio_history = importlib.import_module("portfolio_history").build_portfolio_history
 
@@ -70,16 +70,16 @@ class BuildPortfolioHistoryTests(unittest.TestCase):
             ),
         ]
 
-        with (
-            patch("portfolio_history.get_online_data_root", return_value=Path("C:/fake")),
-            patch("portfolio_history._build_asset_history", side_effect=histories),
-        ):
-            result = build_portfolio_history(
-                assets_catalog,
-                fx_rates,
-                end_date=pd.Timestamp("2025-01-03"),
-                days=3,
-            )
+        # with (
+        #     # patch("portfolio_history.get_online_data_root", return_value=Path("C:/fake")),
+        #     patch("portfolio_history._build_asset_history", side_effect=histories),
+        # ):
+        result = build_portfolio_history(
+            assets_catalog,
+            fx_rates,
+            end_date=pd.Timestamp("2025-01-03"),
+            days=3,
+        )
 
         history = result["history"].sort_values(["date", "group"]).reset_index(drop=True)
         expected = pd.DataFrame(

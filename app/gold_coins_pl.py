@@ -330,6 +330,8 @@ def display_results(all_results: list[dict], weight: str):
         header_style="bold cyan",
         border_style="dim",
         expand=True,
+        width=600,     # <-- dodaj to: ustaw konkretną szerokość w znakach
+
     )
     table.add_column("Źródło", style="bold", min_width=20)
     table.add_column("Moneta / produkt", min_width=30)

@@ -23,6 +23,7 @@ def opoczynska(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     df, r3 = select_asset(df, (
         (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "43105000996029010240832283")
+        | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "78102010264322425711480066")
         ),
         AssetRw.inflow_outflow_mapping)
 
