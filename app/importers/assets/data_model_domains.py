@@ -8,6 +8,7 @@ class GroupDomainCls(DomainCheckerGeneric):
     CASH = '0 gotówka'
     BANK_ACCOUNTS = '1 konta bankowe'
     DEPOSIT = '2 depozyty'
+    GOLD_COINS = '3 złoto-monety'
     INVESTMENT = '5 inwestycje finansowe'
     PROPERTY = '9 nieruchomości'
 
@@ -16,6 +17,7 @@ class GroupDomainCls(DomainCheckerGeneric):
             self.CASH,
             self.BANK_ACCOUNTS,
             self.DEPOSIT,
+            self.GOLD_COINS,
             self.INVESTMENT,
             self.PROPERTY
         }
@@ -30,6 +32,7 @@ class TypeDomainCls(DomainCheckerGeneric):
     CASH = 'cash'
     CURRENT_ACCOUNT = 'ror'
     DEPOSIT = 'depozyt'
+    GOLD_COINS = 'złoto-monety'
     EQUITIES = 'udziały'
     BONDS = 'obligacje'
     PROPERTY = 'property'
@@ -39,6 +42,7 @@ class TypeDomainCls(DomainCheckerGeneric):
             self.CASH,
             self.CURRENT_ACCOUNT,
             self.DEPOSIT,
+            self.GOLD_COINS,
             self.EQUITIES,
             self.BONDS,
             self.PROPERTY
@@ -64,11 +68,25 @@ class KindDomainCls(DomainCheckerGeneric):
             self.ASSETS + '.properties',
             self.ASSETS + '.rocky-iv',
             self.ASSETS + '.cash',
+            self.ASSETS + '.zloto-monety',
             self.BONDS,
             self.BROKER,
             # self.REGNOLOGY,
 
             '?'
+        }
+
+
+class TitleMatchDomainCls(DomainCheckerGeneric):
+    EXACT = 'exact'
+    CONTAINS = 'contains'
+    REGEX = 'regex'
+
+    def domain(self) -> set:
+        return {
+            self.EXACT,
+            self.CONTAINS,
+            self.REGEX,
         }
 
 

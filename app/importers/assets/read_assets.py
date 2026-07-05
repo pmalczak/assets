@@ -5,9 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from importers.assets.data_model import AssetsFile
+from importers.assets.data_model import AssetsFile, GOLD_COIN_PURCHASES_SHEET, GOLD_COIN_VALUATIONS_SHEET
 from main_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
+
+ASSETS_FILE_NAME = "assets_1.xlsx"
+LEGACY_ASSETS_FILE_NAME = "assets.xlsx"
 
 
 def read_assets() -> pd.DataFrame:
@@ -20,9 +23,30 @@ def read_assets() -> pd.DataFrame:
 
 
 def get_assets_file() -> Path:
+    """Zwraca sciezke pliku konfiguracji aktywow w katalogu get_online_data_root()."""
     data_root = get_online_data_root()
-    _in = 'assets.xlsx'
-    return data_root / _in
+    primary = data_root / ASSETS_FILE_NAME
+    if primary.is_file():
+        return primary
+    legacy = data_root / LEGACY_ASSETS_FILE_NAME
+    assert legacy.is_file(), (
+        f"Brak pliku {ASSETS_FILE_NAME} ani {LEGACY_ASSETS_FILE_NAME} w {data_root}"
+    )
+    return legacy
+
+
+def read_asset_sheet(sheet_name: str) -> pd.DataFrame:
+    source_file = get_assets_file()
+    assert source_file.is_file(), source_file
+    return pd.read_excel(source_file, sheet_name=sheet_name)
+
+
+def read_gold_coin_purchase_rules() -> pd.DataFrame:
+    return read_asset_sheet(GOLD_COIN_PURCHASES_SHEET)
+
+
+def read_gold_coin_valuations() -> pd.DataFrame:
+    return read_asset_sheet(GOLD_COIN_VALUATIONS_SHEET)
 
 
 def _read_assets(source_file = None) -> pd.DataFrame:

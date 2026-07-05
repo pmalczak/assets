@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from check_wrong_catalogs import check_wrong_catalogs
-from data_root import get_online_data_root
+from main_proc.check_wrong_catalogs import check_wrong_catalogs
+from main_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 from evaluators.evaluate_assets import evaluate_assets
 from fx.data_model import LastFx

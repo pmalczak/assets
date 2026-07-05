@@ -4,7 +4,7 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 
 from importers.assets.data_model_domains import GroupDomainCls, CurrencyDomainCls, TypeDomainCls, KindDomainCls, \
-    OperationDomainCls
+    OperationDomainCls, TitleMatchDomainCls
 from importers.data_model_generic import GenericStructureClass
 
 
@@ -102,3 +102,72 @@ class PropertiesCls(GenericStructureClass):
 Properties = PropertiesCls()
 
 OperationDomain = OperationDomainCls(Properties.OPERATION)
+
+
+class GoldCoinPurchaseRulesCls(GenericStructureClass):
+    RULE_ID = 'rule_id'
+    SOURCE_ACCOUNT = 'konto_źródłowe'
+    DATE = 'data'
+    DATE_FROM = 'data_od'
+    DATE_TO = 'data_do'
+    TITLE = 'tytuł'
+    TITLE_MATCH = 'tytuł_dopasowanie'
+    COUNTERPARTY = 'kontrahent'
+    COUNTERPARTY_IBAN = 'iban_kontrahenta'
+    AMOUNT = 'kwota'
+    AMOUNT_TOLERANCE = 'tolerancja_kwoty'
+    OPERATION_DESCRIPTION = 'opis_operacji'
+    COIN = 'moneta'
+    QUANTITY = 'sztuki'
+    WEIGHT = 'waga'
+    NOTES = 'notatki'
+
+    def expected_columns(self) -> set:
+        return {
+            self.RULE_ID,
+            self.SOURCE_ACCOUNT,
+            self.DATE,
+            self.DATE_FROM,
+            self.DATE_TO,
+            self.TITLE,
+            self.TITLE_MATCH,
+            self.COUNTERPARTY,
+            self.COUNTERPARTY_IBAN,
+            self.AMOUNT,
+            self.AMOUNT_TOLERANCE,
+            self.OPERATION_DESCRIPTION,
+            self.COIN,
+            self.QUANTITY,
+            self.WEIGHT,
+            self.NOTES,
+        }
+
+    def check_structure(self, df: pd.DataFrame, file=None):
+        super().check_structure(df, file=file)
+        if df.empty:
+            return
+        TitleMatchDomain.is_in_domain(
+            df[df[self.TITLE_MATCH].notna()],
+            file=file,
+        )
+
+
+class GoldCoinValuationsCls(GenericStructureClass):
+    DATE = 'Data'
+    VALUE = AssetsDef.VALUE
+    NOTES = 'notatki'
+
+    def expected_columns(self) -> set:
+        return {
+            self.DATE,
+            self.VALUE,
+            self.NOTES,
+        }
+
+
+GoldCoinPurchaseRules = GoldCoinPurchaseRulesCls()
+GoldCoinValuations = GoldCoinValuationsCls()
+TitleMatchDomain = TitleMatchDomainCls(GoldCoinPurchaseRules.TITLE_MATCH)
+
+GOLD_COIN_PURCHASES_SHEET = 'zloto-monety-zakupy'
+GOLD_COIN_VALUATIONS_SHEET = 'zloto-monety-wyceny'
