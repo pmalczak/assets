@@ -16,7 +16,7 @@ def _():
 
 @app.cell
 def _():
-    from calculate_assets import calculate_assets
+    from main_proc.calculate_assets import calculate_assets
 
     assets = calculate_assets()
     assets = assets.set_index('id')

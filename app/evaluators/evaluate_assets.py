@@ -9,6 +9,7 @@ from evaluators.evaluate_assets_file import evaluate_assets_file
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
 from evaluators.evaluate_revolut import evaluate_revolut
+from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
 from fx.get_last_fx import get_last_fx
 
 
@@ -36,6 +37,13 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
         elif rodzaj_importu == 'obligacje_skarbowe_import':
             asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row)
+            AssetsDef.check_structure(r)
+            result += [r]
+
+        elif rodzaj_importu == 'assets.zloto-monety':
+            r, warnings = evaluate_zloto_monety(data_root, assets_file_row, a)
+            for warning in warnings:
+                print(f"OSTRZEZENIE [{assets_file_row[AssetsDef.ID]}]: {warning}")
             AssetsDef.check_structure(r)
             result += [r]
 

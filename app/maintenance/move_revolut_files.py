@@ -47,6 +47,10 @@ def _move_file(file: Path, file_owner: str, dropbox_assets: Path, type: str):
     else:
         raise ValueError(type)
 
+    if df.empty:
+        file.unlink()
+        return
+
     currency = get_account_currency(df)
     target = dropbox_assets / f'{file_owner}_{currency}' / file.name
     file.rename(target)

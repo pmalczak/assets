@@ -26,13 +26,18 @@ def kiemliczow_3(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             | (df[AssetRw.MBANK_TITLE].str.contains("ROZLICZENIE KAUCJI")
                | df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("GOŁĘBIOWSKI"))
 
-            | (df[AssetRw.MBANK_TITLE].str.contains("CZYNSZ")
-               & df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("RUSLAN KOSSAK"))
+            # | (df[AssetRw.MBANK_TITLE].str.contains("CZYNSZ")
+            #    & df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("RUSLAN KOSSAK"))
 
             | (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("KRZYSZTOF TUTAJ"))
             | (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("STANISŁAW EDMUND TUTAJ"))
             | (df[AssetRw.MBANK_TRANSACTION_PARTY].str.contains("STANISŁAW TUTAJ"))
-            ), AssetRw.inflow_outflow_mapping)
+
+            | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "78102010264322413325710019") # tauron
+            | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "20109027500000000141901493")  # czynsz Ruslan
+            | (df[AssetRw.MBANK_ACCOUNT_NUMBER] == "72102049000000840235213880")  # czynsz Maryna Kossak
+
+    ), AssetRw.inflow_outflow_mapping)
 
     r = pd.concat([r0, r1, r2])
     return df, r

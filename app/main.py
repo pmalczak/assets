@@ -3,7 +3,7 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-from calculate_assets import calculate_assets
+from main_proc.calculate_assets import calculate_assets
 from importers.assets.data_model import AssetsDef
 
 s = '________________________________________________\n'
