@@ -380,6 +380,6 @@ def main():
 
 
 if __name__ == "__main__":
-    pd.options.mode.copy_on_write = True
+    # pd.options.mode.copy_on_write = True
     pd.options.future.infer_string = True
     main()
