@@ -5,11 +5,11 @@ import pandas as pd
 
 from analyse_assets.analyse import main
 
-pd.options.mode.copy_on_write = True
+# pd.options.mode.copy_on_write = True
 pd.options.future.infer_string = True
 
 if __name__ == '__main__':
-    pd.options.mode.copy_on_write = True
+    # pd.options.mode.copy_on_write = True
     pd.options.future.infer_string = True
 
     pd.set_option('display.max_rows', None)
