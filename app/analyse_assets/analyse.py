@@ -12,7 +12,7 @@ from analyse_assets.config_model import AnalyseAssetsManual, AnalyseAssetsRules
 from analyse_assets.data_model import AssetRw
 from analyse_assets.read_config import read_analyse_config
 from analyse_assets.select_asset import print_asset, select_asset
-from consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
+from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
 from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.read_assets import read_assets
