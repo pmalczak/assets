@@ -1,5 +1,6 @@
 import io
 import sys
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -10,12 +11,9 @@ from openpyxl import load_workbook
 project_root = Path().home() / r"PycharmProjects\github_common_py"
 sys.path.append(str(project_root))
 
-from main_proc.check_wrong_catalogs import check_wrong_catalogs
-from main_proc.data_root import get_online_data_root
+from main_proc.calculate_assets import calculate_assets
 from data_step.data_step import DATA_STEP
-from evaluators.evaluate_assets import evaluate_assets
-from fx.data_model import LastFx
-from importers.assets.data_model import AssetsDef, AssetsFile
+from importers.assets.data_model import AssetsDef
 from importers.assets.read_assets import get_assets_file, read_assets
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 from main_app_proc.portfolio_history import build_portfolio_history
@@ -24,10 +22,8 @@ st.set_page_config(page_title="Assets Dashboard", layout="wide")
 
 
 def build_data():
-    local_data_steps_root = Path(__file__).parent.parent
+    local_data_steps_root = Path(__file__)
     DATA_STEP.init_steps(root=local_data_steps_root)
-
-    data_root = get_online_data_root()
 
     metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / "fx"
     metadata_root.mkdir(parents=True, exist_ok=True)
@@ -37,13 +33,9 @@ def build_data():
     fx_rates = fx_rates[[NBP_API_EUR]]
 
     assets_catalog = read_assets()
-    check_wrong_catalogs(data_root, assets_catalog)
     history_data = build_portfolio_history(assets_catalog, fx_rates)
 
-    assets = evaluate_assets(data_root, assets_catalog, fx_rates)
-    assets = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
-    assets = assets[assets[AssetsDef.VALUE] != 0]
-    assets = assets.drop(columns=[AssetsDef.NOTES, LastFx.FX])
+    assets = calculate_assets(valuation_date=date.today())
     snapshot_by_group = (
         assets[[AssetsDef.GROUP, AssetsDef.VALUE_PLN]]
         .assign(**{AssetsDef.VALUE_PLN: pd.to_numeric(assets[AssetsDef.VALUE_PLN], errors="coerce").fillna(0)})

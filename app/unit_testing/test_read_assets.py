@@ -8,7 +8,7 @@ from data_step.data_step import DATA_STEP
 
 class MyTestCase(unittest.TestCase):
     def test_something(self):
-        local_data_steps_root = Path(__file__).parent.parent.parent
+        local_data_steps_root = Path(__file__)
         DATA_STEP.init_steps(root=local_data_steps_root)
         df = read_assets()
         self.assertTrue(len(df) > 0)

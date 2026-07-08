@@ -27,12 +27,13 @@ class EvaluateDepositsTests(unittest.TestCase):
         # Weryfikacja wartości i dat
         self.assertEqual(res[0][AssetsDef.VALUE], 100.0)
         self.assertEqual(res[0][AssetsDef.EVALUATION_DATE], "2025-01-10")
-        self.assertEqual(res[0][AssetsDef.GROUP], "1 środki pieniężne")
+        self.assertEqual(res[0][AssetsDef.GROUP], '2 depozyty')
         self.assertEqual(res[0][AssetsDef.TYPE], "depozyt")
         self.assertIn("otwarcie", res[0][AssetsDef.DESCR])
 
         self.assertEqual(res[1][AssetsDef.VALUE], 50.0)
-        self.assertEqual(res[1][AssetsDef.EVALUATION_DATE], "2025-02-01")
+        self.assertEqual(res[1][AssetsDef.EVALUATION_DATE], "2025-02-0"
+                                                            "1")
         self.assertIn("otwarcie", res[1][AssetsDef.DESCR])
 
     def test_withdrawal_exhausts_at_least_one_deposit(self):

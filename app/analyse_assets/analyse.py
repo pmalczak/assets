@@ -22,8 +22,7 @@ from main_proc.data_root import get_online_data_root
 
 def main():
 
-    proj_root = Path(__file__).parent.parent
-    DATA_STEP.init_steps(root=proj_root)
+    DATA_STEP.init_steps(root=Path(__file__))
     # DATA_STEP.force_read_data()
     assets = read_assets()
     assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]

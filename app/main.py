@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+from datetime import date
+
 import pandas as pd
 
 from main_proc.calculate_assets import calculate_assets
@@ -11,10 +13,12 @@ col_space=15
 
 
 def main():
-    assets = calculate_assets(force_read_all_data=False)
+    valuation_date = date.today()
+
+    assets = calculate_assets(valuation_date=valuation_date, force_read_all_data=False)
     print(assets)
     print(s)
-    assets.to_excel('assets_evaluation.xlsx', index=False)
+    assets.to_excel(f'assets_evaluation_{valuation_date}.xlsx', index=False)
 
     # rap3(assets)
     rap2(assets)
