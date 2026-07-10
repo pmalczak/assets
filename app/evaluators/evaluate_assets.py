@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+from datetime import date
+
 import pandas as pd
 
 from fx.data_model import LastFx
@@ -10,10 +12,16 @@ from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
 from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
-from fx.get_last_fx import get_last_fx
+from evaluators.valuation_date import format_date_columns
+from fx.get_last_fx import get_fx_as_of
 
 
-def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> pd.DataFrame:
+def evaluate_assets(
+    data_root,
+    assets: pd.DataFrame,
+    fx_rates: pd.DataFrame,
+    valuation_date: date,
+) -> pd.DataFrame:
 
     result = []
     a = assets[assets[AssetsDef.KIND].notnull()]
@@ -23,43 +31,49 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
 
         if rodzaj_importu.startswith(KindDomain.MBANK):
             asset_id: str = assets_file_row[AssetsDef.ID]
-            r = evaluate_mbank(data_root, asset_id, assets_file_row)
-            AssetsDef.check_structure(r)
-            result += [r]
+            r = evaluate_mbank(data_root, asset_id, assets_file_row, valuation_date)
+            if not r.empty:
+                AssetsDef.check_structure(r)
+                result += [r]
 
         elif rodzaj_importu.startswith(KindDomain.REVOLUT):
             asset_id: str = assets_file_row[AssetsDef.ID]
-            r = evaluate_revolut(data_root, asset_id, assets_file_row)
+            r = evaluate_revolut(data_root, asset_id, assets_file_row, valuation_date)
             if len(r) > 0:
                 AssetsDef.check_structure(r)
                 result += [r]
 
         elif rodzaj_importu == 'obligacje_skarbowe_import':
             asset_id: str = assets_file_row[AssetsDef.ID]
-            r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row)
-            AssetsDef.check_structure(r)
-            result += [r]
+            r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row, valuation_date)
+            if not r.empty:
+                AssetsDef.check_structure(r)
+                result += [r]
 
         elif rodzaj_importu == 'assets.zloto-monety':
-            r, warnings = evaluate_zloto_monety(data_root, assets_file_row, a)
+            r, warnings = evaluate_zloto_monety(data_root, assets_file_row, a, valuation_date)
             for warning in warnings:
                 print(f"OSTRZEZENIE [{assets_file_row[AssetsDef.ID]}]: {warning}")
-            AssetsDef.check_structure(r)
-            result += [r]
+            if not r.empty:
+                AssetsDef.check_structure(r)
+                result += [r]
 
         elif rodzaj_importu.startswith('assets.'):
-            r = evaluate_assets_file(rodzaj_importu, assets_file_row)
-            if r is not None:
+            r = evaluate_assets_file(rodzaj_importu, assets_file_row, valuation_date)
+            if r is not None and not r.empty:
                 AssetsDef.check_structure(r)
                 result += [r]
 
         else:
             print(f'brakujący typ: {rodzaj_importu}')
 
+    if not result:
+        return pd.DataFrame(columns=AssetsDef.expected_columns() | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION})
+
     result = pd.concat(result)
     AssetsDef.check_structure(result)
 
-    last_fx = get_last_fx(fx_rates)
+    last_fx = get_fx_as_of(fx_rates, valuation_date)
 
     result_fx = pd.merge(result, last_fx, on=AssetsDef.CURRENCY)
     assert len(result) == len(result_fx)
@@ -74,4 +88,4 @@ def evaluate_assets(data_root, assets: pd.DataFrame, fx_rates: pd.DataFrame) -> 
     evaluation_date = pd.to_datetime(result_fx[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
     diff = (value_date - evaluation_date).dt.days
     result_fx[AssetsDef.DAYS_AFTER_VALUATION] = diff
-    return result_fx
+    return format_date_columns(result_fx, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE)

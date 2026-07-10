@@ -26,7 +26,7 @@ def calculate_assets(
     if valuation_date is None:
         valuation_date = date.today()
 
-    local_data_steps_root = Path(__file__)
+    local_data_steps_root = Path(__file__).parent.parent
     DATA_STEP.init_steps(root=local_data_steps_root)
 
     if force_read_all_data:
@@ -54,7 +54,7 @@ def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
 
     assets = read_assets()
     check_wrong_catalogs(data_root, assets)
-    assets = evaluate_assets(data_root, assets, fx_rates)
+    assets = evaluate_assets(data_root, assets, fx_rates, valuation_date)
 
     return _finalize_assets_snapshot(assets, valuation_date)
 

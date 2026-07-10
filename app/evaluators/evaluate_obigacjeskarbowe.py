@@ -1,32 +1,53 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from evaluators.valuation_date import evaluated_resource, filter_on_or_before, format_date_columns
 from importers.assets.data_model import AssetsDef
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.import_bonds import import_bonds
 
 
-def evaluate_obligacjeskarbowe(data_root, asset_id: str, assets_file_row: pd.Series) -> pd.DataFrame:
+def evaluate_obligacjeskarbowe(
+    data_root,
+    asset_id: str,
+    assets_file_row: pd.Series,
+    valuation_date: date,
+) -> pd.DataFrame:
     assert isinstance(asset_id, str)
-    r = DATA_STEP.obtain(f'02 evaluated/{asset_id}.parquet', _evaluate_obligacjeskarbowe,
-                         data_root=data_root, asset_id=asset_id, assets_file_row=assets_file_row)
-    result = r.data_frame()
-    return result
+    resource = evaluated_resource(asset_id, valuation_date)
+    r = DATA_STEP.obtain(
+        resource,
+        _evaluate_obligacjeskarbowe,
+        data_root=data_root,
+        asset_id=asset_id,
+        assets_file_row=assets_file_row,
+        valuation_date=valuation_date,
+    )
+    return r.data_frame()
 
 
-def _evaluate_obligacjeskarbowe(data_root: Path = None, asset_id: str = None, assets_file_row: pd.Series = None):
+def _evaluate_obligacjeskarbowe(
+    data_root: Path = None,
+    asset_id: str = None,
+    assets_file_row: pd.Series = None,
+    valuation_date: date = None,
+):
     p = data_root / asset_id
     if not p.is_dir():
         raise ValueError(p)
     df = read_obligacje(p, asset_id)
+    df = filter_on_or_before(df, PkoBpBonds.DATE, valuation_date)
+    if df.empty:
+        return pd.DataFrame(columns=AssetsDef.expected_columns())
 
     data = []
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         assets_row1 = AssetsDef.as_assets_row(assets_file_row)
         assets_row1[AssetsDef.VALUE] = row[PkoBpBonds.AMOUNT]
         assets_row1[AssetsDef.EVALUATION_DATE] = row[PkoBpBonds.DATE]
@@ -36,11 +57,10 @@ def _evaluate_obligacjeskarbowe(data_root: Path = None, asset_id: str = None, as
 
     result = pd.DataFrame(data=data)
     AssetsDef.check_structure(result)
-    return result
+    return format_date_columns(result, AssetsDef.EVALUATION_DATE)
 
 
 def read_obligacje(input_path: Path, asset_id: str) -> pd.DataFrame:
     resource = f'01 source/{asset_id}.parquet'
     r = DATA_STEP.obtain(resource, import_bonds, input_path=input_path)
-    result = r.data_frame()
-    return result
+    return r.data_frame()
