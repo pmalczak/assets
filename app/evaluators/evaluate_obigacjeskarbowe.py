@@ -7,40 +7,24 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
-from evaluators.valuation_date import evaluated_resource, filter_on_or_before, format_date_columns
+from evaluators.valuation_date import filter_on_or_before, format_date_columns
 from importers.assets.data_model import AssetsDef
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.import_bonds import import_bonds
 
 
 def evaluate_obligacjeskarbowe(
-    data_root,
+    data_root: Path,
     asset_id: str,
     assets_file_row: pd.Series,
     valuation_date: date,
 ) -> pd.DataFrame:
     assert isinstance(asset_id, str)
-    resource = evaluated_resource(asset_id, valuation_date)
-    r = DATA_STEP.obtain(
-        resource,
-        _evaluate_obligacjeskarbowe,
-        data_root=data_root,
-        asset_id=asset_id,
-        assets_file_row=assets_file_row,
-        valuation_date=valuation_date,
-    )
-    return r.data_frame()
 
-
-def _evaluate_obligacjeskarbowe(
-    data_root: Path = None,
-    asset_id: str = None,
-    assets_file_row: pd.Series = None,
-    valuation_date: date = None,
-):
     p = data_root / asset_id
     if not p.is_dir():
         raise ValueError(p)
+
     df = read_obligacje(p, asset_id)
     df = filter_on_or_before(df, PkoBpBonds.DATE, valuation_date)
     if df.empty:

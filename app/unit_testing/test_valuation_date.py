@@ -10,7 +10,6 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from evaluators.valuation_date import (
-    evaluated_resource,
     filter_excel_rows_on_or_before,
     filter_on_or_before,
     format_date_columns,
@@ -37,14 +36,6 @@ class FilterOnOrBeforeTests(unittest.TestCase):
         df = pd.DataFrame({"Data": pd.to_datetime(["2026-01-01", "2026-06-01", "2026-12-01"])})
         result = filter_excel_rows_on_or_before(df, "Data", date(2026, 6, 30))
         self.assertEqual(len(result), 2)
-
-
-class EvaluatedResourceTests(unittest.TestCase):
-    def test_evaluated_resource_includes_date(self):
-        self.assertEqual(
-            evaluated_resource("g_m_23_9039", date(2026, 7, 7)),
-            "02 evaluated/g_m_23_9039/2026-07-07.parquet",
-        )
 
 
 class FormatDateColumnsTests(unittest.TestCase):

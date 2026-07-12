@@ -12,17 +12,18 @@ from __future__ import annotations
 import io
 import re
 import sys
+from contextlib import redirect_stdout
 from datetime import date, timedelta
 from pathlib import Path
+
+project_root = Path.home() / "PycharmProjects" / "github_common_py"
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 from openpyxl import load_workbook
-
-project_root = Path.home() / "PycharmProjects" / "github_common_py"
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
 
 from importers.assets.data_model import AssetsDef
 from importers.assets.read_assets import get_assets_file
@@ -32,6 +33,7 @@ from main_proc.data_steps_root import get_data_steps_root
 st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
 
 SNAPSHOT_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})\.parquet$")
+HISTORY_COLUMNS = [AssetsDef.GROUP, AssetsDef.VALUE_PLN]
 
 
 def snapshots_directory() -> Path:
@@ -60,7 +62,29 @@ def load_snapshot(path: Path) -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False)
+def load_snapshot_for_date(snapshot_date: date) -> pd.DataFrame:
+    path = snapshots_directory() / f"{snapshot_date:%Y-%m-%d}.parquet"
+    if not path.is_file():
+        return pd.DataFrame()
+    return load_snapshot(path)
+
+
+@st.cache_data(show_spinner=False)
+def _read_timeline_events_cached() -> pd.DataFrame:
+    return _read_timeline_events()
+
+
+@st.cache_data(show_spinner="Wczytywanie snapshotow...")
 def build_portfolio_history_from_snapshots(
+    days: int = 365,
+    end_date_iso: str | None = None,
+) -> dict[str, object]:
+    end = date.fromisoformat(end_date_iso) if end_date_iso else date.today()
+    return _build_portfolio_history_from_snapshots(days=days, end_date=end)
+
+
+def _build_portfolio_history_from_snapshots(
     snapshots_dir: Path | None = None,
     days: int = 365,
     end_date: date | None = None,
@@ -71,6 +95,7 @@ def build_portfolio_history_from_snapshots(
 
     snapshot_files = list_snapshot_files(snapshots_dir)
     selected = [(snapshot_date, path) for snapshot_date, path in snapshot_files if start <= snapshot_date <= end]
+    latest_target_date = selected[-1][0] if selected else None
 
     history_rows: list[dict[str, object]] = []
     snapshot_summaries: list[dict[str, object]] = []
@@ -78,7 +103,10 @@ def build_portfolio_history_from_snapshots(
     latest_date: date | None = None
 
     for snapshot_date, path in selected:
-        assets = load_snapshot(path)
+        if snapshot_date == latest_target_date:
+            assets = load_snapshot(path)
+        else:
+            assets = pd.read_parquet(path, columns=HISTORY_COLUMNS)
         if assets.empty:
             snapshot_summaries.append(
                 {
@@ -156,7 +184,15 @@ def build_portfolio_history_from_snapshots(
 
 
 def _read_timeline_events() -> pd.DataFrame:
-    workbook = load_workbook(get_assets_file(), read_only=True, data_only=True)
+    try:
+        assets_file = get_assets_file()
+    except Exception:
+        return pd.DataFrame(columns=["date", "label"])
+
+    try:
+        workbook = load_workbook(assets_file, read_only=True, data_only=True)
+    except Exception:
+        return pd.DataFrame(columns=["date", "label"])
     if "time-line" not in workbook.sheetnames:
         return pd.DataFrame(columns=["date", "label"])
 
@@ -298,6 +334,52 @@ def render_portfolio_history(history: pd.DataFrame, timeline_events: pd.DataFram
     )
 
 
+def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
+    from asset_reports import rap1, rap2
+
+    st.subheader("Raporty (jak w main.py)")
+
+    snapshot_files = list_snapshot_files(snapshots_directory())
+    if not snapshot_files:
+        st.warning(
+            f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
+            "Uruchom `maintenance/recalculate_weekly_assets_snapshots.py`."
+        )
+        return
+
+    available_dates = [item[0] for item in snapshot_files]
+    default_index = len(available_dates) - 1
+    if snapshot_date in available_dates:
+        default_index = available_dates.index(snapshot_date)
+
+    selected_date = st.selectbox(
+        "Data snapshotu",
+        options=available_dates,
+        index=default_index,
+        format_func=lambda d: d.isoformat(),
+    )
+    if selected_date != snapshot_date:
+        assets = load_snapshot_for_date(selected_date)
+
+    if assets.empty:
+        st.warning(f"Brak danych w snapshotcie {selected_date:%Y-%m-%d}.")
+        return
+
+    st.caption(f"Zrodlo: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`")
+
+    st.markdown("**Pelna lista aktywow**")
+    st.dataframe(assets, use_container_width=True, hide_index=True, height=360)
+
+    st.markdown("**RAP 2**")
+    rap2_buffer = io.StringIO()
+    with redirect_stdout(rap2_buffer):
+        rap2(assets)
+    st.code(rap2_buffer.getvalue().strip(), language=None)
+
+    st.markdown("**RAP 1**")
+    st.code(rap1(assets).to_string(col_space=15), language=None)
+
+
 def render_diagnostics(data: dict[str, object]):
     st.divider()
     st.subheader("Diagnostyka snapshotow")
@@ -336,8 +418,8 @@ def render_diagnostics(data: dict[str, object]):
 
 
 def build_data(days: int = 365) -> dict[str, object]:
-    data = build_portfolio_history_from_snapshots(days=days)
-    data["timeline_events"] = _read_timeline_events()
+    data = build_portfolio_history_from_snapshots(days=days, end_date_iso=date.today().isoformat())
+    data["timeline_events"] = _read_timeline_events_cached()
 
     latest_snapshot = data["latest_snapshot"]
     excel_buffer = io.BytesIO()
@@ -377,12 +459,18 @@ def main():
             disabled=data["latest_snapshot"].empty,
         )
 
-    render_portfolio_history(
-        data["history"],
-        data["timeline_events"],
-        data["latest_snapshot_date"],
-    )
-    render_diagnostics(data)
+    tab_chart, tab_reports = st.tabs(["Wykres portfela", "Raporty"])
+
+    with tab_chart:
+        render_portfolio_history(
+            data["history"],
+            data["timeline_events"],
+            data["latest_snapshot_date"],
+        )
+        render_diagnostics(data)
+
+    with tab_reports:
+        render_main_reports(data["latest_snapshot_date"], data["latest_snapshot"])
 
 
 if __name__ == "__main__":

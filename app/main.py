@@ -5,6 +5,7 @@ from datetime import date
 
 import pandas as pd
 
+from asset_reports import rap1, rap2
 from main_proc.calculate_assets import calculate_assets
 from importers.assets.data_model import AssetsDef
 
@@ -56,112 +57,12 @@ def rap3(assets):
     print(s)
 
 
-def rap2(assets):
-    msg = 'RAP 2___________________________________________'
-    print(msg)
-    # wybór kolumn
-    a1 = assets[[
-        AssetsDef.TYPE,
-        AssetsDef.VALUE,
-        AssetsDef.VALUE_PLN,
-        AssetsDef.CURRENCY
-    ]]
-
-    # dodanie wierszy "Z RAZEM"
-    a1_sum = a1.copy()
-    a1_sum[AssetsDef.TYPE] = 'Z RAZEM'
-    a1 = pd.concat([a1, a1_sum])
-
-    # agregacja
-    g1 = (
-        a1
-        .groupby([AssetsDef.TYPE, AssetsDef.CURRENCY])
-        .sum()
-        .round()
-        .astype(int)
-    )
-
-    # pivot: waluta → kolumny
-    g1 = g1.unstack(AssetsDef.CURRENCY)
-
-    # spłaszczenie MultiIndex kolumn
-    g1.columns = [
-        f"{col}_{cur}".lower()
-        for col, cur in g1.columns
-    ]
-
-    # formatowanie liczb
-    for col in g1.columns:
-        g1[col] = (
-            g1[col]
-            .map('{:,}'.format)
-            .str.replace(',', ' ')
-        )
-
-    print(g1.to_string(col_space=col_space))
-    print(s)
-
-
-def rap2_0(assets):
-    msg = 'RAP 2___________________________________________'
-    print(msg)
-    a1 = assets[[AssetsDef.TYPE,
-                 # AssetsDef.EVALUATION_DATE,
-                 AssetsDef.VALUE,
-                 AssetsDef.VALUE_PLN,
-                 AssetsDef.CURRENCY]]
-    a1_g = a1.copy()
-    a1_g[AssetsDef.TYPE] = 'Z RAZEM'
-    a1 = pd.concat([a1, a1_g])
-
-    g1 = a1.groupby([AssetsDef.CURRENCY, AssetsDef.TYPE]).sum().round().astype('int')
-    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1.index.get_level_values(AssetsDef.CURRENCY)
-    g1[AssetsDef.VALUE_PLN] = g1[AssetsDef.VALUE_PLN].map('{:,}'.format).apply(lambda x: x.replace(',', ' '))
-    print(g1.to_string(col_space=col_space))
-    print(s)
-
-
 def rap1_prn(assets):
     msg = 'RAP 1'
     print(msg)
     g1 = rap1(assets)
     print(g1.to_string(col_space=col_space))
     # print(s)
-
-
-def rap1(assets: pd.DataFrame) -> pd.DataFrame:
-    a1 = assets[[AssetsDef.GROUP, AssetsDef.CURRENCY, AssetsDef.VALUE_PLN]]
-    a2 = a1.copy()
-    a2[AssetsDef.GROUP] = 'Z RAZEM'
-    a3 = a1.copy()
-    a3[AssetsDef.CURRENCY] = 'RAZEM'
-    a4 = a3.copy()
-    a4[AssetsDef.GROUP] = 'Z RAZEM'
-
-    # łączymy dane
-    df = pd.concat([a1, a2, a3, a4])
-
-    # grupowanie: GROUP + CURRENCY --> suma
-    g1 = df.groupby([AssetsDef.GROUP, AssetsDef.CURRENCY]).sum()
-
-    # pivot: waluty w kolumnach
-    g1 = g1.unstack(AssetsDef.CURRENCY).fillna(0)
-
-    # usuwamy MultiIndex kolumn po pivotowaniu
-    g1.columns = g1.columns.get_level_values(1)
-
-    # formatowanie kwot
-    for col in g1.columns:
-        g1[col] = (
-            g1[col]
-            .round()
-            .astype(int)
-            .map('{:,}'.format)
-            .str.replace(',', ' ')
-        )
-
-    return g1
 
 
 if __name__ == '__main__':

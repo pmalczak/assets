@@ -6,10 +6,6 @@ from datetime import date
 import pandas as pd
 
 
-def evaluated_resource(asset_id: str, valuation_date: date) -> str:
-    return f"02 evaluated/{asset_id}/{valuation_date:%Y-%m-%d}.parquet"
-
-
 def filter_on_or_before(df: pd.DataFrame, date_column: str, valuation_date: date) -> pd.DataFrame:
     if df.empty or date_column not in df.columns:
         return df.copy()
