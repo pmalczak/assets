@@ -1,13 +1,8 @@
-import sys
 import unittest
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
-
-project_root = Path.home() / "PycharmProjects" / "github_common_py"
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
 
 from evaluators.valuation_date import (
     filter_excel_rows_on_or_before,

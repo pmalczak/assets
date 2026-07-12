@@ -1,14 +1,8 @@
-import sys
 import unittest
 from datetime import date
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
-
-project_root = Path.home() / "PycharmProjects" / "github_common_py"
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
 
 from main_proc.calculate_assets import (
     _finalize_assets_snapshot,

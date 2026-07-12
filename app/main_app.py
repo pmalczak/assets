@@ -1,5 +1,4 @@
 import io
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -7,9 +6,6 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 from openpyxl import load_workbook
-
-project_root = Path().home() / r"PycharmProjects\github_common_py"
-sys.path.append(str(project_root))
 
 from main_proc.calculate_assets import calculate_assets
 from data_step.data_step import DATA_STEP

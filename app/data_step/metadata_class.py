@@ -1,0 +1,198 @@
+# -*- coding: utf-8 -*-
+__author__ = "pmalczak@gmail.com"
+
+import hashlib
+import os
+from hmac import digest
+from pathlib import Path
+
+from data_step.metadata_primitives_class import MetadataPrimitives, DEPENDENCIES
+
+DATA_FRAME_ROWS = 'data_frame_rows'
+MTIME = 'mtime'
+DIGEST = 'digest'
+COLUMNS = 'columns'
+
+
+class MetadataUpdateError(Exception):
+    pass
+
+
+class Metadata(MetadataPrimitives):
+    def __init__(self, root: Path):
+        super().__init__(root)
+
+        self.force_update = False
+        self.cached_data_types = ('.parquet', )
+        self.updated_stat_cache = {}
+
+    def is_updated(self, token: str) -> None:
+        assert isinstance(token, str)
+        if self.force_update:
+            raise MetadataUpdateError(f'forced data reading')
+
+        if token in self.updated_stat_cache:
+            return
+
+        data_file_path = self.token_as_path(token)
+        if self.is_dir_token(token):
+            if not data_file_path.is_dir():
+                raise MetadataUpdateError(f"dir doesn't exists {token}")
+
+        elif not data_file_path.is_file():
+            raise MetadataUpdateError(f"file doesn't exists {token}")
+
+        self._is_object_up_to_date(token)
+        self._all_dependencies_are_up_to_date(token)
+        self.updated_stat_cache[token] = None
+        return
+
+    # def create_missing_catalogs(self, item_path: Path) -> None:
+    #     _, ext = os.path.splitext(item_path.name)
+    #     if ext in self.cached_data_types:  # if it's cached
+    #         self._app_file.create_missing_catalogs(item_path.parent)
+    #     return
+
+    def update(self,
+               method: str,
+               token: str,
+               dependencies: list,
+               columns: (str, list, tuple) = None,
+               rows: int = None,
+               ) -> None:
+        item_path = self.token_as_path(token)
+        # self.create_missing_catalogs(item_path)
+
+        try:
+            item_descriptor = self.get_items_descriptor(token)
+        except KeyError:
+            item_descriptor = {}
+
+        if token in dependencies:
+            dependencies = dependencies.remove(token)
+        item_descriptor[DEPENDENCIES] = dependencies
+        assert token not in dependencies
+        if method == DIGEST:
+
+            if self.is_dir_token(token):
+                digest = self._calc_dir_token_digest(item_path)
+
+            else:
+                digest = self._calc_file_digest(item_path)
+
+            item_descriptor[DIGEST] = digest
+            if MTIME in item_descriptor:
+                del item_descriptor[MTIME]
+        elif method == MTIME:
+            mtime = os.path.getmtime(item_path)
+            item_descriptor[MTIME] = mtime
+            if DIGEST in item_descriptor:
+                del item_descriptor[DIGEST]
+
+        if columns is not None:
+            item_descriptor[COLUMNS] = columns
+
+        if rows is not None:
+            item_descriptor[DATA_FRAME_ROWS] = rows
+
+        self.update_item_descriptor(token, item_descriptor)
+        if item_path in self.updated_stat_cache:
+            self.updated_stat_cache.pop(item_path)  # TODO ALL DEPENDENCIES SHOULD BE ALSO REMOVED FROM THE CACHE
+        return
+
+    def delete(self, missing_file):
+        _metadata = self.get_metadata()
+        del _metadata[missing_file]
+        return
+
+    def force_read_data(self, value: bool) -> None:
+        self.force_update = value
+
+    def _is_object_up_to_date(self, token) -> None:
+        # data_file_path = self.data_set_as_file_path(metadata_item)
+        item_path = self.token_as_path(token)
+
+        try:
+            descriptor = self.get_items_descriptor(token)
+        except KeyError:
+            raise MetadataUpdateError(f"file's outdated {token}")
+
+        if DIGEST in descriptor:
+
+            if self.is_dir_token(token):
+                digest = self._calc_dir_token_digest(item_path)
+
+            elif not item_path.is_file():
+                raise MetadataUpdateError(f"file's outdated {token}")
+
+            elif item_path.is_file():
+                digest = self._calc_file_digest(item_path)
+
+            else:
+                raise ValueError
+
+            if descriptor[DIGEST] != digest:
+                raise MetadataUpdateError(f"file's outdated {token}")
+            return
+
+        elif MTIME in descriptor:
+            mtime = os.path.getmtime(item_path)
+            if descriptor[MTIME] != mtime:
+                raise MetadataUpdateError(f"file's outdated {token}")
+            return
+
+        raise NotImplementedError
+
+    def _calc_dir_token_digest(self, item_path: Path) -> str:
+        assert item_path.is_dir()
+        l = list(item_path.glob('*.*'))
+        l = list(map(lambda x: str(x), l))
+        l = ''.join(l)
+        content = l.encode('utf-8')
+
+        md5hash = hashlib.md5()
+        md5hash.update(content)
+        digest = md5hash.hexdigest()
+        return digest
+
+    def _calc_file_digest(self, item_path: Path) -> str:
+        assert item_path.is_file()
+        md5hash = hashlib.md5()
+        with open(item_path, 'rb') as f:
+            content = f.read()
+        md5hash.update(content)
+        digest = md5hash.hexdigest()
+        return digest
+
+    def _get_dependencies(self, resource: str) -> list:
+        descriptor = self.get_items_descriptor(resource)
+        dependencies = descriptor[DEPENDENCIES]
+        return dependencies
+
+    def is_dependent(self, product: str, input_: str) -> None:
+        assert isinstance(product, str)
+        assert isinstance(input_, str)
+        input_item = self.as_token(input_)
+        dependencies = self._get_dependencies(product)
+        if input_item not in dependencies:
+            raise MetadataUpdateError(f"{input_} doesn't exist in dependencies")
+        return
+
+    def _all_dependencies_are_up_to_date(self, resource: str) -> None:
+        item = self.as_token(resource)
+        msg = f"dependencies aren't updated {resource}"
+        try:
+            dependencies = self._get_dependencies(item)
+        except KeyError:
+            raise MetadataUpdateError(msg)
+
+        self.check_cycles(item, dependencies)
+        for dep in dependencies:
+            self.is_updated(dep)
+
+    @staticmethod
+    def check_cycles(resource, dependencies):
+        for item in dependencies:
+            if isinstance(item, str):
+                if item == resource:
+                    raise ValueError(resource)

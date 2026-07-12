@@ -21,10 +21,6 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-GITHUB_COMMON_ROOT = Path.home() / "PycharmProjects" / "github_common_py"
-if str(GITHUB_COMMON_ROOT) not in sys.path:
-    sys.path.append(str(GITHUB_COMMON_ROOT))
-
 from main_proc.calculate_assets import (
     PORTFOLIO_VALUATION_DATE,
     assets_snapshot_resource,

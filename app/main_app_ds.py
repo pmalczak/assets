@@ -11,14 +11,9 @@ from __future__ import annotations
 
 import io
 import re
-import sys
 from contextlib import redirect_stdout
 from datetime import date, timedelta
 from pathlib import Path
-
-project_root = Path.home() / "PycharmProjects" / "github_common_py"
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
 
 import altair as alt
 import pandas as pd
