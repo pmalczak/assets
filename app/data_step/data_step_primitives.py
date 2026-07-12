@@ -25,6 +25,7 @@ class DataStepPrimitives:
         self.printing_shift = 0
 
         self._initialised = False
+        self._data_steps_root: Path | None = None
 
     def find_data_step_root(self, start: Path, markers: str = "data_steps") -> Path:
         """
@@ -50,9 +51,13 @@ class DataStepPrimitives:
     def init_steps(self, root: Path = None):
         assert root is not None
 
-        root = self.find_data_step_root(start=root)
+        data_steps_root = self.find_data_step_root(start=root)
+        if self._initialised and self._data_steps_root == data_steps_root:
+            return
+
+        self._data_steps_root = data_steps_root
         # metadata_params = self.data_steps + self._meta_parameters
-        self.metadata = Metadata(root)
+        self.metadata = Metadata(data_steps_root)
         self._dependencies_stack = ['top', ]  # first element is already on stack in order to get 'previous' one
         self._dependencies = Dependencies()
         self._cache = {}

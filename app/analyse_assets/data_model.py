@@ -4,7 +4,7 @@ import pandas as pd
 from importers.mbank.data_model import MBankFileCls, MbankOperationType
 
 
-class ExpectedPosutiveValue(Exception): pass
+class ExpectedPositiveValue(Exception): pass
 class ExpectedNegativeValue(Exception): pass
 
 
@@ -47,7 +47,7 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_CLOSING,
         }
 
-    def extract_ymd(self, df):
+    def add_ymd_columns(self, df):
         x = pd.to_datetime(df[self.MBANK_TRANSACTION_DATE], format='%Y-%m-%d')
 
         df[self.YEAR] = x.dt.year.astype('str')
@@ -65,7 +65,7 @@ class AssetRWCls(MBankFileCls):
                     raise ExpectedNegativeValue(pos)
             elif cat in (self.CAT_INFLOW, self.CAT_CLOSING):
                 if not neg.empty:
-                    raise ExpectedPosutiveValue(neg)
+                    raise ExpectedPositiveValue(neg)
             else:
                 raise NotImplementedError
 
@@ -77,7 +77,7 @@ class AssetRWCls(MBankFileCls):
             self.MBANK_DESCRIPTION,
         )
         r0 = pd.DataFrame(data=data, columns=cols)
-        r0 = AssetRw.extract_ymd(r0)
+        r0 = AssetRw.add_ymd_columns(r0)
         self.check_values(r0)
         return r0
 

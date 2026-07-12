@@ -1,0 +1,139 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+
+from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
+from analyse_assets.data_model import AssetRw
+from app_proc.data_root import get_online_data_root
+from evaluators.valuation_date import filter_excel_rows_on_or_before
+from importers.assets.data_model import AssetsFile, KindDomain, Properties
+from importers.assets.read_assets import get_assets_file, read_assets
+from importers.mbank.read_m_transactions import read_m_transactions
+from roi.allocate import allocate_catalog
+from roi.categories import CLOSING, INFLOW, INVESTMENT, OUTFLOW
+from roi.config import read_analyse_config
+from roi.data_model import CashFlowEvent
+from roi.terminal_value import is_asset_sold, resolve_terminal_value
+
+
+@dataclass
+class RoiSummary:
+    asset_id: str
+    capex: float
+    opex: float
+    revenue: float
+    terminal_realized: float
+    terminal_unrealized: float
+    roi_nominal: float
+    is_sold: bool
+    warnings: list[str] = field(default_factory=list)
+
+
+def aggregate_category(cashflows: pd.DataFrame, category: str) -> float:
+    if cashflows.empty:
+        return 0.0
+    mask = cashflows[CashFlowEvent.CATEGORY] == category
+    return float(cashflows.loc[mask, CashFlowEvent.AMOUNT].sum())
+
+
+def compute_roi(
+    asset_id: str,
+    cashflows: pd.DataFrame,
+    properties_sheet: pd.DataFrame | None,
+    valuation_date: date,
+) -> RoiSummary:
+    filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
+
+    capex = aggregate_category(filtered, INVESTMENT)
+    opex = aggregate_category(filtered, OUTFLOW)
+    revenue = aggregate_category(filtered, INFLOW)
+    terminal_realized, terminal_unrealized, warnings = resolve_terminal_value(
+        asset_id,
+        cashflows,
+        properties_sheet,
+        valuation_date,
+    )
+
+    flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
+    roi_nominal = flows_total + terminal_unrealized
+    sold = is_asset_sold(asset_id, cashflows, properties_sheet, valuation_date)
+
+    return RoiSummary(
+        asset_id=asset_id,
+        capex=capex,
+        opex=opex,
+        revenue=revenue,
+        terminal_realized=terminal_realized,
+        terminal_unrealized=terminal_unrealized,
+        roi_nominal=roi_nominal,
+        is_sold=sold,
+        warnings=warnings,
+    )
+
+
+def roi_summary_to_row(summary: RoiSummary) -> dict[str, object]:
+    return {
+        "asset_id": summary.asset_id,
+        "capex": round(summary.capex),
+        "opex": round(summary.opex),
+        "revenue": round(summary.revenue),
+        "terminal_realized": round(summary.terminal_realized),
+        "terminal_unrealized": round(summary.terminal_unrealized),
+        "roi_nominal": round(summary.roi_nominal),
+        "is_sold": summary.is_sold,
+        "warnings": "; ".join(summary.warnings),
+    }
+
+
+def compute_portfolio_roi(
+    valuation_date: date,
+    config_path: Path | None = None,
+    *,
+    use_cache: bool = True,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    from roi.cache import load_catalog_events
+
+    config = read_analyse_config(config_path)
+    catalog = config["catalog"]
+    catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
+
+    properties_sheet = _read_properties_sheet()
+    events_by_asset = load_catalog_events(config, use_cache=use_cache)
+
+    summaries = []
+    for _, asset_row in catalog.iterrows():
+        asset_id = str(asset_row["asset_id"])
+        events = events_by_asset.get(asset_id, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
+        summary = compute_roi(asset_id, events, properties_sheet, valuation_date)
+        summaries.append(roi_summary_to_row(summary))
+
+    return pd.DataFrame(summaries), events_by_asset
+
+
+def load_mbank_pool() -> pd.DataFrame:
+    assets = read_assets()
+    assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
+    assets = assets[assets[AssetsFile.CURRENCY] == "PLN"]
+    asset_ids = assets[AssetsFile.ID].tolist()
+
+    data_root = get_online_data_root()
+    statements = []
+    for asset_id in asset_ids:
+        df = read_m_transactions(data_root, str(asset_id))
+        df["_source"] = asset_id
+        statements.append(df)
+
+    df, _report, _meta = consolidate_many_drop_internal_transfers(statements)
+    return AssetRw.add_ymd_columns(df)
+
+
+def _read_properties_sheet() -> pd.DataFrame:
+    assets_file = get_assets_file()
+    sheet = pd.read_excel(assets_file, sheet_name="properties")
+    Properties.check_structure(sheet, file=assets_file)
+    return sheet

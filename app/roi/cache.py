@@ -1,0 +1,73 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+
+from data_step.data_step import DATA_STEP
+from app_proc.data_steps_root import get_data_steps_root
+from roi.allocate import allocate_catalog
+from roi.compute_roi import load_mbank_pool
+from roi.config import get_config_file, read_analyse_config
+from roi.data_model import CashFlowEvent
+
+ROI_EVENTS_STEP = "10 roi_events"
+ROI_CATALOG_RESOURCE = f"{ROI_EVENTS_STEP}/_catalog.parquet"
+
+
+def roi_events_resource(asset_id: str) -> str:
+    return f"{ROI_EVENTS_STEP}/{asset_id}.parquet"
+
+
+def load_catalog_events(
+    config: dict[str, pd.DataFrame] | None = None,
+    *,
+    config_path: Path | None = None,
+    use_cache: bool = True,
+) -> dict[str, pd.DataFrame]:
+    if config is None:
+        config = read_analyse_config(config_path)
+
+    if not use_cache:
+        return _build_catalog_events(config)
+
+    DATA_STEP.init_steps(root=get_data_steps_root())
+    config_file = get_config_file(config_path)
+    r = DATA_STEP.obtain_dependent(
+        ROI_CATALOG_RESOURCE,
+        _build_all_events,
+        config_file,
+    )
+    all_events = r.data_frame()
+    return _split_by_asset(all_events, config["catalog"])
+
+
+def _build_catalog_events(config: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    catalog = config["catalog"]
+    catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
+    pool = load_mbank_pool()
+    return allocate_catalog(pool, catalog, config["rules"], config["manual"])
+
+
+def _build_all_events(source_file: Path | None = None) -> pd.DataFrame:
+    config = read_analyse_config(source_file)
+    events_by_asset = _build_catalog_events(config)
+    frames = [events for events in events_by_asset.values() if not events.empty]
+    if not frames:
+        return pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+    result = pd.concat(frames, ignore_index=True)
+    CashFlowEvent.check_structure(result)
+    return result
+
+
+def _split_by_asset(all_events: pd.DataFrame, catalog: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    enabled = catalog[catalog["enabled"].astype(bool)].sort_values("order")
+    result: dict[str, pd.DataFrame] = {}
+    for _, asset_row in enabled.iterrows():
+        asset_id = str(asset_row["asset_id"])
+        if all_events.empty:
+            result[asset_id] = pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+        else:
+            result[asset_id] = all_events[all_events[CashFlowEvent.ASSET_ID] == asset_id].copy()
+    return result

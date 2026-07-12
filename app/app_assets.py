@@ -25,6 +25,21 @@ from importers.assets.read_assets import get_assets_file
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
 from app_proc.data_steps_root import get_data_steps_root
 from app_proc.transaction_search import load_all_transactions, search_transactions
+from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
+from evaluators.valuation_date import filter_excel_rows_on_or_before
+from roi.compute_roi import compute_portfolio_roi
+from roi.data_model import CashFlowEvent
+
+ROI_DISPLAY_COLUMNS = {
+    "asset_id": "Aktywo",
+    "capex": "Inwestycja (CAPEX)",
+    "opex": "Wydatki (OPEX)",
+    "revenue": "Wplywy (REVENUE)",
+    "terminal_realized": "Zamkniecie (realiz.)",
+    "terminal_unrealized": "Wycena (nerealiz.)",
+    "roi_nominal": "ROI nominal",
+    "is_sold": "Sprzedane",
+}
 
 st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
 
@@ -384,6 +399,81 @@ def render_transaction_search() -> None:
     )
 
 
+@st.cache_data(show_spinner="Liczenie ROI...")
+def _load_roi_data(valuation_date_iso: str) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    valuation_date = date.fromisoformat(valuation_date_iso)
+    summary, events_by_asset = compute_portfolio_roi(valuation_date, use_cache=True)
+    return summary, events_by_asset
+
+
+def render_roi(default_valuation_date: date | None) -> None:
+    st.subheader("ROI nieruchomosci")
+
+    valuation_date = st.date_input(
+        "Data wyceny ROI",
+        value=default_valuation_date or date.today(),
+        key="roi_valuation_date",
+    )
+
+    try:
+        summary, events_by_asset = _load_roi_data(valuation_date.isoformat())
+    except Exception as exc:
+        st.error("Nie udalo sie policzyc ROI.")
+        st.exception(exc)
+        return
+
+    if summary.empty:
+        st.info("Brak danych ROI w katalogu analyse_assets.")
+        return
+
+    st.caption(
+        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties dla otwartych inwestycji. "
+        "Konfiguracja: `analyse_assets/analyse_assets_config.xlsx`."
+    )
+
+    total_roi = int(summary["roi_nominal"].sum())
+    sold_count = int(summary["is_sold"].sum())
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Liczba aktywow", len(summary))
+    c2.metric("Sprzedane", sold_count)
+    c3.metric("Suma ROI nominal", f"{total_roi:,}".replace(",", " "))
+
+    display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
+    for col in ROI_DISPLAY_COLUMNS.values():
+        if col == "Sprzedane":
+            continue
+        if col in display.columns:
+            display[col] = display[col].map(
+                lambda v: f"{v:,}".replace(",", " ") if isinstance(v, (int, float)) else v
+            )
+
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+    csv = summary.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="Pobierz ROI (CSV)",
+        data=csv,
+        file_name=f"roi_{valuation_date:%Y-%m-%d}.csv",
+        mime="text/csv",
+        key="roi_csv_download",
+    )
+
+    warned = summary[summary["warnings"].astype(str).str.len() > 0]
+    if not warned.empty:
+        st.markdown("**Ostrzezenia**")
+        st.dataframe(warned[["asset_id", "warnings"]], use_container_width=True, hide_index=True)
+
+    st.markdown("**Szczegoly przeplywow**")
+    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
+    selected_asset = st.selectbox("Aktywo", options=asset_ids, key="roi_selected_asset")
+    events = events_by_asset.get(selected_asset, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
+    if events.empty:
+        st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
+    else:
+        events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
+        st.dataframe(events_display, use_container_width=True, hide_index=True, height=280)
+
+
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import rap1, rap2
 
@@ -509,7 +599,15 @@ def main():
             disabled=data["latest_snapshot"].empty,
         )
 
-    tab_chart, tab_reports, tab_search = st.tabs(["Wykres portfela", "Raporty", "Wyszukiwanie transakcji"])
+    if TABS_STATE_KEY not in st.session_state:
+        st.session_state[TABS_STATE_KEY] = load_last_tab()
+
+    tab_chart, tab_reports, tab_search, tab_roi = st.tabs(
+        TAB_LABELS,
+        key=TABS_STATE_KEY,
+        default=st.session_state[TABS_STATE_KEY],
+        on_change=on_tab_changed,
+    )
 
     with tab_chart:
         render_portfolio_history(
@@ -524,6 +622,9 @@ def main():
 
     with tab_search:
         render_transaction_search()
+
+    with tab_roi:
+        render_roi(data["latest_snapshot_date"])
 
 
 if __name__ == "__main__":

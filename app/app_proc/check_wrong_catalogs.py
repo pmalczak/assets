@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from importers.assets.read_assets import ASSETS_FILE_NAME
 
 def check_wrong_catalogs(data_root: Path, assets: pd.DataFrame):
     dir = data_root.glob('*')
@@ -19,7 +20,9 @@ def check_wrong_catalogs(data_root: Path, assets: pd.DataFrame):
     _assets['x'] = 1
     result = dir.merge(_assets, on='id', how='left')
     result = result[result['x'].isnull()]
-    result = result[['id']].rename(columns={'id': 'nadmiarowe katalogi nieujawnione w "assets.xlsx"'})
+    result = result[['id']].rename(
+        columns={'id': f'nadmiarowe katalogi nieujawnione w "{ASSETS_FILE_NAME}"'}
+    )
     if not result.empty:
         print(result)
     return

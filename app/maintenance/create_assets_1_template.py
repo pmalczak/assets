@@ -2,13 +2,14 @@
 """
 Tworzy plik assets_1.xlsx w katalogu get_online_data_root().
 
-Domyslnie kopiuje istniejace zakladki z assets.xlsx (ten sam katalog)
-i dodaje zakladki zloto-monety-zakupy oraz zloto-monety-wyceny.
+Opcjonalnie kopiuje istniejace zakladki z podanego pliku zrodlowego
+(np. dawnego assets.xlsx) i dodaje zakladki zloto-monety-zakupy oraz zloto-monety-wyceny.
 
 Uzycie:
   cd app
   uv run python maintenance/create_assets_1_template.py
   uv run python maintenance/create_assets_1_template.py C:/sciezka/assets_1.xlsx
+  uv run python maintenance/create_assets_1_template.py C:/sciezka/assets_1.xlsx C:/sciezka/assets.xlsx
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from importers.assets.data_model import (
     KindDomain,
     TypeDomain,
 )
-from importers.assets.read_assets import ASSETS_FILE_NAME, LEGACY_ASSETS_FILE_NAME
+from importers.assets.read_assets import ASSETS_FILE_NAME
 from app_proc.data_root import get_online_data_root
 
 
@@ -127,11 +128,14 @@ def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
 
 def main() -> None:
     data_root = get_online_data_root()
-    source_file = data_root / LEGACY_ASSETS_FILE_NAME
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else data_root / ASSETS_FILE_NAME
+    source_file = Path(sys.argv[2]) if len(sys.argv) > 2 else None
 
-    if not source_file.is_file():
-        print(f"Uwaga: brak {source_file}; tworze minimalny szablon.")
+    if source_file is None or not source_file.is_file():
+        if source_file is not None:
+            print(f"Uwaga: brak {source_file}; tworze minimalny szablon.")
+        else:
+            print("Tworze minimalny szablon assets_1.xlsx.")
         sheets = build_workbook(None)
     else:
         print(f"Migracja z: {source_file}")

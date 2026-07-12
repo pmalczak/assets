@@ -7,12 +7,12 @@ import pandas as pd
 
 from importers.assets.data_model import AssetsDef
 
-_SEPARATOR = "________________________________________________\n"
+_SEPARATOR = "___________________\n"
 _COL_SPACE = 15
 
 
 def rap2(assets: pd.DataFrame) -> None:
-    print("RAP 2___________________________________________")
+    print(_SEPARATOR)
     a1 = assets[[AssetsDef.TYPE, AssetsDef.VALUE, AssetsDef.VALUE_PLN, AssetsDef.CURRENCY]]
 
     a1_sum = a1.copy()

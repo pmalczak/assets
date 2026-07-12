@@ -10,7 +10,6 @@ from app_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 
 ASSETS_FILE_NAME = "assets_1.xlsx"
-LEGACY_ASSETS_FILE_NAME = "assets.xlsx"
 
 
 def read_assets() -> pd.DataFrame:
@@ -25,14 +24,9 @@ def read_assets() -> pd.DataFrame:
 def get_assets_file() -> Path:
     """Zwraca sciezke pliku konfiguracji aktywow w katalogu get_online_data_root()."""
     data_root = get_online_data_root()
-    primary = data_root / ASSETS_FILE_NAME
-    if primary.is_file():
-        return primary
-    legacy = data_root / LEGACY_ASSETS_FILE_NAME
-    assert legacy.is_file(), (
-        f"Brak pliku {ASSETS_FILE_NAME} ani {LEGACY_ASSETS_FILE_NAME} w {data_root}"
-    )
-    return legacy
+    assets_file = data_root / ASSETS_FILE_NAME
+    assert assets_file.is_file(), f"Brak pliku {ASSETS_FILE_NAME} w {data_root}"
+    return assets_file
 
 
 def read_asset_sheet(sheet_name: str) -> pd.DataFrame:
