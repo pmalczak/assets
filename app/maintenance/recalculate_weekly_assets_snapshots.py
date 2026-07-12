@@ -35,48 +35,6 @@ SUNDAY = 6
 SNAPSHOT_WEEKDAYS = (TUESDAY, WEDNESDAY, FRIDAY, SUNDAY)
 
 
-def valuation_dates_one_year_back(reference: date | None = None) -> list[date]:
-    end = reference or date.today()
-    start = end - timedelta(days=365)
-
-    dates: list[date] = []
-    current = start
-    while current <= end:
-        if current.weekday() in SNAPSHOT_WEEKDAYS:
-            dates.append(current)
-        current += timedelta(days=1)
-    return dates
-
-
-def sundays_one_year_back(reference: date | None = None) -> list[date]:
-    """Alias zachowany dla kompatybilnosci; uzyj valuation_dates_one_year_back()."""
-    return valuation_dates_one_year_back(reference)
-
-
-def recalculate_weekly_assets_snapshots(
-    reference: date | None = None,
-    force_read_all_data: bool = False,
-) -> list[tuple[date, int, str]]:
-    valuation_dates = valuation_dates_one_year_back(reference)
-    results: list[tuple[date, int, str]] = []
-
-    for index, valuation_date in enumerate(valuation_dates):
-        use_force = force_read_all_data and index == 0
-        assets = calculate_assets(
-            valuation_date=valuation_date,
-            force_read_all_data=use_force,
-        )
-        resource = assets_snapshot_resource(valuation_date)
-        total_pln = int(assets["wartość-pln"].sum()) if not assets.empty else 0
-        results.append((valuation_date, len(assets), resource))
-        print(
-            f"{valuation_date:%Y-%m-%d}  wiersze={len(assets):3d}  "
-            f"suma_pln={total_pln:>12,}  {resource}"
-        )
-
-    return results
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Przelicz snapshoty portfela (09 assets) we wtorki, srody, piatki i niedziele z ostatniego roku.",
@@ -95,17 +53,54 @@ def main() -> int:
     args = parser.parse_args()
 
     reference = args.reference_date or date.today()
-    dates = valuation_dates_one_year_back(reference)
+    dates = _valuation_dates_one_year_back(reference)
     print(f"Okno: {reference - timedelta(days=365):%Y-%m-%d} .. {reference:%Y-%m-%d}")
     print(f"Dat wyceny (wt, sr, pt, nd): {len(dates)}")
     print(f"Kolumna daty snapshotu: {PORTFOLIO_VALUATION_DATE}")
     print()
 
-    recalculate_weekly_assets_snapshots(
+    _recalculate_weekly_assets_snapshots(
         reference=reference,
         force_read_all_data=args.force,
     )
     return 0
+
+
+def _valuation_dates_one_year_back(reference: date | None = None) -> list[date]:
+    end = reference or date.today()
+    start = end - timedelta(days=365)
+
+    dates: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() in SNAPSHOT_WEEKDAYS:
+            dates.append(current)
+        current += timedelta(days=1)
+    return dates
+
+
+def _recalculate_weekly_assets_snapshots(
+    reference: date | None = None,
+    force_read_all_data: bool = False,
+) -> list[tuple[date, int, str]]:
+    valuation_dates = _valuation_dates_one_year_back(reference)
+    results: list[tuple[date, int, str]] = []
+
+    for index, valuation_date in enumerate(valuation_dates):
+        use_force = force_read_all_data and index == 0
+        assets = calculate_assets(
+            valuation_date=valuation_date,
+            force_read_all_data=use_force,
+        )
+        resource = assets_snapshot_resource(valuation_date)
+        total_pln = int(assets["wartość-pln"].sum()) if not assets.empty else 0
+        results.append((valuation_date, len(assets), resource))
+        print(
+            f"{valuation_date:%Y-%m-%d}  wiersze={len(assets):3d}  "
+            f"suma_pln={total_pln:>12,}  {resource}"
+        )
+
+    return results
 
 
 if __name__ == "__main__":
