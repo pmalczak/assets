@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from main_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, OperationDomain, Properties
 from importers.assets.read_assets import get_assets_file
 from importers.mbank.data_model import MBankFile

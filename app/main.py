@@ -6,7 +6,7 @@ from datetime import date
 import pandas as pd
 
 from asset_reports import rap1, rap2
-from main_proc.calculate_assets import calculate_assets
+from app_proc.calculate_assets import calculate_assets
 from importers.assets.data_model import AssetsDef
 
 s = '________________________________________________\n'

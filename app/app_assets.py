@@ -4,7 +4,7 @@ Dashboard wartosci portfela oparty o snapshoty DATA_STEP (09 assets).
 
 Uruchomienie:
   cd app
-  uv run streamlit run main_app_ds.py
+  uv run streamlit run app_assets.py
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ from openpyxl import load_workbook
 
 from importers.assets.data_model import AssetsDef
 from importers.assets.read_assets import get_assets_file
-from main_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
-from main_proc.data_steps_root import get_data_steps_root
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
+from app_proc.data_steps_root import get_data_steps_root
+from app_proc.transaction_search import load_all_transactions, search_transactions
 
 st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
 
@@ -329,6 +330,60 @@ def render_portfolio_history(history: pd.DataFrame, timeline_events: pd.DataFram
     )
 
 
+@st.cache_data(show_spinner="Wczytywanie transakcji...")
+def _load_transactions_cached() -> pd.DataFrame:
+    return load_all_transactions()
+
+
+def render_transaction_search() -> None:
+    st.subheader("Wyszukiwanie transakcji")
+
+    try:
+        transactions = _load_transactions_cached()
+    except Exception as exc:
+        st.error("Nie udalo sie wczytac transakcji.")
+        st.exception(exc)
+        return
+
+    st.caption(
+        f"Przeszukiwane zrodla: mBank i Revolut ({len(transactions):,} transakcji). "
+        "Szukamy w polach: opis, tytul, kontrahent, konto."
+    )
+
+    query = st.text_input(
+        "Szukaj",
+        placeholder="np. nazwa kontrahenta, fragment tytulu, opis operacji...",
+        key="transaction_search_query",
+    )
+    case_sensitive = st.checkbox("Uwzgledniaj wielkosc liter", value=False, key="transaction_search_case")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Wszystkie transakcje", f"{len(transactions):,}".replace(",", " "))
+    col2.metric("Konta / zrodla", transactions["asset_id"].nunique() if not transactions.empty else 0)
+
+    if not query.strip():
+        st.info("Wpisz fraze wyszukiwania, aby zobaczyc pasujace transakcje.")
+        return
+
+    results = search_transactions(transactions, query, case_sensitive=case_sensitive)
+    col3.metric("Wyniki", len(results))
+
+    if results.empty:
+        st.warning(f"Brak transakcji zawierajacych „{query}” w polach tekstowych.")
+        return
+
+    st.dataframe(results, use_container_width=True, hide_index=True, height=520)
+
+    csv = results.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="Pobierz wyniki (CSV)",
+        data=csv,
+        file_name="transakcje_wyszukiwanie.csv",
+        mime="text/csv",
+        key="transaction_search_csv",
+    )
+
+
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import rap1, rap2
 
@@ -454,7 +509,7 @@ def main():
             disabled=data["latest_snapshot"].empty,
         )
 
-    tab_chart, tab_reports = st.tabs(["Wykres portfela", "Raporty"])
+    tab_chart, tab_reports, tab_search = st.tabs(["Wykres portfela", "Raporty", "Wyszukiwanie transakcji"])
 
     with tab_chart:
         render_portfolio_history(
@@ -466,6 +521,9 @@ def main():
 
     with tab_reports:
         render_main_reports(data["latest_snapshot_date"], data["latest_snapshot"])
+
+    with tab_search:
+        render_transaction_search()
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.read_assets import read_assets
 from importers.mbank.read_m_transactions import read_m_transactions
-from main_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root
 
 
 def main():

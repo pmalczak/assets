@@ -21,7 +21,7 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from main_proc.calculate_assets import (
+from app_proc.calculate_assets import (
     PORTFOLIO_VALUATION_DATE,
     assets_snapshot_resource,
     calculate_assets,

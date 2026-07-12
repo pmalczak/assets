@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from main_proc.calculate_assets import (
+from app_proc.calculate_assets import (
     _finalize_assets_snapshot,
     calculate_assets, ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE, assets_snapshot_resource,
 )
-from main_proc.data_steps_root import get_data_steps_root
+from app_proc.data_steps_root import get_data_steps_root
 from importers.assets.data_model import AssetsDef, AssetsFile
 
 
@@ -49,7 +49,7 @@ class FinalizeAssetsSnapshotTests(unittest.TestCase):
 
 
 class CalculateAssetsObtainTests(unittest.TestCase):
-    @patch("main_proc.calculate_assets.DATA_STEP")
+    @patch("app_proc.calculate_assets.DATA_STEP")
     def test_calculate_assets_calls_obtain_with_dated_product(self, data_step_mock):
         valuation_date = date(2026, 7, 7)
         expected_df = pd.DataFrame([{AssetsFile.ID: "a1", PORTFOLIO_VALUATION_DATE: "2026-07-07"}])
@@ -66,7 +66,7 @@ class CalculateAssetsObtainTests(unittest.TestCase):
         self.assertEqual(kwargs["valuation_date"], valuation_date)
         pd.testing.assert_frame_equal(result, expected_df)
 
-    @patch("main_proc.calculate_assets.DATA_STEP")
+    @patch("app_proc.calculate_assets.DATA_STEP")
     def test_calculate_assets_defaults_valuation_date_to_today(self, data_step_mock):
         frame_mock = MagicMock()
         frame_mock.data_frame.return_value = pd.DataFrame()

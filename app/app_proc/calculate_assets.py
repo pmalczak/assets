@@ -11,8 +11,8 @@ from evaluators.evaluate_assets import evaluate_assets
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, AssetsFile
 from importers.assets.read_assets import read_assets
-from main_proc.check_wrong_catalogs import check_wrong_catalogs
-from main_proc.data_root import get_online_data_root
+from app_proc.check_wrong_catalogs import check_wrong_catalogs
+from app_proc.data_root import get_online_data_root
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 
 ASSETS_SNAPSHOT_STEP = "09 assets"

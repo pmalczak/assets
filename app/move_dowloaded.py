@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from main_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root
 from maintenance.move_mbank_files import move_mbank_files
 from maintenance.move_revolut_files import move_revolut_files
 

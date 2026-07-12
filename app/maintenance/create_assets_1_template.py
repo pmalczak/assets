@@ -29,7 +29,7 @@ from importers.assets.data_model import (
     TypeDomain,
 )
 from importers.assets.read_assets import ASSETS_FILE_NAME, LEGACY_ASSETS_FILE_NAME
-from main_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root
 
 
 def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
