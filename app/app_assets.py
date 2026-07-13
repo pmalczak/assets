@@ -28,6 +28,7 @@ from app_proc.transaction_search import load_all_transactions, search_transactio
 from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi.compute_roi import compute_portfolio_roi
+from roi.config import get_config_file
 from roi.data_model import CashFlowEvent
 
 ROI_DISPLAY_COLUMNS = {
@@ -399,13 +400,6 @@ def render_transaction_search() -> None:
     )
 
 
-@st.cache_data(show_spinner="Liczenie ROI...")
-def _load_roi_data(valuation_date_iso: str) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-    valuation_date = date.fromisoformat(valuation_date_iso)
-    summary, events_by_asset = compute_portfolio_roi(valuation_date, use_cache=True)
-    return summary, events_by_asset
-
-
 def render_roi(default_valuation_date: date | None) -> None:
     st.subheader("ROI nieruchomosci")
 
@@ -415,8 +409,13 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_valuation_date",
     )
 
+    info_col, _ = st.columns([3, 1])
+    with info_col:
+        st.caption(f"Konfiguracja: `{get_config_file()}`")
+
     try:
-        summary, events_by_asset = _load_roi_data(valuation_date.isoformat())
+        with st.spinner("Liczenie ROI..."):
+            summary, events_by_asset = compute_portfolio_roi(valuation_date, use_cache=True)
     except Exception as exc:
         st.error("Nie udalo sie policzyc ROI.")
         st.exception(exc)
@@ -427,8 +426,8 @@ def render_roi(default_valuation_date: date | None) -> None:
         return
 
     st.caption(
-        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties dla otwartych inwestycji. "
-        "Konfiguracja: `analyse_assets/analyse_assets_config.xlsx`."
+        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties-wyceny dla otwartych inwestycji. "
+        "Zamkniecie: CLOSING w analyse_assets_config.xlsx."
     )
 
     total_roi = int(summary["roi_nominal"].sum())

@@ -5,6 +5,7 @@ Eksportuje biezaca parametryzacje analyse_assets do pliku Excel.
 Uzycie:
   cd app
   uv run python maintenance/export_analyse_assets_config.py
+  uv run python maintenance/export_analyse_assets_config.py C:/sciezka/analyse_assets_config.xlsx
 """
 
 from __future__ import annotations
@@ -24,21 +25,22 @@ from analyse_assets.config_model import (
     MANUAL_SHEET,
     RULES_SHEET,
 )
+from app_proc.data_root import get_online_data_root
 
 
 def _catalog() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1},
-            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1},
-            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1},
-            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1},
-            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1},
-            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1},
-            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1},
-            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1},
-            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1},
-            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1},
+            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina"},
+            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego"},
+            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż"},
+            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa"},
+            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1"},
+            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4"},
+            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3"},
+            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa"},
+            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska"},
+            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz"},
         ]
     )
 
@@ -209,12 +211,20 @@ def _manual() -> pd.DataFrame:
             {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-05-28", "amount": -200.0, "category": "OUTFLOW", "description": "WYPIS Z KW / GOTÓWKA"},
             {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-06-13", "amount": -1904.29, "category": "OUTFLOW", "description": "ZAKUP OKIEN DO MIESZK B.JASI / GOTÓWKA"},
             {"asset_id": "kiemliczow_4", "step_order": 0, "date": "2000-02-18", "amount": -185000.0, "category": "INVESTMENT", "description": "zakup mieszkania"},
+            {
+                "asset_id": "rumiankowa",
+                "step_order": 0,
+                "date": "2008-02-19",
+                "amount": 326601.45,
+                "category": "CLOSING",
+                "description": "sprzedane (rozliczenie jako spłata kredytu)",
+            },
         ]
     )
 
 
 def main() -> None:
-    target = APP_ROOT / "analyse_assets" / CONFIG_FILE_NAME
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / CONFIG_FILE_NAME
     sheets = {
         CATALOG_SHEET: _catalog(),
         RULES_SHEET: _rules(),

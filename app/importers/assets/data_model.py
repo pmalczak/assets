@@ -104,6 +104,15 @@ Properties = PropertiesCls()
 OperationDomain = OperationDomainCls(Properties.OPERATION)
 
 
+class PropertyValuationsCls(PropertiesCls):
+    """Arkusz properties-wyceny — te same kolumny co Properties (id, Data, wartosc, metraz, operacja)."""
+
+    pass
+
+
+PropertyValuations = PropertyValuationsCls()
+
+
 class GoldCoinPurchaseRulesCls(GenericStructureClass):
     RULE_ID = 'rule_id'
     SOURCE_ACCOUNT = 'konto_źródłowe'
@@ -171,3 +180,5 @@ TitleMatchDomain = TitleMatchDomainCls(GoldCoinPurchaseRules.TITLE_MATCH)
 
 GOLD_COIN_PURCHASES_SHEET = 'zloto-monety-zakupy'
 GOLD_COIN_VALUATIONS_SHEET = 'zloto-monety-wyceny'
+PROPERTIES_VALUATIONS_SHEET = 'properties-wyceny'
+LEGACY_PROPERTIES_SHEET = 'properties'

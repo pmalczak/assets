@@ -66,6 +66,7 @@ class KindDomainCls(DomainCheckerGeneric):
             self.ASSETS + '.IKE-GM',
             self.ASSETS + '.IKE-PM',
             self.ASSETS + '.properties',
+            self.ASSETS + '.properties-wyceny',
             self.ASSETS + '.rocky-iv',
             self.ASSETS + '.cash',
             self.ASSETS + '.zloto-monety',

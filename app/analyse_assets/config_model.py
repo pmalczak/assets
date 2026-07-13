@@ -9,9 +9,16 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
     OUTPUT_FILE = "output_file"
     ORDER = "order"
     ENABLED = "enabled"
+    PROPERTIES_ID = "properties_id"
 
     def expected_columns(self) -> set:
-        return {self.ASSET_ID, self.OUTPUT_FILE, self.ORDER, self.ENABLED}
+        return {
+            self.ASSET_ID,
+            self.OUTPUT_FILE,
+            self.ORDER,
+            self.ENABLED,
+            self.PROPERTIES_ID,
+        }
 
 
 class AnalyseAssetsRulesCls(GenericStructureClass):

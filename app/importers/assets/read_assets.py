@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from importers.assets.data_model import AssetsFile, GOLD_COIN_PURCHASES_SHEET, GOLD_COIN_VALUATIONS_SHEET
+from importers.assets.data_model import (
+    AssetsFile,
+    GOLD_COIN_PURCHASES_SHEET,
+    GOLD_COIN_VALUATIONS_SHEET,
+    LEGACY_PROPERTIES_SHEET,
+    PROPERTIES_VALUATIONS_SHEET,
+    PropertyValuations,
+)
 from app_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 
@@ -41,6 +48,25 @@ def read_gold_coin_purchase_rules() -> pd.DataFrame:
 
 def read_gold_coin_valuations() -> pd.DataFrame:
     return read_asset_sheet(GOLD_COIN_VALUATIONS_SHEET)
+
+
+def read_property_valuations() -> pd.DataFrame:
+    source_file = get_assets_file()
+    sheet_name = _property_valuations_sheet_name(source_file)
+    valuations = pd.read_excel(source_file, sheet_name=sheet_name)
+    PropertyValuations.check_structure(valuations, file=source_file)
+    return valuations
+
+
+def _property_valuations_sheet_name(source_file: Path) -> str:
+    sheet_names = pd.ExcelFile(source_file).sheet_names
+    if PROPERTIES_VALUATIONS_SHEET in sheet_names:
+        return PROPERTIES_VALUATIONS_SHEET
+    if LEGACY_PROPERTIES_SHEET in sheet_names:
+        return LEGACY_PROPERTIES_SHEET
+    raise ValueError(
+        f"Brak arkusza {PROPERTIES_VALUATIONS_SHEET!r} ani {LEGACY_PROPERTIES_SHEET!r} w {source_file}"
+    )
 
 
 def _read_assets(source_file = None) -> pd.DataFrame:

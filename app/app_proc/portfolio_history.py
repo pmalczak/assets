@@ -5,8 +5,13 @@ from pathlib import Path
 import pandas as pd
 
 from app_proc.data_root import get_online_data_root
-from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, OperationDomain, Properties
-from importers.assets.read_assets import get_assets_file
+from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Properties
+from importers.assets.property_lifecycle import (
+    load_property_close_dates,
+    property_valuation_history,
+)
+from importers.assets.read_assets import get_assets_file, read_property_valuations
+from roi.config import read_analyse_config
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 from importers.pkobp.data_model import PkoBpBonds
@@ -237,21 +242,15 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
             return pd.concat(result, ignore_index=True)
         return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
-    if kind == "assets.properties":
-        Properties.check_structure(sheet, file=get_assets_file())
+    if kind in ("assets.properties-wyceny", "assets.properties"):
+        valuations = read_property_valuations()
+        config = read_analyse_config()
+        close_dates = load_property_close_dates(config["manual"], config["catalog"])
         result = []
-        sheet = sheet.copy()
-        sheet[Properties.DATE] = pd.to_datetime(sheet[Properties.DATE])
-        sheet[Properties.VALUE] = pd.to_numeric(sheet[Properties.VALUE], errors="coerce")
-
-        for property_id, group in sheet.groupby(Properties.ID):
-            history = group[[Properties.DATE, Properties.VALUE, Properties.CURRENCY, Properties.OPERATION]].copy()
-            history = history.dropna(subset=[Properties.DATE])
-            history["value"] = history[Properties.VALUE]
-            history.loc[history[Properties.OPERATION] == OperationDomain.SOLD, "value"] = 0.0
-            history = history.dropna(subset=["value"])
-            history = history.rename(columns={Properties.DATE: "date", Properties.CURRENCY: "currency"})
-            history = history.groupby("date", as_index=False).last()
+        for property_id in sorted(valuations[Properties.ID].astype(str).unique()):
+            history = property_valuation_history(valuations, property_id, close_dates)
+            if history.empty:
+                continue
             history["asset_key"] = f"{asset_row[AssetsDef.ID]}:{property_id}"
             history["group"] = str(asset_row[AssetsDef.GROUP])
             history["currency"] = history["currency"].astype(str).str.upper()

@@ -33,6 +33,19 @@ CATEGORY_MAP = {
 }
 
 
+def is_blank_rule_value(value) -> bool:
+    if pd.isna(value):
+        return True
+    text = str(value).strip()
+    return not text or text.lower() == "nan"
+
+
+def rule_cell_str(value) -> str | None:
+    if is_blank_rule_value(value):
+        return None
+    return str(value).strip()
+
+
 def get_mapping(name: str) -> dict:
     if name not in MAPPING_MAP:
         raise ValueError(f"Nieznane mapowanie: {name!r}")
@@ -85,14 +98,24 @@ def build_step_selector(df: pd.DataFrame, step_rules: pd.DataFrame) -> pd.Series
     or_masks: list[pd.Series] = []
     for _, group in step_rules.groupby(AnalyseAssetsRules.CONDITION_GROUP, sort=False):
         mask = pd.Series(True, index=df.index)
+        has_condition = False
         for _, rule in group.iterrows():
+            field = rule_cell_str(rule[AnalyseAssetsRules.FIELD])
+            operator = rule_cell_str(rule[AnalyseAssetsRules.OPERATOR])
+            if field is None or operator is None:
+                continue
+            has_condition = True
             mask &= apply_condition(
                 df,
-                str(rule[AnalyseAssetsRules.FIELD]),
-                str(rule[AnalyseAssetsRules.OPERATOR]),
+                field,
+                operator,
                 rule[AnalyseAssetsRules.VALUE],
             )
-        or_masks.append(mask)
+        if has_condition:
+            or_masks.append(mask)
+
+    if not or_masks:
+        return pd.Series(False, index=df.index)
 
     result = or_masks[0]
     for mask in or_masks[1:]:

@@ -68,7 +68,10 @@ def evaluate_assets(
             print(f'brakujący typ: {rodzaj_importu}')
 
     if not result:
-        return pd.DataFrame(columns=AssetsDef.expected_columns() | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION})
+        return pd.DataFrame(columns=list(
+            AssetsDef.expected_columns()
+            | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION}
+        ))
 
     result = pd.concat(result)
     AssetsDef.check_structure(result)

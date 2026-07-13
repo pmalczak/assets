@@ -23,7 +23,7 @@ def evaluate_mbank(
     df = read_m_transactions(data_root, asset_id)
     df = filter_on_or_before(df, MBankFile.MBANK_TRANSACTION_DATE, valuation_date)
     if df.empty:
-        return pd.DataFrame(columns=AssetsDef.expected_columns())
+        return pd.DataFrame(columns=list(AssetsDef.expected_columns()))
 
     last = df[-1:]
     assets_row = None

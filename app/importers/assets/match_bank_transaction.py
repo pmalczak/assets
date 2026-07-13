@@ -101,6 +101,8 @@ def match_purchase_rules(
 
 def _apply_rule(rule: pd.Series, transactions: pd.DataFrame) -> pd.DataFrame:
     matched = transactions.copy()
+    if matched.empty:
+        return matched
 
     exact_date = rule.get(GoldCoinPurchaseRules.DATE)
     if pd.notna(exact_date):

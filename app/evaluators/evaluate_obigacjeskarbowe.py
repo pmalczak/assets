@@ -28,7 +28,7 @@ def evaluate_obligacjeskarbowe(
     df = read_obligacje(p, asset_id)
     df = filter_on_or_before(df, PkoBpBonds.DATE, valuation_date)
     if df.empty:
-        return pd.DataFrame(columns=AssetsDef.expected_columns())
+        return pd.DataFrame(columns=list(AssetsDef.expected_columns()))
 
     data = []
     for _, row in df.iterrows():
