@@ -147,7 +147,10 @@ class DataStepPrimitives:
                 if keep_cached:
                     self._cache[product] = result
             return result
-        except MetadataUpdateError as e:
+        except (MetadataUpdateError, KeyError, FileNotFoundError):
+            self.metadata.updated_stat_cache.pop(product, None)
+            if source_item:
+                self.metadata.updated_stat_cache.pop(source_item, None)
             result = self.__collect(data_collector, source_item, product, keep_cached, **kwargs)
             return result
 

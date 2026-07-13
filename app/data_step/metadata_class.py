@@ -32,7 +32,10 @@ class Metadata(MetadataPrimitives):
             raise MetadataUpdateError(f'forced data reading')
 
         if token in self.updated_stat_cache:
-            return
+            if not self._cached_token_still_valid(token):
+                del self.updated_stat_cache[token]
+            else:
+                return
 
         data_file_path = self.token_as_path(token)
         if self.is_dir_token(token):
@@ -136,12 +139,25 @@ class Metadata(MetadataPrimitives):
             return
 
         elif MTIME in descriptor:
+            if not item_path.is_file():
+                raise MetadataUpdateError(f"file's outdated {token}")
             mtime = os.path.getmtime(item_path)
             if descriptor[MTIME] != mtime:
                 raise MetadataUpdateError(f"file's outdated {token}")
             return
 
         raise NotImplementedError
+
+    def _cached_token_still_valid(self, token: str) -> bool:
+        try:
+            self.get_items_descriptor(token)
+        except KeyError:
+            return False
+
+        item_path = self.token_as_path(token)
+        if self.is_dir_token(token):
+            return item_path.is_dir()
+        return item_path.is_file()
 
     def _calc_dir_token_digest(self, item_path: Path) -> str:
         assert item_path.is_dir()
@@ -173,7 +189,10 @@ class Metadata(MetadataPrimitives):
         assert isinstance(product, str)
         assert isinstance(input_, str)
         input_item = self.as_token(input_)
-        dependencies = self._get_dependencies(product)
+        try:
+            dependencies = self._get_dependencies(product)
+        except KeyError:
+            raise MetadataUpdateError(f"metadata missing for {product}")
         if input_item not in dependencies:
             raise MetadataUpdateError(f"{input_} doesn't exist in dependencies")
         return

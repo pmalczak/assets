@@ -9,6 +9,9 @@ class CashFlowEventCls(GenericStructureClass):
     CATEGORY = "category"
     SOURCE = "source"
     DESCRIPTION = "description"
+    TITLE = "title"
+    COUNTERPARTY = "counterparty"
+    ACCOUNT_NUMBER = "account_number"
 
     COLUMN_ORDER = (
         ASSET_ID,
@@ -17,6 +20,9 @@ class CashFlowEventCls(GenericStructureClass):
         CATEGORY,
         SOURCE,
         DESCRIPTION,
+        TITLE,
+        COUNTERPARTY,
+        ACCOUNT_NUMBER,
     )
 
     def expected_columns(self) -> set:

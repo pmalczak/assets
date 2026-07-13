@@ -29,7 +29,10 @@ from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi.compute_roi import compute_portfolio_roi
 from roi.config import get_config_file
+from roi.allocate import normalize_whitespace
+from roi.cache import load_unallocated_mbank
 from roi.data_model import CashFlowEvent
+from importers.mbank.data_model import MBankFile
 
 ROI_DISPLAY_COLUMNS = {
     "asset_id": "Aktywo",
@@ -39,8 +42,31 @@ ROI_DISPLAY_COLUMNS = {
     "terminal_realized": "Zamkniecie (realiz.)",
     "terminal_unrealized": "Wycena (nerealiz.)",
     "roi_nominal": "ROI nominal",
+    "xirr": "XIRR",
     "is_sold": "Sprzedane",
 }
+
+ROI_FLOW_DISPLAY_COLUMNS = {
+    CashFlowEvent.DATE: "Data",
+    CashFlowEvent.AMOUNT: "Kwota",
+    CashFlowEvent.CATEGORY: "Kategoria",
+    CashFlowEvent.SOURCE: "Zrodlo",
+    CashFlowEvent.DESCRIPTION: "Opis",
+    CashFlowEvent.TITLE: MBankFile.MBANK_TITLE,
+    CashFlowEvent.COUNTERPARTY: MBankFile.MBANK_TRANSACTION_PARTY,
+    CashFlowEvent.ACCOUNT_NUMBER: MBankFile.MBANK_ACCOUNT_NUMBER,
+}
+
+MBANK_UNALLOCATED_DISPLAY_COLUMNS = [
+    MBankFile.MBANK_TRANSACTION_DATE,
+    MBankFile.MBANK_AMOUNT,
+    MBankFile.MBANK_DESCRIPTION,
+    MBankFile.MBANK_TITLE,
+    MBankFile.MBANK_TRANSACTION_PARTY,
+    MBankFile.MBANK_ACCOUNT_NUMBER,
+    MBankFile.DEBIT_ACCOUNT,
+    "_source",
+]
 
 st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
 
@@ -338,7 +364,7 @@ def render_portfolio_history(history: pd.DataFrame, timeline_events: pd.DataFram
             )
             chart = chart + event_rules + event_points + event_labels
 
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width='stretch')
     st.caption(
         f"Wykres budowany wylacznie ze snapshotow `{ASSETS_SNAPSHOT_STEP}` "
         f"(kolumna `{PORTFOLIO_VALUATION_DATE}`). Kazdy punkt to wartosc portfela "
@@ -388,7 +414,7 @@ def render_transaction_search() -> None:
         st.warning(f"Brak transakcji zawierajacych „{query}” w polach tekstowych.")
         return
 
-    st.dataframe(results, use_container_width=True, hide_index=True, height=520)
+    st.dataframe(results, width='stretch', hide_index=True, height=520)
 
     csv = results.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
@@ -427,6 +453,7 @@ def render_roi(default_valuation_date: date | None) -> None:
 
     st.caption(
         "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties-wyceny dla otwartych inwestycji. "
+        "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
         "Zamkniecie: CLOSING w analyse_assets_config.xlsx."
     )
 
@@ -439,14 +466,18 @@ def render_roi(default_valuation_date: date | None) -> None:
 
     display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
     for col in ROI_DISPLAY_COLUMNS.values():
-        if col == "Sprzedane":
+        if col in ("Sprzedane", "XIRR"):
             continue
         if col in display.columns:
             display[col] = display[col].map(
                 lambda v: f"{v:,}".replace(",", " ") if isinstance(v, (int, float)) else v
             )
+    if "XIRR" in display.columns:
+        display["XIRR"] = summary["xirr"].map(
+            lambda v: f"{v * 100:.1f}%" if v is not None and pd.notna(v) else "—"
+        )
 
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.dataframe(display, width='stretch', hide_index=True)
 
     csv = summary.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
@@ -457,10 +488,43 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_csv_download",
     )
 
+    unallocated = load_unallocated_mbank(use_cache=True)
+    st.markdown("**Transakcje mBank niezaalokowane (mbank_consolidated)**")
+    st.caption(
+        "Wszystkie konta mBank PLN po usunieciu przeplywow wewnetrznych, "
+        "bez wierszy przypisanych do inwestycji z analyse_assets_config."
+    )
+    st.caption(f"Liczba wierszy: {len(unallocated):,}".replace(",", " "))
+    if unallocated.empty:
+        st.info("Brak niezaalokowanych transakcji mBank (wszystko przypisane do inwestycji).")
+    else:
+        preview = unallocated.copy()
+        for column in (
+            MBankFile.MBANK_TITLE,
+            MBankFile.MBANK_TRANSACTION_PARTY,
+            MBankFile.MBANK_DESCRIPTION,
+            MBankFile.MBANK_ACCOUNT_NUMBER,
+        ):
+            if column in preview.columns:
+                preview[column] = preview[column].map(normalize_whitespace)
+        display_columns = [column for column in MBANK_UNALLOCATED_DISPLAY_COLUMNS if column in preview.columns]
+        st.dataframe(preview[display_columns], width="stretch", hide_index=True, height=240)
+
+        unallocated_export = preview[display_columns]
+        unallocated_buffer = io.BytesIO()
+        unallocated_export.to_excel(unallocated_buffer, index=False)
+        st.download_button(
+            label="Pobierz mbank_consolidated.xlsx",
+            data=unallocated_buffer.getvalue(),
+            file_name="mbank_consolidated.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="roi_unallocated_xlsx",
+        )
+
     warned = summary[summary["warnings"].astype(str).str.len() > 0]
     if not warned.empty:
         st.markdown("**Ostrzezenia**")
-        st.dataframe(warned[["asset_id", "warnings"]], use_container_width=True, hide_index=True)
+        st.dataframe(warned[["asset_id", "warnings"]], width='stretch', hide_index=True)
 
     st.markdown("**Szczegoly przeplywow**")
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
@@ -470,7 +534,9 @@ def render_roi(default_valuation_date: date | None) -> None:
         st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
     else:
         events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
-        st.dataframe(events_display, use_container_width=True, hide_index=True, height=280)
+        flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
+        flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
+        st.dataframe(flow_display, width='stretch', hide_index=True, height=280)
 
 
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
@@ -507,7 +573,7 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     st.caption(f"Zrodlo: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`")
 
     st.markdown("**Pelna lista aktywow**")
-    st.dataframe(assets, use_container_width=True, hide_index=True, height=360)
+    st.dataframe(assets, width='stretch', hide_index=True, height=360)
 
     st.markdown("**RAP 2**")
     rap2_buffer = io.StringIO()
@@ -538,19 +604,19 @@ def render_diagnostics(data: dict[str, object]):
     else:
         display = summaries.copy()
         display["date"] = display["date"].apply(lambda d: d.isoformat() if isinstance(d, date) else d)
-        st.dataframe(display.sort_values("date"), use_container_width=True, hide_index=True)
+        st.dataframe(display.sort_values("date"), width='stretch', hide_index=True)
 
     st.markdown("**Ostatni snapshot per grupa**")
     st.dataframe(
         data["snapshot_by_group"].sort_values("group"),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
     )
 
     st.markdown("**Historia per grupa (z snapshotow)**")
     st.dataframe(
         history.sort_values(["date", "group"]),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height=280,
     )

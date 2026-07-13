@@ -4,6 +4,7 @@ import re
 from typing import List, Optional
 
 from importers.mbank.data_model import MBankFile, MbankOperationType
+from analyse_assets.data_model import AssetRw
 
 phrase_in = MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY
 phrases_out = [MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY, MbankOperationType.PRZELEW_WLASNY]
@@ -139,6 +140,7 @@ def consolidate_many_drop_internal_transfers(
         "_sign","_amount_abs","_bucket_time","_acc_min","_acc_max",
         "_internal_in","_internal_out","_internal_type"
     ], errors="ignore").sort_values(by=[col_data_transakcji]).reset_index(drop=True)
+    cleaned = AssetRw.add_ymd_columns(cleaned)
 
     meta = {
         "input_rows": sum(len(x) for x in statements),

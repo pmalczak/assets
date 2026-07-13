@@ -9,8 +9,22 @@ from analyse_assets.build_selector import CATEGORY_MAP, build_step_selector, get
 from analyse_assets.config_model import AnalyseAssetsManual, AnalyseAssetsRules
 from analyse_assets.data_model import AssetRw
 from analyse_assets.select_asset import select_asset
+from importers.mbank.data_model import MBankFile
 from roi.categories import ASSET_RW_TO_ROI
 from roi.data_model import CashFlowEvent
+
+
+def normalize_whitespace(value) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    return " ".join(text.split())
+
+
+def _text_column(raw: pd.DataFrame, column: str) -> pd.Series:
+    if column not in raw.columns:
+        return pd.Series([""] * len(raw), index=raw.index, dtype="string")
+    return raw[column].astype("string").fillna("").map(normalize_whitespace)
 
 
 def allocate_asset_from_mbank_pool(
@@ -74,7 +88,10 @@ def asset_rw_to_cashflow_events(
             CashFlowEvent.AMOUNT: pd.to_numeric(raw[AssetRw.MBANK_AMOUNT], errors="coerce"),
             CashFlowEvent.CATEGORY: raw[AssetRw.CAT].map(ASSET_RW_TO_ROI),
             CashFlowEvent.SOURCE: source,
-            CashFlowEvent.DESCRIPTION: raw[AssetRw.MBANK_DESCRIPTION].astype("string").fillna(""),
+            CashFlowEvent.DESCRIPTION: _text_column(raw, AssetRw.MBANK_DESCRIPTION),
+            CashFlowEvent.TITLE: _text_column(raw, MBankFile.MBANK_TITLE),
+            CashFlowEvent.COUNTERPARTY: _text_column(raw, MBankFile.MBANK_TRANSACTION_PARTY),
+            CashFlowEvent.ACCOUNT_NUMBER: _text_column(raw, MBankFile.MBANK_ACCOUNT_NUMBER),
         }
     )
     result = result.dropna(subset=[CashFlowEvent.AMOUNT, CashFlowEvent.CATEGORY])
@@ -87,7 +104,7 @@ def allocate_catalog(
     catalog: pd.DataFrame,
     rules: pd.DataFrame,
     manual: pd.DataFrame,
-) -> dict[str, pd.DataFrame]:
+) -> tuple[dict[str, pd.DataFrame], pd.DataFrame]:
     pool = df.copy()
     events_by_asset: dict[str, pd.DataFrame] = {}
 
@@ -97,7 +114,7 @@ def allocate_catalog(
         pool, events = allocate_asset_from_mbank_pool(pool, asset_id, rules, manual)
         events_by_asset[asset_id] = events
 
-    return events_by_asset
+    return events_by_asset, pool
 
 
 def _build_manual_part(step_rows: pd.DataFrame) -> pd.DataFrame:

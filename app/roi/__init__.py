@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from roi.allocate import allocate_asset_from_mbank_pool, allocate_catalog, asset_rw_to_cashflow_events
-from roi.cache import load_catalog_events, roi_events_resource
+from roi.cache import load_catalog_events, load_unallocated_mbank, roi_events_resource
 from roi.compute_roi import (
     RoiSummary,
     aggregate_category,
@@ -26,6 +26,7 @@ __all__ = [
     "is_asset_sold",
     "load_catalog_events",
     "load_mbank_pool",
+    "load_unallocated_mbank",
     "read_analyse_config",
     "resolve_terminal_value",
     "roi_events_resource",

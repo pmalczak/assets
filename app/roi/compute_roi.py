@@ -8,18 +8,17 @@ from pathlib import Path
 import pandas as pd
 
 from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
-from analyse_assets.data_model import AssetRw
 from app_proc.data_root import get_online_data_root
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.property_lifecycle import catalog_properties_id
 from importers.assets.read_assets import read_assets, read_property_valuations
 from importers.mbank.read_m_transactions import read_m_transactions
-from roi.allocate import allocate_catalog
 from roi.categories import CLOSING, INFLOW, INVESTMENT, OUTFLOW
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
+from roi.xirr import cashflows_for_xirr, compute_xirr
 
 
 @dataclass
@@ -31,6 +30,7 @@ class RoiSummary:
     terminal_realized: float
     terminal_unrealized: float
     roi_nominal: float
+    xirr: float | None
     is_sold: bool
     warnings: list[str] = field(default_factory=list)
 
@@ -74,6 +74,9 @@ def compute_roi(
         properties_id=lookup_id,
     )
 
+    xirr_dates, xirr_amounts = cashflows_for_xirr(filtered, valuation_date, terminal_unrealized)
+    xirr = compute_xirr(xirr_dates, xirr_amounts)
+
     return RoiSummary(
         asset_id=asset_id,
         capex=capex,
@@ -82,6 +85,7 @@ def compute_roi(
         terminal_realized=terminal_realized,
         terminal_unrealized=terminal_unrealized,
         roi_nominal=roi_nominal,
+        xirr=xirr,
         is_sold=sold,
         warnings=warnings,
     )
@@ -96,6 +100,7 @@ def roi_summary_to_row(summary: RoiSummary) -> dict[str, object]:
         "terminal_realized": round(summary.terminal_realized),
         "terminal_unrealized": round(summary.terminal_unrealized),
         "roi_nominal": round(summary.roi_nominal),
+        "xirr": summary.xirr,
         "is_sold": summary.is_sold,
         "warnings": "; ".join(summary.warnings),
     }
@@ -147,5 +152,5 @@ def load_mbank_pool() -> pd.DataFrame:
         statements.append(df)
 
     df, _report, _meta = consolidate_many_drop_internal_transfers(statements)
-    return AssetRw.add_ymd_columns(df)
+    return df
 
