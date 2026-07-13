@@ -3,3 +3,6 @@
 *.pyo
 *.pyd
 __pycache__/
+
+# ROI config lives next to assets_1.xlsx in Dropbox, not in repo
+app/analyse_assets/analyse_assets_config.xlsx
