@@ -7,7 +7,7 @@ import streamlit as st
 
 from app_proc.data_steps_root import get_data_steps_root
 
-TAB_LABELS = ["Wykres portfela", "Raporty", "Wyszukiwanie transakcji", "ROI"]
+TAB_LABELS = ["Wykres portfela", "Raporty", "Wyszukiwanie transakcji", "ROI", "Import wyciągów"]
 DEFAULT_TAB = "Raporty"
 TABS_STATE_KEY = "app_assets_tab"
 
@@ -16,6 +16,7 @@ SLUG_TO_LABEL = {
     "raporty": "Raporty",
     "szukaj": "Wyszukiwanie transakcji",
     "roi": "ROI",
+    "import": "Import wyciągów",
 }
 LABEL_TO_SLUG = {label: slug for slug, label in SLUG_TO_LABEL.items()}
 

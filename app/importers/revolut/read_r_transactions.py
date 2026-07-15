@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'pmalczak@gmail.com'
 
+import re
 from pathlib import Path
 import pandas as pd
 
@@ -8,6 +9,8 @@ from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.revolut.revolut_account_file import RevolutAccountFile
 from importers.revolut.revolut_file_state import RevolutFileState
+
+REVOLUT_DATE_PATTERN = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 
 def read_revolut_account_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
@@ -51,11 +54,14 @@ def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame
 
 
 def _extract_file_date(input_file):
-    r = input_file.name.split('_')
-    assert len(r) == 5
-    r = r[2]
-    assert len(r) == 10
-    return r
+    parts = Path(input_file).stem.split('_')
+    if parts[0] != 'account-statement' or len(parts) < 3:
+        raise ValueError(f'Unexpected Revolut account statement name: {input_file.name}')
+
+    end_date = parts[2]
+    if not REVOLUT_DATE_PATTERN.match(end_date):
+        raise ValueError(f'Unexpected end date in {input_file.name}: {end_date}')
+    return end_date
 
 
 def _strip_date(x):

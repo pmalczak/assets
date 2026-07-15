@@ -21,18 +21,11 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from app_proc.calculate_assets import (
-    PORTFOLIO_VALUATION_DATE,
-    assets_snapshot_resource,
-    calculate_assets,
+from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE
+from app_proc.recalculate_snapshots import (
+    recalculate_weekly_snapshots,
+    valuation_dates_one_year_back,
 )
-
-
-TUESDAY = 1
-WEDNESDAY = 2
-FRIDAY = 4
-SUNDAY = 6
-SNAPSHOT_WEEKDAYS = (TUESDAY, WEDNESDAY, FRIDAY, SUNDAY)
 
 
 def main() -> int:
@@ -53,54 +46,22 @@ def main() -> int:
     args = parser.parse_args()
 
     reference = args.reference_date or date.today()
-    dates = _valuation_dates_one_year_back(reference)
+    dates = valuation_dates_one_year_back(reference)
     print(f"Okno: {reference - timedelta(days=365):%Y-%m-%d} .. {reference:%Y-%m-%d}")
     print(f"Dat wyceny (wt, sr, pt, nd): {len(dates)}")
     print(f"Kolumna daty snapshotu: {PORTFOLIO_VALUATION_DATE}")
     print()
 
-    _recalculate_weekly_assets_snapshots(
+    results = recalculate_weekly_snapshots(
         reference=reference,
         force_read_all_data=args.force,
     )
-    return 0
-
-
-def _valuation_dates_one_year_back(reference: date | None = None) -> list[date]:
-    end = reference or date.today()
-    start = end - timedelta(days=365)
-
-    dates: list[date] = []
-    current = start
-    while current <= end:
-        if current.weekday() in SNAPSHOT_WEEKDAYS:
-            dates.append(current)
-        current += timedelta(days=1)
-    return dates
-
-
-def _recalculate_weekly_assets_snapshots(
-    reference: date | None = None,
-    force_read_all_data: bool = False,
-) -> list[tuple[date, int, str]]:
-    valuation_dates = _valuation_dates_one_year_back(reference)
-    results: list[tuple[date, int, str]] = []
-
-    for index, valuation_date in enumerate(valuation_dates):
-        use_force = force_read_all_data and index == 0
-        assets = calculate_assets(
-            valuation_date=valuation_date,
-            force_read_all_data=use_force,
-        )
-        resource = assets_snapshot_resource(valuation_date)
-        total_pln = int(assets["wartość-pln"].sum()) if not assets.empty else 0
-        results.append((valuation_date, len(assets), resource))
+    for result in results:
         print(
-            f"{valuation_date:%Y-%m-%d}  wiersze={len(assets):3d}  "
-            f"suma_pln={total_pln:>12,}  {resource}"
+            f"{result.valuation_date:%Y-%m-%d}  wiersze={result.rows:3d}  "
+            f"suma_pln={result.total_pln:>12,}  {result.resource}"
         )
-
-    return results
+    return 0
 
 
 if __name__ == "__main__":

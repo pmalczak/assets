@@ -47,9 +47,17 @@ class DataStep(DataStepPrimitives):  # interface class
                 pass
             raise e
         finally:
+            if not self._dependencies_stack:
+                raise RuntimeError(
+                    f"DATA_STEP stack is empty while finishing obtain({product!r})"
+                )
             last_element = self._dependencies_stack.pop()
         self._add_dependent(prev, product)
-        assert last_element == product
+        if last_element != product:
+            raise RuntimeError(
+                f"DATA_STEP stack mismatch while finishing obtain({product!r}): "
+                f"popped {last_element!r}, remaining stack={self._dependencies_stack!r}"
+            )
         return result
 
     def obtain_dependent(self,

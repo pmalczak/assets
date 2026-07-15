@@ -26,6 +26,19 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_
 from app_proc.data_steps_root import get_data_steps_root
 from app_proc.transaction_search import load_all_transactions, search_transactions
 from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
+from maintenance.move_downloaded_results import (
+    ACTION_DELETED_EMPTY,
+    ACTION_MOVED,
+    ACTION_SKIPPED,
+    results_to_dataframe,
+)
+from move_dowloaded import run_move_downloaded
+from app_proc.recalculate_snapshots import (
+    SnapshotResult,
+    recalculate_today_snapshot,
+    recalculate_weekly_snapshots,
+    snapshot_results_to_dataframe,
+)
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi.compute_roi import compute_portfolio_roi
 from roi.config import get_config_file
@@ -539,6 +552,117 @@ def render_roi(default_valuation_date: date | None) -> None:
         st.dataframe(flow_display, width='stretch', hide_index=True, height=280)
 
 
+def clear_dashboard_cache() -> None:
+    build_portfolio_history_from_snapshots.clear()
+    load_snapshot_for_date.clear()
+    _load_transactions_cached.clear()
+
+
+def _run_snapshot_recalculation(*, full_recalculation: bool) -> list[SnapshotResult]:
+    if full_recalculation:
+        return recalculate_weekly_snapshots(force_read_all_data=True)
+    return [recalculate_today_snapshot(force_read_all_data=True)]
+
+
+def _render_snapshot_results(snapshot_results: list[SnapshotResult]) -> None:
+    st.markdown("**Przeliczone snapshoty**")
+    if not snapshot_results:
+        st.info("Brak przeliczonych snapshotów.")
+        return
+
+    total_pln = snapshot_results[-1].total_pln
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Snapshotów", len(snapshot_results))
+    c2.metric("Ostatnia data", snapshot_results[-1].valuation_date.isoformat())
+    c3.metric("Suma PLN (ostatni)", f"{total_pln:,}".replace(",", " "))
+    st.dataframe(
+        snapshot_results_to_dataframe(snapshot_results),
+        width="stretch",
+        hide_index=True,
+        height=min(360, 80 + 35 * len(snapshot_results)),
+    )
+
+
+def render_import_wyciagow() -> None:
+    st.subheader("Import wyciągów")
+
+    home = Path.home()
+    st.caption(
+        "Przenosi pobrane wyciągi do katalogów w Dropbox:\n"
+        f"- mBank: `{home / 'Downloads'}` oraz pliki w `{home / 'Dropbox' / 'INWESTYCJE' / 'assets'}`\n"
+        f"- Revolut pm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'pm'}`\n"
+        f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}`"
+    )
+
+    if st.button("Przenieś pliki do ich katalogów", key="move_downloaded_button"):
+        try:
+            with st.spinner("Przenoszenie plików..."):
+                results = run_move_downloaded()
+            st.session_state["move_downloaded_results"] = results
+
+            moved = sum(1 for result in results if result.action == ACTION_MOVED)
+            if moved > 0:
+                with st.spinner("Przeliczanie snapshotu na dziś..."):
+                    snapshot_results = _run_snapshot_recalculation(full_recalculation=False)
+                st.session_state["snapshot_recalculation_results"] = snapshot_results
+                clear_dashboard_cache()
+        except Exception as exc:
+            st.error("Nie udało się przenieść plików.")
+            st.exception(exc)
+            return
+
+    move_results = st.session_state.get("move_downloaded_results")
+    if move_results is not None:
+        if not move_results:
+            st.info("Brak plików do przeniesienia.")
+        else:
+            moved = sum(1 for result in move_results if result.action == ACTION_MOVED)
+            deleted = sum(1 for result in move_results if result.action == ACTION_DELETED_EMPTY)
+            skipped = sum(1 for result in move_results if result.action == ACTION_SKIPPED)
+
+            st.markdown("**Przeniesione pliki**")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Przeniesione", moved)
+            c2.metric("Usunięte (puste)", deleted)
+            c3.metric("Pominięte", skipped)
+            st.dataframe(
+                results_to_dataframe(move_results),
+                width="stretch",
+                hide_index=True,
+                height=360,
+            )
+    else:
+        st.info("Kliknij przycisk, aby przenieść pliki i zobaczyć wyniki.")
+
+    st.divider()
+    st.markdown("**Snapshoty portfela (`09 assets`)**")
+    st.caption(
+        "Po przeniesieniu plików snapshot na dziś jest przeliczany automatycznie. "
+        "Możesz też przeliczyć ręcznie."
+    )
+
+    full_recalculation = st.checkbox(
+        "Pełne przeliczenie (365 dni, wt/sr/pt/nd)",
+        value=False,
+        key="snapshot_full_recalculation",
+    )
+
+    if st.button("Przelicz snapshoty", key="recalculate_snapshots_button"):
+        try:
+            with st.spinner("Przeliczanie snapshotów..."):
+                snapshot_results = _run_snapshot_recalculation(full_recalculation=full_recalculation)
+            st.session_state["snapshot_recalculation_results"] = snapshot_results
+            clear_dashboard_cache()
+        except Exception as exc:
+            st.error("Nie udało się przeliczyć snapshotów.")
+            st.exception(exc)
+            return
+
+    snapshot_results = st.session_state.get("snapshot_recalculation_results")
+    if snapshot_results is not None:
+        _render_snapshot_results(snapshot_results)
+
+
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import rap1, rap2
 
@@ -667,7 +791,7 @@ def main():
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    tab_chart, tab_reports, tab_search, tab_roi = st.tabs(
+    tab_chart, tab_reports, tab_search, tab_roi, tab_import = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
@@ -690,6 +814,9 @@ def main():
 
     with tab_roi:
         render_roi(data["latest_snapshot_date"])
+
+    with tab_import:
+        render_import_wyciagow()
 
 
 if __name__ == "__main__":

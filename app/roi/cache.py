@@ -7,11 +7,12 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from data_step.data_strep_data_types import REFRESHED
-from app_proc.data_steps_root import get_data_steps_root
 from roi.allocate import allocate_catalog
 from roi.compute_roi import load_mbank_pool
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
+
+_APP_ROOT = Path(__file__).resolve().parent.parent
 
 ROI_EVENTS_STEP = "10 roi_events"
 ROI_CATALOG_RESOURCE = f"{ROI_EVENTS_STEP}/_catalog.parquet"
@@ -20,6 +21,10 @@ ROI_UNALLOCATED_RESOURCE = f"{ROI_EVENTS_STEP}/_unallocated.parquet"
 
 def roi_events_resource(asset_id: str) -> str:
     return f"{ROI_EVENTS_STEP}/{asset_id}.parquet"
+
+
+def _init_data_step() -> None:
+    DATA_STEP.init_steps(root=_APP_ROOT)
 
 
 def load_catalog_events(
@@ -35,7 +40,7 @@ def load_catalog_events(
         events_by_asset, _unallocated = _build_allocation(config)
         return events_by_asset
 
-    DATA_STEP.init_steps(root=get_data_steps_root())
+    _init_data_step()
     config_file = get_config_file(config_path)
     r = DATA_STEP.obtain_dependent(
         ROI_CATALOG_RESOURCE,
@@ -61,7 +66,7 @@ def load_unallocated_mbank(
 
     _ensure_unallocated_cache(config_path)
     load_catalog_events(config, config_path=config_path, use_cache=True)
-    DATA_STEP.init_steps(root=get_data_steps_root())
+    _init_data_step()
     path = DATA_STEP.get_absolute_file_path(ROI_UNALLOCATED_RESOURCE)
     if not path.is_file():
         _events_by_asset, unallocated = _build_allocation(config)
@@ -72,7 +77,7 @@ def load_unallocated_mbank(
 
 def _ensure_unallocated_cache(config_path: Path | None = None) -> None:
     """Wymusza przebudowe ROI, gdy catalog jest w cache bez pliku unallocated."""
-    DATA_STEP.init_steps(root=get_data_steps_root())
+    _init_data_step()
     unallocated_path = DATA_STEP.get_absolute_file_path(ROI_UNALLOCATED_RESOURCE)
     if unallocated_path.is_file():
         return

@@ -21,3 +21,9 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             (root / "last_tab.txt").write_text("nieznany", encoding="utf-8")
             self.assertEqual(load_last_tab(prefs_root=root), DEFAULT_TAB)
+
+    def test_save_and_load_import_tab_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab("Import wyciągów", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "Import wyciągów")
