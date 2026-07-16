@@ -5,20 +5,18 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyse_assets.build_selector import CATEGORY_MAP, build_step_selector, get_mapping
+from analyse_assets.build_selector import (
+    CATEGORY_MAP,
+    build_step_selector,
+    get_mapping,
+    normalize_whitespace,
+)
 from analyse_assets.config_model import AnalyseAssetsManual, AnalyseAssetsRules
 from analyse_assets.data_model import AssetRw
 from analyse_assets.select_asset import select_asset
 from importers.mbank.data_model import MBankFile
 from roi.categories import ASSET_RW_TO_ROI
 from roi.data_model import CashFlowEvent
-
-
-def normalize_whitespace(value) -> str:
-    if value is None or pd.isna(value):
-        return ""
-    text = str(value).strip()
-    return " ".join(text.split())
 
 
 def _text_column(raw: pd.DataFrame, column: str) -> pd.Series:

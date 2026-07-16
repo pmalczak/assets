@@ -29,6 +29,7 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESS_ELIXIR_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESSOWY_PRZELEW_PRZYCH: self.CAT_OUTFLOW,
+            MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_OUTFLOW,
         }
         self.inflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
@@ -48,11 +49,22 @@ class AssetRWCls(MBankFileCls):
         }
 
     def add_ymd_columns(self, df):
-        x = pd.to_datetime(df[self.MBANK_TRANSACTION_DATE], format='%Y-%m-%d')
+        if df is None or df.empty or self.MBANK_TRANSACTION_DATE not in df.columns:
+            return df
 
-        df[self.YEAR] = x.dt.year.astype('str')
-        df[self.MONTH] = x.dt.month
-        df[self.DAY] = x.dt.day
+        # Stare nazwy z ogonkami (mbank_consolidated) — usun i przebuduj.
+        legacy = [c for c in ("MIESIĄC", "DZIEŃ") if c in df.columns]
+        if legacy:
+            df = df.drop(columns=legacy)
+
+        if self.YEAR in df.columns and self.MONTH in df.columns and self.DAY in df.columns:
+            if df[self.YEAR].dtype == object or str(df[self.YEAR].dtype) == "string":
+                return df
+
+        x = pd.to_datetime(df[self.MBANK_TRANSACTION_DATE], errors="coerce")
+        df[self.YEAR] = x.dt.year.astype("string")
+        df[self.MONTH] = x.dt.month.astype("string")
+        df[self.DAY] = x.dt.day.astype("string")
         return df
 
     def check_values(self, _df: pd.DataFrame):

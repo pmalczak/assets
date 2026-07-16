@@ -14,7 +14,7 @@ from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.property_lifecycle import catalog_properties_id
 from importers.assets.read_assets import read_assets, read_property_valuations
 from importers.mbank.read_m_transactions import read_m_transactions
-from roi.categories import CLOSING, INFLOW, INVESTMENT, OUTFLOW
+from roi.categories import INFLOW, INVESTMENT, OUTFLOW
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
@@ -35,7 +35,7 @@ class RoiSummary:
     warnings: list[str] = field(default_factory=list)
 
 
-def aggregate_category(cashflows: pd.DataFrame, category: str) -> float:
+def _aggregate_category(cashflows: pd.DataFrame, category: str) -> float:
     if cashflows.empty:
         return 0.0
     mask = cashflows[CashFlowEvent.CATEGORY] == category
@@ -53,9 +53,9 @@ def compute_roi(
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
     lookup_id = properties_id or asset_id
 
-    capex = aggregate_category(filtered, INVESTMENT)
-    opex = aggregate_category(filtered, OUTFLOW)
-    revenue = aggregate_category(filtered, INFLOW)
+    capex = _aggregate_category(filtered, INVESTMENT)
+    opex = _aggregate_category(filtered, OUTFLOW)
+    revenue = _aggregate_category(filtered, INFLOW)
     terminal_realized, terminal_unrealized, warnings = resolve_terminal_value(
         asset_id,
         cashflows,
@@ -109,17 +109,15 @@ def roi_summary_to_row(summary: RoiSummary) -> dict[str, object]:
 def compute_portfolio_roi(
     valuation_date: date,
     config_path: Path | None = None,
-    *,
-    use_cache: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-    from roi.cache import load_catalog_events
+    from roi.roi_products import load_catalog_events
 
     config = read_analyse_config(config_path)
     catalog = config["catalog"]
     catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
 
     properties_sheet = read_property_valuations()
-    events_by_asset = load_catalog_events(config, use_cache=use_cache)
+    events_by_asset = load_catalog_events(valuation_date, config, config_path=config_path)
 
     summaries = []
     for _, asset_row in catalog.iterrows():

@@ -14,7 +14,14 @@ FIELD_MAP = {
     "MBANK_TRANSACTION_PARTY": AssetRw.MBANK_TRANSACTION_PARTY,
     "MBANK_ACCOUNT_NUMBER": AssetRw.MBANK_ACCOUNT_NUMBER,
     "MBANK_AMOUNT": AssetRw.MBANK_AMOUNT,
+    "MBANK_DESCRIPTION": AssetRw.MBANK_DESCRIPTION,
     "YEAR": AssetRw.YEAR,
+}
+
+TEXT_FIELDS = {
+    "MBANK_TITLE",
+    "MBANK_TRANSACTION_PARTY",
+    "MBANK_DESCRIPTION",
 }
 
 MAPPING_MAP = {
@@ -46,6 +53,13 @@ def rule_cell_str(value) -> str | None:
     return str(value).strip()
 
 
+def normalize_whitespace(value) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    return " ".join(text.split())
+
+
 def get_mapping(name: str) -> dict:
     if name not in MAPPING_MAP:
         raise ValueError(f"Nieznane mapowanie: {name!r}")
@@ -74,6 +88,9 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
             return series == float(value)
         if field == "MBANK_ACCOUNT_NUMBER":
             return series.astype("string") == str(value).replace(".0", "")
+        if field in TEXT_FIELDS:
+            normalized = series.astype("string").fillna("").map(normalize_whitespace)
+            return normalized == normalize_whitespace(value)
         return series == value
     if operator == "gte":
         if field == "YEAR":

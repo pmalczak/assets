@@ -6,11 +6,13 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from analyse_assets.config_model import CONFIG_FILE_NAME
+from analyse_assets.data_model import AssetRw
+from app_proc.export_product_excel import MBANK_CONSOLIDATED_FILE
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.mbank.data_model import MBankFile
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi, load_unallocated_mbank
 from roi.allocate import normalize_whitespace
-from roi.cache import MBANK_CONSOLIDATED_YEAR, MBANK_CONSOLIDATED_MONTH, MBANK_CONSOLIDATED_DAY
 
 ROI_DISPLAY_COLUMNS = {
     "asset_id": "Aktywo",
@@ -35,9 +37,9 @@ ROI_FLOW_DISPLAY_COLUMNS = {
 }
 MBANK_UNALLOCATED_DISPLAY_COLUMNS = [
     MBankFile.MBANK_TRANSACTION_DATE,
-    MBANK_CONSOLIDATED_YEAR,
-    MBANK_CONSOLIDATED_MONTH,
-    MBANK_CONSOLIDATED_DAY,
+    AssetRw.YEAR,
+    AssetRw.MONTH,
+    AssetRw.DAY,
     MBankFile.MBANK_AMOUNT,
     MBankFile.MBANK_DESCRIPTION,
     MBankFile.MBANK_TITLE,
@@ -63,7 +65,7 @@ def render_roi(default_valuation_date: date | None) -> None:
 
     try:
         with st.spinner("Liczenie ROI..."):
-            summary, events_by_asset = compute_portfolio_roi(valuation_date, use_cache=True)
+            summary, events_by_asset = compute_portfolio_roi(valuation_date)
     except Exception as exc:
         st.error("Nie udalo sie policzyc ROI.")
         st.exception(exc)
@@ -76,7 +78,7 @@ def render_roi(default_valuation_date: date | None) -> None:
     st.caption(
         "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties-wyceny dla otwartych inwestycji. "
         "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
-        "Zamkniecie: CLOSING w analyse_assets_config.xlsx."
+        f"Zamkniecie: CLOSING w {CONFIG_FILE_NAME}."
     )
 
     total_roi = int(summary["roi_nominal"].sum())
@@ -110,7 +112,7 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_csv_download",
     )
 
-    unallocated = load_unallocated_mbank(use_cache=True)
+    unallocated = load_unallocated_mbank(valuation_date)
     st.markdown("**Transakcje mBank niezaalokowane (mbank_consolidated)**")
     st.caption(
         "Wszystkie konta mBank PLN po usunieciu przeplywow wewnetrznych, "
@@ -136,9 +138,9 @@ def render_roi(default_valuation_date: date | None) -> None:
         unallocated_buffer = io.BytesIO()
         unallocated_export.to_excel(unallocated_buffer, index=False)
         st.download_button(
-            label="Pobierz mbank_consolidated.xlsx",
+            label=f"Pobierz {MBANK_CONSOLIDATED_FILE}",
             data=unallocated_buffer.getvalue(),
-            file_name="mbank_consolidated.xlsx",
+            file_name=MBANK_CONSOLIDATED_FILE,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="roi_unallocated_xlsx",
         )

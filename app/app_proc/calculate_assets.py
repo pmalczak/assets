@@ -13,6 +13,7 @@ from importers.assets.data_model import AssetsDef, AssetsFile
 from importers.assets.read_assets import read_assets
 from app_proc.check_wrong_catalogs import check_wrong_catalogs
 from app_proc.data_root import get_online_data_root
+from app_proc.export_product_excel import export_assets_evaluation
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 
 ASSETS_SNAPSHOT_STEP = "09 assets"
@@ -38,7 +39,9 @@ def calculate_assets(
         _build_assets_snapshot,
         valuation_date=valuation_date,
     )
-    return result.data_frame()
+    assets = result.data_frame()
+    export_assets_evaluation(assets, valuation_date)
+    return assets
 
 
 def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:

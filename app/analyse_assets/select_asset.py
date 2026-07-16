@@ -10,7 +10,7 @@ def select_asset(df: pd.DataFrame, selector, mapping: dict) -> tuple:
     remaining = df[~selector].copy()
 
     if selected.empty:
-        raise ValueError()
+        raise ValueError("Selektor nie zwrocil zadnych transakcji")
 
     cond = selected[AssetRw.MBANK_DESCRIPTION].isin(mapping.keys())
     missing = selected.loc[~cond, AssetRw.MBANK_DESCRIPTION].unique()

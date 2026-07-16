@@ -19,7 +19,6 @@ def main():
     assets = calculate_assets(valuation_date=valuation_date, force_read_all_data=False)
     print(assets)
     print(s)
-    assets.to_excel(f'assets_evaluation_{valuation_date}.xlsx', index=False)
 
     # rap3(assets)
     rap2(assets)
