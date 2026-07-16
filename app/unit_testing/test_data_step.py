@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from data_step.data_step import DataStep
 from data_step.data_step_dependencies import Dependencies
 from data_step.data_step_frame import DataStepFrame
@@ -214,9 +215,9 @@ class DataStepIntegrationTests(unittest.TestCase):
 
     def test_get_absolute_file_path_creates_parent_dirs(self):
         self.step.init_steps(root=self.start_file)
-        path = self.step.get_absolute_file_path("09 assets/2026-01-01.parquet")
+        path = self.step.get_absolute_file_path(f"{ASSETS_SNAPSHOT_STEP}/2026-01-01.parquet")
         self.assertTrue(path.parent.is_dir())
-        self.assertEqual(path.parent.resolve(), (self.data_steps / "09 assets").resolve())
+        self.assertEqual(path.parent.resolve(), (self.data_steps / ASSETS_SNAPSHOT_STEP).resolve())
 
     def test_obtain_cleans_metadata_on_collector_failure(self):
         self.step.init_steps(root=self.start_file)

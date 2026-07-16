@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Dashboard wartosci portfela oparty o snapshoty DATA_STEP (09 assets).
+Dashboard wartosci portfela oparty o snapshoty DATA_STEP (ASSETS_SNAPSHOT_STEP).
 
 Uruchomienie:
   cd app
@@ -14,6 +14,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.data_root import get_online_data_root
 from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
 from app_streamlit.render_diagnostics import render_diagnostics
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
@@ -57,7 +59,7 @@ def render_import_wyciagow() -> None:
     home = Path.home()
     st.caption(
         "Przenosi pobrane wyciągi do katalogów w Dropbox:\n"
-        f"- mBank: `{home / 'Downloads'}` oraz pliki w `{home / 'Dropbox' / 'INWESTYCJE' / 'assets'}`\n"
+        f"- mBank: `{home / 'Downloads'}` oraz pliki w `{get_online_data_root()}`\n"
         f"- Revolut pm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'pm'}`\n"
         f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}`"
     )
@@ -103,7 +105,7 @@ def render_import_wyciagow() -> None:
         st.info("Kliknij przycisk, aby przenieść pliki i zobaczyć wyniki.")
 
     st.divider()
-    st.markdown("**Snapshoty portfela (`09 assets`)**")
+    st.markdown(f"**Snapshoty portfela (`{ASSETS_SNAPSHOT_STEP}`)**")
     st.caption(
         "Po przeniesieniu plików snapshot na dziś jest przeliczany automatycznie. "
         "Możesz też przeliczyć ręcznie."

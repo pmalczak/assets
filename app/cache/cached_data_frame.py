@@ -30,7 +30,8 @@ class CachedDataFrame(NonCachedDataFrame):
     def __str__(self):
         return self.parquet_file_name()
 
-    def create_file_core_name(self, the_file: Path, extension: str) -> Path:
+    @staticmethod
+    def create_file_core_name(the_file: Path, extension: str) -> Path:
         if the_file is None:
             raise ValueError
         name = the_file.name.split('.')

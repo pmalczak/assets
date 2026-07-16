@@ -2,7 +2,7 @@
 """
 Przelicza calculate_assets() we wtorki, srody, piatki i niedziele w oknie 365 dni wstecz od dzis.
 
-Wyniki trafiaja do data_steps/09 assets/YYYY-MM-DD.parquet (krok DATA_STEP).
+Wyniki trafiaja do data_steps/ASSETS_SNAPSHOT_STEP/YYYY-MM-DD.parquet (krok DATA_STEP).
 
 Uzycie:
   cd app
@@ -21,7 +21,7 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE
+from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE, ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import (
     recalculate_weekly_snapshots,
     valuation_dates_one_year_back,
@@ -30,7 +30,7 @@ from app_proc.recalculate_snapshots import (
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Przelicz snapshoty portfela (09 assets) we wtorki, srody, piatki i niedziele z ostatniego roku.",
+        description=f"Przelicz snapshoty portfela ({ASSETS_SNAPSHOT_STEP}) we wtorki, srody, piatki i niedziele z ostatniego roku.",
     )
     parser.add_argument(
         "--force",

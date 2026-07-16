@@ -135,7 +135,7 @@ def main() -> None:
         if source_file is not None:
             print(f"Uwaga: brak {source_file}; tworze minimalny szablon.")
         else:
-            print("Tworze minimalny szablon assets_1.xlsx.")
+            print(f"Tworze minimalny szablon {ASSETS_FILE_NAME}.")
         sheets = build_workbook(None)
     else:
         print(f"Migracja z: {source_file}")

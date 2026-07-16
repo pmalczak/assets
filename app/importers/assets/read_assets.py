@@ -17,10 +17,11 @@ from app_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 
 ASSETS_FILE_NAME = "assets_1.xlsx"
+ASSETS_PARQUET = "assets.parquet"
 
 
 def read_assets() -> pd.DataFrame:
-    _out = 'assets.parquet'
+    _out = ASSETS_PARQUET
 
     r = DATA_STEP.obtain_dependent(_out, _read_assets, get_assets_file())
     result = r.data_frame()
