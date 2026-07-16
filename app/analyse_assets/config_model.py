@@ -10,6 +10,7 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
     ORDER = "order"
     ENABLED = "enabled"
     PROPERTIES_ID = "properties_id"
+    SOURCE = "source"
 
     def expected_columns(self) -> set:
         return {
@@ -18,6 +19,7 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
             self.ORDER,
             self.ENABLED,
             self.PROPERTIES_ID,
+            self.SOURCE,
         }
 
 
@@ -31,6 +33,7 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
     OPERATOR = "operator"
     VALUE = "value"
     UWAGI = "Uwagi"
+    SOURCE = "source"
 
     def expected_columns(self) -> set:
         return {
@@ -43,6 +46,7 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
             self.OPERATOR,
             self.VALUE,
             self.UWAGI,
+            self.SOURCE,
         }
 
 
@@ -74,6 +78,9 @@ CATALOG_SHEET = "assets"
 RULES_SHEET = "rules"
 MANUAL_SHEET = "manual"
 
+DEFAULT_TRANSACTION_SOURCE = "mbank_pln"
+MANUAL_TRANSACTION_SOURCE = "manual"
+
 MAPPING_NAMES = {
     "initial_investment",
     "inflow_outflow",
@@ -89,6 +96,7 @@ FIELD_NAMES = {
     "MBANK_AMOUNT",
     "MBANK_DESCRIPTION",
     "YEAR",
+    "SOURCE",
 }
 
 OPERATOR_NAMES = {

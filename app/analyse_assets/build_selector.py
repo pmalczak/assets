@@ -5,7 +5,7 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-from analyse_assets.config_model import AnalyseAssetsRules, FIELD_NAMES, OPERATOR_NAMES
+from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsRules, FIELD_NAMES, OPERATOR_NAMES
 from analyse_assets.data_model import AssetRw
 
 
@@ -16,6 +16,7 @@ FIELD_MAP = {
     "MBANK_AMOUNT": AssetRw.MBANK_AMOUNT,
     "MBANK_DESCRIPTION": AssetRw.MBANK_DESCRIPTION,
     "YEAR": AssetRw.YEAR,
+    "SOURCE": AnalyseAssetsCatalog.SOURCE,
 }
 
 TEXT_FIELDS = {

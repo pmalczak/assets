@@ -22,6 +22,7 @@ if str(APP_ROOT) not in sys.path:
 from analyse_assets.config_model import (
     CONFIG_FILE_NAME,
     CATALOG_SHEET,
+    DEFAULT_TRANSACTION_SOURCE,
     MANUAL_SHEET,
     RULES_SHEET,
 )
@@ -31,16 +32,16 @@ from app_proc.data_root import get_online_data_root
 def _catalog() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina"},
-            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego"},
-            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż"},
-            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa"},
-            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1"},
-            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4"},
-            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3"},
-            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa"},
-            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska"},
-            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz"},
+            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "source": DEFAULT_TRANSACTION_SOURCE},
         ]
     )
 
@@ -55,6 +56,7 @@ def _rule(
     operator: str,
     value,
     uwagi: str = "",
+    source: str = "",
 ) -> dict:
     return {
         "asset_id": asset_id,
@@ -66,6 +68,7 @@ def _rule(
         "operator": operator,
         "value": value,
         "Uwagi": uwagi,
+        "source": source,
     }
 
 

@@ -7,6 +7,7 @@ from analyse_assets.build_selector import is_blank_rule_value
 from analyse_assets.config_model import (
     CONFIG_FILE_NAME,
     CATALOG_SHEET,
+    DEFAULT_TRANSACTION_SOURCE,
     MANUAL_SHEET,
     RULES_SHEET,
     AnalyseAssetsCatalog,
@@ -24,13 +25,39 @@ def _drop_incomplete_rules(rules: pd.DataFrame) -> pd.DataFrame:
 
 
 def _normalize_rules_columns(rules: pd.DataFrame) -> pd.DataFrame:
+    rules = rules.copy()
     if AnalyseAssetsRules.UWAGI not in rules.columns:
-        rules = rules.copy()
         rules[AnalyseAssetsRules.UWAGI] = ""
     else:
-        rules = rules.copy()
         rules[AnalyseAssetsRules.UWAGI] = rules[AnalyseAssetsRules.UWAGI].fillna("").astype(str)
+
+    if AnalyseAssetsRules.SOURCE not in rules.columns:
+        rules[AnalyseAssetsRules.SOURCE] = ""
+    else:
+        rules[AnalyseAssetsRules.SOURCE] = (
+            rules[AnalyseAssetsRules.SOURCE].fillna("").astype(str).str.strip()
+        )
+        rules.loc[
+            rules[AnalyseAssetsRules.SOURCE].str.lower().isin({"", "nan"}),
+            AnalyseAssetsRules.SOURCE,
+        ] = ""
     return rules
+
+
+def _normalize_catalog_source(catalog: pd.DataFrame) -> pd.DataFrame:
+    catalog = catalog.copy()
+    if AnalyseAssetsCatalog.SOURCE not in catalog.columns:
+        catalog[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
+    else:
+        catalog[AnalyseAssetsCatalog.SOURCE] = (
+            catalog[AnalyseAssetsCatalog.SOURCE]
+            .fillna(DEFAULT_TRANSACTION_SOURCE)
+            .astype(str)
+            .str.strip()
+        )
+        blank = catalog[AnalyseAssetsCatalog.SOURCE].str.lower().isin({"", "nan"})
+        catalog.loc[blank, AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
+    return catalog
 
 
 def get_config_file(config_path: Path | None = None) -> Path:
@@ -57,6 +84,7 @@ def read_analyse_config(config_path: Path | None = None) -> dict[str, pd.DataFra
             .fillna(catalog[AnalyseAssetsCatalog.ASSET_ID])
             .astype(str)
         )
+    catalog = _normalize_catalog_source(catalog)
 
     AnalyseAssetsCatalog.check_structure(catalog)
     AnalyseAssetsRules.check_structure(rules)

@@ -141,6 +141,7 @@ class AllocateCatalogTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     "order": 1,
                     "enabled": True,
+                    AnalyseAssetsCatalog.SOURCE: "mbank_pln",
                 }
             ]
         )
@@ -155,6 +156,7 @@ class AllocateCatalogTests(unittest.TestCase):
                     AnalyseAssetsRules.FIELD: "MBANK_TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
+                    AnalyseAssetsRules.SOURCE: "",
                 }
             ]
         )
@@ -165,7 +167,7 @@ class AllocateCatalogTests(unittest.TestCase):
         self.assertEqual(len(unallocated), 1)
         self.assertEqual(unallocated.iloc[0][AssetRw.MBANK_TITLE], "INNY TYTUL")
         self.assertEqual(len(events_by_asset["aquamarina"]), 1)
-        self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], "mbank")
+        self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], "mbank_pln")
 
 
 class ManualAllocationTests(unittest.TestCase):
@@ -187,16 +189,18 @@ class ManualAllocationTests(unittest.TestCase):
                 }
             ]
         )
-        events = asset_rw_to_cashflow_events(raw, "test_asset", source="mbank")
+        events = asset_rw_to_cashflow_events(raw, "test_asset", source="mbank_pln")
 
         self.assertEqual(normalize_whitespace("  a   b  "), "a b")
         self.assertEqual(events.iloc[0][CashFlowEvent.TITLE], "umowa nr 123")
         self.assertEqual(events.iloc[0][CashFlowEvent.COUNTERPARTY], "Jan Kowalski")
         self.assertEqual(events.iloc[0][CashFlowEvent.ACCOUNT_NUMBER], "12 3456 7890")
+        self.assertEqual(events.iloc[0][CashFlowEvent.SOURCE], "mbank_pln")
 
     def test_manual_part_builds_valid_events(self):
         from analyse_assets.config_model import AnalyseAssetsManual, AnalyseAssetsRules
         from roi.allocate import allocate_asset_from_mbank_pool
+        from analyse_assets.config_model import MANUAL_TRANSACTION_SOURCE
 
         manual = pd.DataFrame(
             [
@@ -219,6 +223,57 @@ class ManualAllocationTests(unittest.TestCase):
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events.iloc[0][CashFlowEvent.CATEGORY], INVESTMENT)
+        self.assertEqual(events.iloc[0][CashFlowEvent.SOURCE], MANUAL_TRANSACTION_SOURCE)
+
+    def test_rule_source_overrides_catalog_default(self):
+        from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsManual, AnalyseAssetsRules
+        from analyse_assets.data_model import AssetRw
+        from importers.mbank.data_model import MBankFile
+        from roi.allocate import allocate_catalog
+
+        row = {
+            AssetRw.MBANK_BOOKING_DATE: "2020-01-01",
+            AssetRw.MBANK_TRANSACTION_DATE: "2020-01-01",
+            AssetRw.MBANK_DESCRIPTION: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
+            AssetRw.MBANK_TITLE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
+            AssetRw.MBANK_TRANSACTION_PARTY: "X",
+            AssetRw.MBANK_ACCOUNT_NUMBER: "123",
+            AssetRw.MBANK_AMOUNT: -100.0,
+            AssetRw.MBANK_OUTSTANDING_BALANCE: 0.0,
+            MBankFile.EFFECTIVE_DATE: "2020-01-01",
+            MBankFile.DEBIT_ACCOUNT: "acc1",
+            "_source": "acc1",
+        }
+        pool = AssetRw.add_ymd_columns(pd.DataFrame([row]))
+        catalog = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsCatalog.ASSET_ID: "aquamarina",
+                    AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
+                    "order": 1,
+                    "enabled": True,
+                    AnalyseAssetsCatalog.SOURCE: "mbank_pln",
+                }
+            ]
+        )
+        rules = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsRules.ASSET_ID: "aquamarina",
+                    AnalyseAssetsRules.STEP_ID: "r0",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
+                    AnalyseAssetsRules.SOURCE: "revolut",
+                }
+            ]
+        )
+        manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
+        events_by_asset, _unallocated = allocate_catalog(pool, catalog, rules, manual)
+        self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], "revolut")
 
 
 class BuildSelectorTests(unittest.TestCase):

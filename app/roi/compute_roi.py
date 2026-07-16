@@ -137,6 +137,8 @@ def compute_portfolio_roi(
 
 
 def load_mbank_pool() -> pd.DataFrame:
+    from analyse_assets.config_model import AnalyseAssetsCatalog, DEFAULT_TRANSACTION_SOURCE
+
     assets = read_assets()
     assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
     assets = assets[assets[AssetsFile.CURRENCY] == "PLN"]
@@ -147,8 +149,11 @@ def load_mbank_pool() -> pd.DataFrame:
     for asset_id in asset_ids:
         df = read_m_transactions(data_root, str(asset_id))
         df["_source"] = asset_id
+        df[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
         statements.append(df)
 
     df, _report, _meta = consolidate_many_drop_internal_transfers(statements)
+    if AnalyseAssetsCatalog.SOURCE not in df.columns:
+        df[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
     return df
 
