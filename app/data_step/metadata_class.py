@@ -3,7 +3,6 @@ __author__ = "pmalczak@gmail.com"
 
 import hashlib
 import os
-from hmac import digest
 from pathlib import Path
 
 from data_step.metadata_primitives_class import MetadataPrimitives, DEPENDENCIES
@@ -71,8 +70,7 @@ class Metadata(MetadataPrimitives):
         except KeyError:
             item_descriptor = {}
 
-        if token in dependencies:
-            dependencies = dependencies.remove(token)
+        dependencies = [dep for dep in (dependencies or []) if dep != token]
         item_descriptor[DEPENDENCIES] = dependencies
         assert token not in dependencies
         if method == DIGEST:
@@ -99,8 +97,8 @@ class Metadata(MetadataPrimitives):
             item_descriptor[DATA_FRAME_ROWS] = rows
 
         self.update_item_descriptor(token, item_descriptor)
-        if item_path in self.updated_stat_cache:
-            self.updated_stat_cache.pop(item_path)  # TODO ALL DEPENDENCIES SHOULD BE ALSO REMOVED FROM THE CACHE
+        if token in self.updated_stat_cache:
+            del self.updated_stat_cache[token]
         return
 
     def delete(self, missing_file):
@@ -159,7 +157,8 @@ class Metadata(MetadataPrimitives):
             return item_path.is_dir()
         return item_path.is_file()
 
-    def _calc_dir_token_digest(self, item_path: Path) -> str:
+    @staticmethod
+    def _calc_dir_token_digest(item_path: Path) -> str:
         assert item_path.is_dir()
         l = list(item_path.glob('*.*'))
         l = list(map(lambda x: str(x), l))
@@ -171,7 +170,8 @@ class Metadata(MetadataPrimitives):
         digest = md5hash.hexdigest()
         return digest
 
-    def _calc_file_digest(self, item_path: Path) -> str:
+    @staticmethod
+    def _calc_file_digest(item_path: Path) -> str:
         assert item_path.is_file()
         md5hash = hashlib.md5()
         with open(item_path, 'rb') as f:

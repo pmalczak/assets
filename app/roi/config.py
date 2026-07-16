@@ -23,6 +23,16 @@ def _drop_incomplete_rules(rules: pd.DataFrame) -> pd.DataFrame:
     return rules.loc[complete].reset_index(drop=True)
 
 
+def _normalize_rules_columns(rules: pd.DataFrame) -> pd.DataFrame:
+    if AnalyseAssetsRules.UWAGI not in rules.columns:
+        rules = rules.copy()
+        rules[AnalyseAssetsRules.UWAGI] = ""
+    else:
+        rules = rules.copy()
+        rules[AnalyseAssetsRules.UWAGI] = rules[AnalyseAssetsRules.UWAGI].fillna("").astype(str)
+    return rules
+
+
 def get_config_file(config_path: Path | None = None) -> Path:
     if config_path is not None:
         return config_path
@@ -34,7 +44,9 @@ def read_analyse_config(config_path: Path | None = None) -> dict[str, pd.DataFra
     assert source.is_file(), source
 
     catalog = pd.read_excel(source, sheet_name=CATALOG_SHEET)
-    rules = _drop_incomplete_rules(pd.read_excel(source, sheet_name=RULES_SHEET))
+    rules = _normalize_rules_columns(
+        _drop_incomplete_rules(pd.read_excel(source, sheet_name=RULES_SHEET))
+    )
     manual = pd.read_excel(source, sheet_name=MANUAL_SHEET)
 
     if AnalyseAssetsCatalog.PROPERTIES_ID not in catalog.columns:

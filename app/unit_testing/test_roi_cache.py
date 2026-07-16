@@ -4,7 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from roi.cache import ROI_CATALOG_RESOURCE, load_catalog_events
+from roi.cache import (
+    ROI_CATALOG_RESOURCE,
+    add_mbank_consolidated_ymd_columns,
+    load_catalog_events,
+)
+from importers.mbank.data_model import MBankFile
 from roi.data_model import CashFlowEvent
 
 
@@ -70,6 +75,31 @@ class LoadCatalogEventsTests(unittest.TestCase):
 
         build_allocation_mock.assert_called_once_with(config)
         self.assertEqual(result, {"kiemliczow_1": events})
+
+
+class MbankConsolidatedYmdTests(unittest.TestCase):
+    def test_add_mbank_consolidated_ymd_columns(self):
+        df = pd.DataFrame(
+            {
+                MBankFile.MBANK_TRANSACTION_DATE: ["2024-03-15", "2025-11-01"],
+                MBankFile.MBANK_AMOUNT: [-100.0, 200.0],
+            }
+        )
+        result = add_mbank_consolidated_ymd_columns(df)
+
+        self.assertEqual(result.loc[0, "ROK"], 2024)
+        self.assertEqual(result.loc[0, "MIESIĄC"], 3)
+        self.assertEqual(result.loc[0, "DZIEŃ"], 15)
+        self.assertEqual(result.loc[1, "ROK"], 2025)
+        self.assertEqual(result.loc[1, "MIESIĄC"], 11)
+        self.assertEqual(result.loc[1, "DZIEŃ"], 1)
+
+    def test_add_mbank_consolidated_ymd_columns_is_idempotent(self):
+        df = add_mbank_consolidated_ymd_columns(
+            pd.DataFrame({MBankFile.MBANK_TRANSACTION_DATE: ["2024-01-02"]})
+        )
+        again = add_mbank_consolidated_ymd_columns(df)
+        pd.testing.assert_frame_equal(df, again)
 
 
 if __name__ == "__main__":

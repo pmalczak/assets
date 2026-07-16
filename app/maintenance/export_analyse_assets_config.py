@@ -54,6 +54,7 @@ def _rule(
     field: str,
     operator: str,
     value,
+    uwagi: str = "",
 ) -> dict:
     return {
         "asset_id": asset_id,
@@ -64,6 +65,7 @@ def _rule(
         "field": field,
         "operator": operator,
         "value": value,
+        "Uwagi": uwagi,
     }
 
 

@@ -24,6 +24,32 @@ class DataStep(DataStepPrimitives):  # interface class
                input_data_set: (str, Path, dict) = None,
                keep_cached=False,
                **kwargs) -> DataStepFrame:
+        """Buduje lub odczytuje produkt pośredni w ``data_steps``.
+
+        Zależności powstają **pośrednio** — bez wskazywania zewnętrznego pliku
+        lub katalogu źródłowego:
+
+        * zagnieżdżone wywołania ``obtain`` / ``obtain_dependent`` (stos
+          ``_dependencies_stack`` — rodzic rejestruje produkt potomny),
+        * argumenty typu ``DataStepFrame`` przekazane w ``**kwargs``.
+
+        Parametr ``input_data_set`` jest opcjonalny i zwykle używany wewnętrznie
+        przez ``obtain_dependent``; bezpośrednie użycie w kodzie aplikacji
+        nie jest zalecane.
+
+        Typowe zastosowanie: kroki potoku (np. snapshot portfela), które
+        składają wynik z innych produktów ``data_steps`` już zarejestrowanych
+        w grafie zależności.
+
+        Args:
+            product: Token produktu w ``data_steps`` (np. ``09 assets/2026-01-01.parquet``).
+            data_collector: Callable zwracający ``DataFrame`` (lub ``DataStepFrame``).
+            input_data_set: Opcjonalny token źródła — preferuj ``obtain_dependent``.
+            keep_cached: Trzymaj wynik w pamięci między wywołaniami.
+            **kwargs: Dodatkowe argumenty przekazywane do ``data_collector``.
+                Wartości ``DataFrame`` w kwargs nie są rejestrowane jako zależności
+                (wypisywane jest ostrzeżenie).
+        """
         self.is_initialised()
         assert isinstance(product, str)
         for k, v in kwargs.items():
@@ -66,6 +92,26 @@ class DataStep(DataStepPrimitives):  # interface class
                          input_item: (str, Path),
                          keep_cached: bool = False,
                          **kwargs) -> DataStepFrame:
+        """Buduje lub odczytuje produkt w ``data_steps`` z **jawnie wskazanego**
+        pliku lub katalogu źródłowego.
+
+        ``input_item`` może leżeć poza ``data_steps`` (np. plik Excel w Dropboxie
+        lub katalog z wyciągami CSV). Ścieżka jest rejestrowana w metadanych
+        jako zależność produktu, a collector otrzymuje ją jako ``source_file``.
+
+        Po odświeżeniu produktu aktualizowany jest digest źródła, dzięki czemu
+        cache invaliduje się po zmianie pliku/katalogu wejściowego.
+
+        Typowe zastosowanie: import z pliku zewnętrznego do parquet w
+        ``data_steps`` (wyciągi bankowe, konfiguracja aktywów, plik reguł ROI).
+
+        Args:
+            product: Token produktu docelowego w ``data_steps``.
+            data_collector: Callable przyjmujący ``source_file`` (``Path``).
+            input_item: Plik lub katalog źródłowy (``str`` lub ``Path``).
+            keep_cached: Trzymaj wynik w pamięci między wywołaniami.
+            **kwargs: Dodatkowe argumenty przekazywane do ``data_collector``.
+        """
         self.is_initialised()
         assert isinstance(product, str)
         assert isinstance(input_item, (str, Path))

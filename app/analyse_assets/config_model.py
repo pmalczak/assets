@@ -30,6 +30,7 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
     FIELD = "field"
     OPERATOR = "operator"
     VALUE = "value"
+    UWAGI = "Uwagi"
 
     def expected_columns(self) -> set:
         return {
@@ -41,6 +42,7 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
             self.FIELD,
             self.OPERATOR,
             self.VALUE,
+            self.UWAGI,
         }
 
 

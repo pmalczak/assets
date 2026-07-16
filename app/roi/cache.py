@@ -7,6 +7,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from data_step.data_strep_data_types import REFRESHED
+from importers.mbank.data_model import MBankFile
 from roi.allocate import allocate_catalog
 from roi.compute_roi import load_mbank_pool
 from roi.config import get_config_file, read_analyse_config
@@ -18,6 +19,15 @@ ROI_EVENTS_STEP = "10 roi_events"
 ROI_CATALOG_RESOURCE = f"{ROI_EVENTS_STEP}/_catalog.parquet"
 ROI_UNALLOCATED_RESOURCE = f"{ROI_EVENTS_STEP}/_unallocated.parquet"
 
+MBANK_CONSOLIDATED_YEAR = "ROK"
+MBANK_CONSOLIDATED_MONTH = "MIESIĄC"
+MBANK_CONSOLIDATED_DAY = "DZIEŃ"
+MBANK_CONSOLIDATED_YMD_COLUMNS = (
+    MBANK_CONSOLIDATED_YEAR,
+    MBANK_CONSOLIDATED_MONTH,
+    MBANK_CONSOLIDATED_DAY,
+)
+
 
 def roi_events_resource(asset_id: str) -> str:
     return f"{ROI_EVENTS_STEP}/{asset_id}.parquet"
@@ -25,6 +35,22 @@ def roi_events_resource(asset_id: str) -> str:
 
 def _init_data_step() -> None:
     DATA_STEP.init_steps(root=_APP_ROOT)
+
+
+def add_mbank_consolidated_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Dodaje kolumny ROK, MIESIĄC, DZIEŃ na podstawie daty operacji mBank."""
+    if df.empty or MBankFile.MBANK_TRANSACTION_DATE not in df.columns:
+        return df
+
+    result = df.copy()
+    if all(column in result.columns for column in MBANK_CONSOLIDATED_YMD_COLUMNS):
+        return result
+
+    dates = pd.to_datetime(result[MBankFile.MBANK_TRANSACTION_DATE], errors="coerce")
+    result[MBANK_CONSOLIDATED_YEAR] = dates.dt.year
+    result[MBANK_CONSOLIDATED_MONTH] = dates.dt.month
+    result[MBANK_CONSOLIDATED_DAY] = dates.dt.day
+    return result
 
 
 def load_catalog_events(
@@ -62,7 +88,7 @@ def load_unallocated_mbank(
 
     if not use_cache:
         _events_by_asset, unallocated = _build_allocation(config)
-        return unallocated
+        return add_mbank_consolidated_ymd_columns(unallocated)
 
     _ensure_unallocated_cache(config_path)
     load_catalog_events(config, config_path=config_path, use_cache=True)
@@ -71,8 +97,8 @@ def load_unallocated_mbank(
     if not path.is_file():
         _events_by_asset, unallocated = _build_allocation(config)
         _save_unallocated_side_product(unallocated)
-        return unallocated
-    return DATA_STEP.read_featured_file(path)
+        return add_mbank_consolidated_ymd_columns(unallocated)
+    return add_mbank_consolidated_ymd_columns(DATA_STEP.read_featured_file(path))
 
 
 def _ensure_unallocated_cache(config_path: Path | None = None) -> None:
@@ -115,6 +141,7 @@ def _build_all_events(source_file: Path | None = None) -> pd.DataFrame:
 
 
 def _save_unallocated_side_product(unallocated: pd.DataFrame) -> None:
+    unallocated = add_mbank_consolidated_ymd_columns(unallocated)
     DATA_STEP._dependencies.create(ROI_UNALLOCATED_RESOURCE)
     for dependency in DATA_STEP._dependencies.get(ROI_CATALOG_RESOURCE):
         DATA_STEP._dependencies.update(ROI_UNALLOCATED_RESOURCE, dependency)

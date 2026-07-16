@@ -8,8 +8,9 @@ import pandas as pd
 from importers.pkobp.data_model import PkoBpBonds
 
 
-def import_bonds(input_path: Path = None) -> pd.DataFrame:
-    input_files = list(input_path.glob('*.xls'))
+def import_bonds(source_file: Path = None) -> pd.DataFrame:
+    assert source_file.is_dir()
+    input_files = list(source_file.glob('*.xls'))
 
     result = []
     for input_file in input_files:

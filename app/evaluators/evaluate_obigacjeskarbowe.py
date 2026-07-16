@@ -46,5 +46,5 @@ def evaluate_obligacjeskarbowe(
 
 def read_obligacje(input_path: Path, asset_id: str) -> pd.DataFrame:
     resource = f'01 source/{asset_id}.parquet'
-    r = DATA_STEP.obtain(resource, import_bonds, input_path=input_path)
+    r = DATA_STEP.obtain_dependent(resource, import_bonds, input_path)
     return r.data_frame()
