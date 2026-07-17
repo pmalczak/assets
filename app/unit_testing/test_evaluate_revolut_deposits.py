@@ -4,7 +4,7 @@ import pandas as pd
 
 from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from importers.assets.data_model import AssetsDef
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 
 
 class EvaluateDepositsTests(unittest.TestCase):

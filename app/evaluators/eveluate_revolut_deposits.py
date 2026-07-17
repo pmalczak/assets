@@ -49,7 +49,7 @@ Napisz kod realizujący zarówno zakładanie jak też zamykanie depozytów
 """
 
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 
 import pandas as pd
 

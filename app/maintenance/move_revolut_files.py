@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from importers.revolut.revolut_account_file import RevolutAccountFile
-from importers.revolut.revolut_deposit_file import RevolutDepositFile
+from importers.revolut.account_data_model import RevolutAccountFile
+from importers.revolut.deposit_data_model import RevolutDepositFile
 from maintenance.move_downloaded_results import (
     ACTION_DELETED_EMPTY,
     ACTION_MOVED,

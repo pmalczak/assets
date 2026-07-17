@@ -4,7 +4,7 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 
 from importers.data_model_generic import GenericStructureClass
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from .account_data_model import RevolutAccountFile
 
 
 class RevolutDepositFileCls(GenericStructureClass):

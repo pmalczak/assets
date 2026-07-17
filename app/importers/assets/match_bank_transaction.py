@@ -7,7 +7,7 @@ import pandas as pd
 
 from importers.assets.data_model import GoldCoinPurchaseRules, TitleMatchDomain
 from importers.mbank.data_model import MBankFile
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 
 
 @dataclass(frozen=True)

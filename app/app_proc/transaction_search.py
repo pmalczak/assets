@@ -13,8 +13,8 @@ from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
-from importers.revolut.revolut_account_file import RevolutAccountFile
-from importers.revolut.revolut_deposit_file import RevolutDepositFile
+from importers.revolut.account_data_model import RevolutAccountFile
+from importers.revolut.deposit_data_model import RevolutDepositFile
 
 SEARCH_TEXT_COLUMNS = ["opis", "tytul", "kontrahent", "konto"]
 RESULT_COLUMNS = [

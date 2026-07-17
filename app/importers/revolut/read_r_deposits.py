@@ -8,7 +8,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
-from importers.revolut.revolut_deposit_file import RevolutDepositFile
+from importers.revolut.deposit_data_model import RevolutDepositFile
 
 
 def read_revolut_deposit_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:

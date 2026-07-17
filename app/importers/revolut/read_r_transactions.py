@@ -7,7 +7,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.revolut_file_state import RevolutFileState
 
 REVOLUT_DATE_PATTERN = re.compile(r'^\d{4}-\d{2}-\d{2}$')

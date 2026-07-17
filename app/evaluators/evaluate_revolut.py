@@ -9,10 +9,10 @@ import pandas as pd
 from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
-from importers.revolut.revolut_deposit_file import RevolutDepositFile
+from importers.revolut.deposit_data_model import RevolutDepositFile
 
 
 def evaluate_revolut(

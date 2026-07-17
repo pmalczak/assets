@@ -17,8 +17,8 @@ from importers.mbank.read_m_transactions import read_m_transactions
 from importers.pkobp.data_model import PkoBpBonds
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
-from importers.revolut.revolut_account_file import RevolutAccountFile
-from importers.revolut.revolut_deposit_file import RevolutDepositFile
+from importers.revolut.account_data_model import RevolutAccountFile
+from importers.revolut.deposit_data_model import RevolutDepositFile
 from evaluators.evaluate_obigacjeskarbowe import read_obligacje
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR
 

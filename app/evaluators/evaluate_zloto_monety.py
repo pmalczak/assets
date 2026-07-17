@@ -24,7 +24,7 @@ from importers.assets.match_bank_transaction import (
     normalize_revolut_transactions,
 )
 from importers.mbank.data_model import MBankFile
-from importers.revolut.revolut_account_file import RevolutAccountFile
+from importers.revolut.account_data_model import RevolutAccountFile
 from importers.assets.read_assets import read_gold_coin_purchase_rules, read_gold_coin_valuations
 from importers.mbank.read_m_transactions import read_m_transactions
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
