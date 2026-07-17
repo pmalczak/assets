@@ -5,7 +5,12 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsRules, FIELD_NAMES, OPERATOR_NAMES
+from analyse_assets.config_model import (
+    AnalyseAssetsCatalog,
+    AnalyseAssetsRules,
+    MBANK_SOURCE_ACCOUNT_COLUMN,
+    OPERATOR_NAMES,
+)
 from analyse_assets.data_model import AssetRw
 
 
@@ -15,6 +20,7 @@ FIELD_MAP = {
     "MBANK_ACCOUNT_NUMBER": AssetRw.MBANK_ACCOUNT_NUMBER,
     "MBANK_AMOUNT": AssetRw.MBANK_AMOUNT,
     "MBANK_DESCRIPTION": AssetRw.MBANK_DESCRIPTION,
+    "MBANK_SOURCE_ACCOUNT": MBANK_SOURCE_ACCOUNT_COLUMN,
     "YEAR": AssetRw.YEAR,
     "SOURCE": AnalyseAssetsCatalog.SOURCE,
 }
@@ -23,6 +29,7 @@ TEXT_FIELDS = {
     "MBANK_TITLE",
     "MBANK_TRANSACTION_PARTY",
     "MBANK_DESCRIPTION",
+    "MBANK_SOURCE_ACCOUNT",
 }
 
 MAPPING_MAP = {
@@ -74,6 +81,8 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
         raise ValueError(f"Nieznany operator: {operator!r}")
 
     col = FIELD_MAP[field]
+    if col not in df.columns:
+        return pd.Series(False, index=df.index)
     series = df[col]
     if field == "MBANK_ACCOUNT_NUMBER":
         series = series.astype("string").str.replace(r"\.0$", "", regex=True)
@@ -89,6 +98,8 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
             return series == float(value)
         if field == "MBANK_ACCOUNT_NUMBER":
             return series.astype("string") == str(value).replace(".0", "")
+        if field == "MBANK_SOURCE_ACCOUNT":
+            return series.astype("string").fillna("") == str(value).strip()
         if field in TEXT_FIELDS:
             normalized = series.astype("string").fillna("").map(normalize_whitespace)
             return normalized == normalize_whitespace(value)

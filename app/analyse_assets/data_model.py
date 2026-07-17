@@ -30,6 +30,7 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_EXPRESS_ELIXIR_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESSOWY_PRZELEW_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_OUTFLOW,
+            MbankOperationType.WYPLATA: self.CAT_OUTFLOW,
         }
         self.inflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
@@ -39,6 +40,11 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_INVESTMENT,
+            # Zasilenie cash (wpływ na konto EUR) — znak ujemny ustawia select_asset.
+            MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INVESTMENT,
+            MbankOperationType.PRZELEW_WALUTOWY_PRZYCHODZACY: self.CAT_INVESTMENT,
+            # Wypłata gotówki z konta (np. cash EUR) — już ujemna na wyciągu.
+            MbankOperationType.WYPLATA: self.CAT_INVESTMENT,
         }
         self.investment_refund_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INVESTMENT,

@@ -52,8 +52,8 @@ class LoadCatalogEventsTests(unittest.TestCase):
 
         result = load_catalog_events(assets_date, config)
 
-        data_step_mock.init_steps.assert_called_once()
         data_step_mock.obtain_dependent.assert_called_once()
+        data_step_mock.init_steps.assert_not_called()
         args, kwargs = data_step_mock.obtain_dependent.call_args
         self.assertEqual(args[0], roi_catalog_resource(assets_date))
         self.assertEqual(args[2], Path("analyse_assets_config.xlsx"))

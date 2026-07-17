@@ -13,8 +13,6 @@ from roi.compute_roi import load_mbank_pool
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
 
-_APP_ROOT = Path(__file__).resolve().parent.parent
-
 ROI_STEP = "10 roi"
 
 
@@ -24,10 +22,6 @@ def roi_catalog_resource(assets_date: date) -> str:
 
 def roi_unallocated_resource(assets_date: date) -> str:
     return f"{ROI_STEP}/{assets_date:%Y-%m-%d}/_unallocated.parquet"
-
-
-def _ensure_data_step() -> None:
-    DATA_STEP.init_steps(root=_APP_ROOT)
 
 
 def add_mbank_consolidated_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -41,7 +35,6 @@ def load_catalog_events(
     *,
     config_path: Path | None = None,
 ) -> dict[str, pd.DataFrame]:
-    _ensure_data_step()
     if config is None:
         config = read_analyse_config(config_path)
 
@@ -61,7 +54,6 @@ def load_unallocated_mbank(
     *,
     config_path: Path | None = None,
 ) -> pd.DataFrame:
-    _ensure_data_step()
     if config is None:
         config = read_analyse_config(config_path)
 

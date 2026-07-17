@@ -27,9 +27,6 @@ def calculate_assets(
     if valuation_date is None:
         valuation_date = date.today()
 
-    local_data_steps_root = Path(__file__).parent.parent
-    DATA_STEP.init_steps(root=local_data_steps_root)
-
     if force_read_all_data:
         DATA_STEP.force_read_data()
 
