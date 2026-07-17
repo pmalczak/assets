@@ -79,7 +79,11 @@ RULES_SHEET = "rules"
 MANUAL_SHEET = "manual"
 
 DEFAULT_TRANSACTION_SOURCE = "mbank_pln"
+MBANK_EUR_TRANSACTION_SOURCE = "mbank_eur"
 MANUAL_TRANSACTION_SOURCE = "manual"
+
+# Kolumna poola ze id konta źródłowego (np. g_m_56_3217_eur).
+MBANK_SOURCE_ACCOUNT_COLUMN = "_source"
 
 MAPPING_NAMES = {
     "initial_investment",
@@ -95,6 +99,7 @@ FIELD_NAMES = {
     "MBANK_ACCOUNT_NUMBER",
     "MBANK_AMOUNT",
     "MBANK_DESCRIPTION",
+    "MBANK_SOURCE_ACCOUNT",
     "YEAR",
     "SOURCE",
 }

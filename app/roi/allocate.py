@@ -48,6 +48,21 @@ def _effective_rule_source(step_rules: pd.DataFrame, default_source: str) -> str
     return default_source
 
 
+def _split_pool_by_source(
+    df: pd.DataFrame,
+    source: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Wydziel wiersze danego source; reszta poola zostaje nietknięta przy alokacji reguł."""
+    if df.empty:
+        empty = df.copy()
+        return empty, empty
+    if AnalyseAssetsCatalog.SOURCE not in df.columns:
+        return df.copy(), df.iloc[0:0].copy()
+
+    mask = df[AnalyseAssetsCatalog.SOURCE].astype("string").fillna("") == source
+    return df.loc[mask].copy(), df.loc[~mask].copy()
+
+
 def allocate_asset_from_mbank_pool(
     df: pd.DataFrame,
     asset_id: str,
@@ -74,8 +89,10 @@ def allocate_asset_from_mbank_pool(
 
     steps.sort(key=lambda item: item[1])
 
+    scoped_pool, other_sources = _split_pool_by_source(df, default_source)
+
     event_parts: list[pd.DataFrame] = []
-    remaining = df
+    remaining = scoped_pool
     for step_kind, _, payload in steps:
         if step_kind == "manual":
             part = _build_manual_part(payload)
@@ -93,12 +110,14 @@ def allocate_asset_from_mbank_pool(
             asset_rw_to_cashflow_events(selected, asset_id, source=effective_source)
         )
 
+    merged_remaining = pd.concat([remaining, other_sources], ignore_index=True)
+
     if not event_parts:
         return df, _empty_events(asset_id)
 
     events = pd.concat(event_parts, ignore_index=True)
     CashFlowEvent.check_structure(events)
-    return remaining, events
+    return merged_remaining, events
 
 
 def asset_rw_to_cashflow_events(

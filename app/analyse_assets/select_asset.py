@@ -19,4 +19,9 @@ def select_asset(df: pd.DataFrame, selector, mapping: dict) -> tuple:
         raise ValueError(f"Brakujące wartości w mapowaniu: {missing}")
 
     selected[AssetRw.CAT] = selected[AssetRw.MBANK_DESCRIPTION].replace(mapping)
+    # INVESTMENT zawsze jako wypływ kapitału (ujemny), także przy zasileniu konta wpływem.
+    investment = selected[AssetRw.CAT] == AssetRw.CAT_INVESTMENT
+    if investment.any():
+        amounts = pd.to_numeric(selected.loc[investment, AssetRw.MBANK_AMOUNT], errors="coerce")
+        selected.loc[investment, AssetRw.MBANK_AMOUNT] = -amounts.abs()
     return remaining, selected

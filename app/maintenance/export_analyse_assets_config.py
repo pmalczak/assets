@@ -24,6 +24,7 @@ from analyse_assets.config_model import (
     CATALOG_SHEET,
     DEFAULT_TRANSACTION_SOURCE,
     MANUAL_SHEET,
+    MBANK_EUR_TRANSACTION_SOURCE,
     RULES_SHEET,
 )
 from app_proc.data_root import get_online_data_root
@@ -42,6 +43,7 @@ def _catalog() -> pd.DataFrame:
             {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa", "source": DEFAULT_TRANSACTION_SOURCE},
             {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska", "source": DEFAULT_TRANSACTION_SOURCE},
             {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "source": DEFAULT_TRANSACTION_SOURCE},
+            {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "properties_id": "cash", "source": MBANK_EUR_TRANSACTION_SOURCE},
         ]
     )
 
@@ -199,6 +201,15 @@ def _rules() -> pd.DataFrame:
     add("karpacz", "r1", 0, "initial_investment", 1, "MBANK_ACCOUNT_NUMBER", "equals", "87114020040000330286652080")
     add("karpacz", "r3", 1, "inflow_outflow", 1, "MBANK_ACCOUNT_NUMBER", "equals", "39105017511000009755659050")
     add("karpacz", "r3", 1, "inflow_outflow", 2, "MBANK_ACCOUNT_NUMBER", "equals", "52105000997198105701000230")
+
+    # cash (mbank EUR g_m_56_3217_eur) — zasilenia kapitału
+    add("cash", "r0", 0, "initial_investment", 1, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 1, "MBANK_TITLE", "contains", "DYWIDENDA")
+    add("cash", "r0", 0, "initial_investment", 2, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 2, "MBANK_TITLE", "contains", "FINGO EARN OUT")
+    add("cash", "r0", 0, "initial_investment", 3, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 3, "MBANK_DESCRIPTION", "equals", "PRZELEW WALUTOWY PRZYCHODZĄCY")
+    add("cash", "r0", 0, "initial_investment", 3, "MBANK_AMOUNT", "gte", 1000)
 
     return pd.DataFrame(rows)
 

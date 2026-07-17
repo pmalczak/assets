@@ -51,7 +51,7 @@ MBANK_UNALLOCATED_DISPLAY_COLUMNS = [
 
 
 def render_roi(default_valuation_date: date | None) -> None:
-    st.subheader("ROI nieruchomosci")
+    st.subheader("ROI (nieruchomosci + cash)")
 
     valuation_date = st.date_input(
         "Data wyceny ROI",
@@ -78,6 +78,7 @@ def render_roi(default_valuation_date: date | None) -> None:
     st.caption(
         "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties-wyceny dla otwartych inwestycji. "
         "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
+        "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
         f"Zamkniecie: CLOSING w {CONFIG_FILE_NAME}."
     )
 
@@ -115,7 +116,7 @@ def render_roi(default_valuation_date: date | None) -> None:
     unallocated = load_unallocated_mbank(valuation_date)
     st.markdown("**Transakcje mBank niezaalokowane (mbank_consolidated)**")
     st.caption(
-        "Wszystkie konta mBank PLN po usunieciu przeplywow wewnetrznych, "
+        "Wszystkie konta mBank PLN+EUR po usunieciu przeplywow wewnetrznych, "
         "bez wierszy przypisanych do inwestycji z analyse_assets_config."
     )
     st.caption(f"Liczba wierszy: {len(unallocated):,}".replace(",", " "))

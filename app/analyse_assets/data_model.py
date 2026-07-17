@@ -39,6 +39,9 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_INVESTMENT,
+            # Zasilenie cash (wpływ na konto EUR) — znak ujemny ustawia select_asset.
+            MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INVESTMENT,
+            MbankOperationType.PRZELEW_WALUTOWY_PRZYCHODZACY: self.CAT_INVESTMENT,
         }
         self.investment_refund_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INVESTMENT,
