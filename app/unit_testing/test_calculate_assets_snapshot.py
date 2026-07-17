@@ -59,8 +59,8 @@ class CalculateAssetsObtainTests(unittest.TestCase):
 
         result = calculate_assets(valuation_date=valuation_date)
 
-        data_step_mock.init_steps.assert_called_once()
         data_step_mock.obtain.assert_called_once()
+        data_step_mock.init_steps.assert_not_called()
         args, kwargs = data_step_mock.obtain.call_args
         self.assertEqual(args[0], assets_snapshot_resource(valuation_date))
         self.assertEqual(kwargs["valuation_date"], valuation_date)

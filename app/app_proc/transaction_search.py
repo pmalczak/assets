@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 
 from app_proc.data_root import get_online_data_root
-from data_step.data_step import DATA_STEP
 from importers.assets.data_model import AssetsDef, KindDomain
 from importers.assets.read_assets import read_assets
 from importers.mbank.data_model import MBankFile
@@ -50,16 +49,10 @@ REVOLUT_DEPOSIT_TEXT_COLUMNS = [
 ]
 
 
-def init_data_step() -> None:
-    local_data_steps_root = Path(__file__).resolve().parent.parent
-    DATA_STEP.init_steps(root=local_data_steps_root)
-
-
 def load_all_transactions(
     data_root: Path | None = None,
     assets: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    init_data_step()
     if data_root is None:
         data_root = get_online_data_root()
     if assets is None:

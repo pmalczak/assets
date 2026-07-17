@@ -62,7 +62,7 @@ def _build_snapshot_result(valuation_date: date, assets: pd.DataFrame) -> Snapsh
     )
 
 
-def recalculate_today_snapshot(*, force_read_all_data: bool = True) -> SnapshotResult:
+def recalculate_today_snapshot(*, force_read_all_data: bool = False) -> SnapshotResult:
     valuation_date = date.today()
     assets = calculate_assets(
         valuation_date=valuation_date,
