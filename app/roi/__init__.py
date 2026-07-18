@@ -5,7 +5,6 @@ from roi.compute_roi import (
     _aggregate_category,
     compute_portfolio_roi,
     compute_roi,
-    load_mbank_pool,
     roi_summary_to_row,
 )
 from roi.config import get_config_file, read_analyse_config
@@ -30,7 +29,6 @@ __all__ = [
     "get_config_file",
     "is_asset_sold",
     "load_catalog_events",
-    "load_mbank_pool",
     "load_unallocated_mbank",
     "read_analyse_config",
     "resolve_terminal_value",

@@ -9,7 +9,7 @@ import pandas as pd
 from analyse_assets.data_model import AssetRw
 from data_step.data_step import DATA_STEP
 from roi.allocate import allocate_catalog
-from roi.compute_roi import load_mbank_pool
+from analyse_assets.accounts_pools import load_mbank_pool
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
 
@@ -76,7 +76,8 @@ def _build_allocation(
     catalog = config["catalog"]
     catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
     pool = load_mbank_pool()
-    return allocate_catalog(pool, catalog, config["rules"], config["manual"])
+    result = allocate_catalog(pool, catalog, config["rules"], config["manual"])
+    return result
 
 
 def _build_catalog_events(

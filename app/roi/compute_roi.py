@@ -7,13 +7,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
-from app_proc.data_root import get_online_data_root
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import AssetsFile, KindDomain
 from importers.assets.property_lifecycle import catalog_properties_id
-from importers.assets.read_assets import read_assets, read_property_valuations
-from importers.mbank.read_m_transactions import read_m_transactions
+from importers.assets.read_assets import read_property_valuations
 from roi.categories import INFLOW, INVESTMENT, OUTFLOW
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
@@ -134,48 +130,3 @@ def compute_portfolio_roi(
         summaries.append(roi_summary_to_row(summary))
 
     return pd.DataFrame(summaries), events_by_asset
-
-
-def _mbank_source_for_currency(currency: str) -> str:
-    from analyse_assets.config_model import (
-        DEFAULT_TRANSACTION_SOURCE,
-        MBANK_EUR_TRANSACTION_SOURCE,
-    )
-
-    code = str(currency).strip().upper()
-    if code == "EUR":
-        return MBANK_EUR_TRANSACTION_SOURCE
-    if code == "PLN":
-        return DEFAULT_TRANSACTION_SOURCE
-    raise ValueError(f"Nieobsługiwana waluta konta mBank w poolu ROI: {currency!r}")
-
-
-def load_mbank_pool() -> pd.DataFrame:
-    from analyse_assets.config_model import (
-        AnalyseAssetsCatalog,
-        DEFAULT_TRANSACTION_SOURCE,
-        MBANK_SOURCE_ACCOUNT_COLUMN,
-    )
-
-    assets = read_assets()
-    assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
-    assets = assets[assets[AssetsFile.CURRENCY].isin(["PLN", "EUR"])]
-
-    data_root = get_online_data_root()
-    statements = []
-    for _, asset_row in assets.iterrows():
-        asset_id = str(asset_row[AssetsFile.ID])
-        source = _mbank_source_for_currency(asset_row[AssetsFile.CURRENCY])
-        df = read_m_transactions(data_root, asset_id)
-        df[MBANK_SOURCE_ACCOUNT_COLUMN] = asset_id
-        df[AnalyseAssetsCatalog.SOURCE] = source
-        statements.append(df)
-
-    if not statements:
-        return pd.DataFrame()
-
-    df, _report, _meta = consolidate_many_drop_internal_transfers(statements)
-    if AnalyseAssetsCatalog.SOURCE not in df.columns:
-        df[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
-    return df
-

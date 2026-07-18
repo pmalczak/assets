@@ -23,20 +23,14 @@ from analyse_assets.build_selector import (
     is_blank_rule_value,
     rule_cell_str,
 )
-from analyse_assets.config_model import (
-    CATALOG_SHEET,
-    CATEGORY_NAMES,
-    DEFAULT_TRANSACTION_SOURCE,
-    MANUAL_SHEET,
-    MANUAL_TRANSACTION_SOURCE,
-    MBANK_EUR_TRANSACTION_SOURCE,
-    MAPPING_NAMES,
-    OPERATOR_NAMES,
-    RULES_SHEET,
-    AnalyseAssetsCatalog,
-    AnalyseAssetsManual,
-    AnalyseAssetsRules,
-)
+from analyse_assets.accounts_pools import load_mbank_pool
+from analyse_assets.build_selector import build_step_selector, get_mapping
+from analyse_assets.select_asset import select_asset
+from analyse_assets.config_model import CATALOG_SHEET, CATEGORY_NAMES, DEFAULT_TRANSACTION_SOURCE
+from analyse_assets.config_model import MANUAL_SHEET, MANUAL_TRANSACTION_SOURCE
+from analyse_assets.config_model import MBANK_EUR_TRANSACTION_SOURCE, MAPPING_NAMES, OPERATOR_NAMES
+from analyse_assets.config_model import RULES_SHEET
+from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsManual, AnalyseAssetsRules
 from analyse_assets.data_model import AssetRw
 from roi.config import get_config_file, read_analyse_config
 
@@ -658,8 +652,6 @@ def _validate_against_pool(
     report: ValidationReport,
 ) -> None:
     """Opcjonalna walidacja względem poola (dziś mbank_pln)."""
-    from analyse_assets.build_selector import build_step_selector, get_mapping
-    from analyse_assets.select_asset import select_asset
 
     if pool is None or pool.empty:
         report.add(
@@ -778,8 +770,6 @@ def validate_analyse_config(
 
     if check_pool:
         if pool is None:
-            from roi.compute_roi import load_mbank_pool
-
             pool = load_mbank_pool()
         _validate_against_pool(catalog, rules, pool, report)
 
