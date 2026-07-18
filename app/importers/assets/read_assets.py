@@ -13,20 +13,55 @@ from importers.assets.data_model import (
     PROPERTIES_VALUATIONS_SHEET,
     PropertyValuations,
 )
+from importers.assets.pool_id import (
+    MBANK_EUR,
+    MBANK_PLN,
+    POOL_ID_COLUMN,
+    POOL_IDS,
+    REVOLUT_EUR,
+    REVOLUT_PLN,
+    assign_pool_id,
+)
 from app_proc.data_root import get_online_data_root
 from data_step.data_step import DATA_STEP
 
 ASSETS_FILE_NAME = "assets_1.xlsx"
 ASSETS_PARQUET = "assets.parquet"
 
+# Kolumny runtime — nie należą do schematu Excela / parquet źródłowego.
+_RUNTIME_ASSET_COLUMNS = (POOL_ID_COLUMN,)
+
+# Re-export dla kompatybilności importów.
+__all__ = [
+    "ASSETS_FILE_NAME",
+    "ASSETS_PARQUET",
+    "MBANK_EUR",
+    "MBANK_PLN",
+    "POOL_IDS",
+    "REVOLUT_EUR",
+    "REVOLUT_PLN",
+    "assign_pool_id",
+    "get_assets_file",
+    "read_assets",
+    "read_asset_sheet",
+    "read_gold_coin_purchase_rules",
+    "read_gold_coin_valuations",
+    "read_property_valuations",
+]
+
+
+def _drop_runtime_columns(df: pd.DataFrame) -> pd.DataFrame:
+    drop = [c for c in _RUNTIME_ASSET_COLUMNS if c in df.columns]
+    return df.drop(columns=drop) if drop else df
+
 
 def read_assets() -> pd.DataFrame:
     _out = ASSETS_PARQUET
 
     r = DATA_STEP.obtain_dependent(_out, _read_assets, get_assets_file())
-    result = r.data_frame()
+    result = _drop_runtime_columns(r.data_frame())
     AssetsFile.check_structure(result)
-    return result
+    return assign_pool_id(result)
 
 
 def get_assets_file() -> Path:
@@ -73,6 +108,8 @@ def _property_valuations_sheet_name(source_file: Path) -> str:
 def _read_assets(source_file = None) -> pd.DataFrame:
     assert source_file.is_file()
     assets = pd.read_excel(source_file, sheet_name='assets')
+    # pool_id jest wyliczany w read_assets(); ignoruj jeśli ktoś dopisał do Excela.
+    assets = _drop_runtime_columns(assets)
     AssetsFile.check_structure(assets)
     print(f'aktualizacja pliku {source_file}')
     return assets

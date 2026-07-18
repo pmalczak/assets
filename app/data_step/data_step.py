@@ -56,13 +56,14 @@ class DataStep(DataStepPrimitives):  # interface class
             if isinstance(v, pd.DataFrame):
                 print(f'possibly lost dependency for {product} -> arg: {k}')
 
+        self._ensure_dependency_stack()
         self._dependency_create(product)
         if input_data_set:
             self._add_dependent(product, input_data_set)
         prev = self._dependencies_stack[-1]
         self._dependencies_stack.append(product)
-        self._add_arguments_to_dependencies(product, **kwargs)
         try:
+            self._add_arguments_to_dependencies(product, **kwargs)
             result = self._obtain_from_cache_or_collect(data_collector, product,
                                                         input_data_set, keep_cached, **kwargs)
         except Exception as e:
@@ -73,11 +74,7 @@ class DataStep(DataStepPrimitives):  # interface class
                 pass
             raise e
         finally:
-            if not self._dependencies_stack:
-                raise RuntimeError(
-                    f"DATA_STEP stack is empty while finishing obtain({product!r})"
-                )
-            last_element = self._dependencies_stack.pop()
+            last_element = self._pop_dependency_frame(product)
         self._add_dependent(prev, product)
         if last_element != product:
             raise RuntimeError(

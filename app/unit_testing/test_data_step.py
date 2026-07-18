@@ -135,6 +135,30 @@ class DataStepIntegrationTests(unittest.TestCase):
         self.step.init_steps(root=self.start_file)
         self.assertIs(self.step.metadata, metadata_ref)
 
+    def test_init_steps_resets_dirty_dependency_stack(self):
+        self.step.init_steps(root=self.start_file)
+        self.step._dependencies_stack.append("orphaned.parquet")
+        self.step.init_steps(root=self.start_file)
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
+    def test_obtain_recovers_from_empty_dependency_stack(self):
+        self.step.init_steps(root=self.start_file)
+        self.step._dependencies_stack = []
+
+        result = self.step.obtain(
+            "recovered.parquet",
+            lambda **kwargs: pd.DataFrame({"v": [1]}),
+        )
+        self.assertEqual(result.get_status(), REFRESHED)
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
+    def test_pop_does_not_remove_top_sentinel(self):
+        self.step.init_steps(root=self.start_file)
+        self.step._dependencies_stack = ["top"]
+        popped = self.step._pop_dependency_frame("missing.parquet")
+        self.assertEqual(popped, "top")
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
     def test_obtain_collects_and_caches_on_second_call(self):
         self.step.init_steps(root=self.start_file)
         calls = {"n": 0}

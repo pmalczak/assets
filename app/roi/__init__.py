@@ -12,6 +12,7 @@ from roi.data_model import CashFlowEvent
 from roi.roi_products import (
     load_catalog_events,
     load_unallocated_mbank,
+    load_unallocated_pool,
     roi_catalog_resource,
     roi_unallocated_resource,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "is_asset_sold",
     "load_catalog_events",
     "load_unallocated_mbank",
+    "load_unallocated_pool",
     "read_analyse_config",
     "resolve_terminal_value",
     "roi_catalog_resource",

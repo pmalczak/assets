@@ -6,12 +6,12 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from analyse_assets.account_tx import AccountTx
 from analyse_assets.config_model import CONFIG_FILE_NAME
 from analyse_assets.data_model import AssetRw
 from app_proc.export_product_excel import MBANK_CONSOLIDATED_FILE
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.mbank.data_model import MBankFile
-from roi import CashFlowEvent, get_config_file, compute_portfolio_roi, load_unallocated_mbank
+from roi import CashFlowEvent, get_config_file, compute_portfolio_roi, load_unallocated_pool
 from roi.allocate import normalize_whitespace
 
 ROI_DISPLAY_COLUMNS = {
@@ -29,24 +29,24 @@ ROI_FLOW_DISPLAY_COLUMNS = {
     CashFlowEvent.DATE: "Data",
     CashFlowEvent.AMOUNT: "Kwota",
     CashFlowEvent.CATEGORY: "Kategoria",
-    CashFlowEvent.SOURCE: "Zrodlo",
-    CashFlowEvent.DESCRIPTION: "Opis",
-    CashFlowEvent.TITLE: MBankFile.MBANK_TITLE,
-    CashFlowEvent.COUNTERPARTY: MBankFile.MBANK_TRANSACTION_PARTY,
-    CashFlowEvent.ACCOUNT_NUMBER: MBankFile.MBANK_ACCOUNT_NUMBER,
+    CashFlowEvent.SOURCE: "pool_id",
+    CashFlowEvent.DESCRIPTION: "Typ operacji",
+    CashFlowEvent.TITLE: "Tytul",
+    CashFlowEvent.COUNTERPARTY: "Kontrahent",
+    CashFlowEvent.ACCOUNT_NUMBER: "Numer konta",
 }
-MBANK_UNALLOCATED_DISPLAY_COLUMNS = [
-    MBankFile.MBANK_TRANSACTION_DATE,
+UNALLOCATED_DISPLAY_COLUMNS = [
+    AccountTx.POOL_ID,
+    AccountTx.TRANSACTION_DATE,
     AssetRw.YEAR,
     AssetRw.MONTH,
     AssetRw.DAY,
-    MBankFile.MBANK_AMOUNT,
-    MBankFile.MBANK_DESCRIPTION,
-    MBankFile.MBANK_TITLE,
-    MBankFile.MBANK_TRANSACTION_PARTY,
-    MBankFile.MBANK_ACCOUNT_NUMBER,
-    MBankFile.DEBIT_ACCOUNT,
-    "_source",
+    AccountTx.AMOUNT,
+    AccountTx.OPERATION_TYPE,
+    AccountTx.TITLE,
+    AccountTx.COUNTERPARTY,
+    AccountTx.ACCOUNT_NUMBER,
+    AccountTx.ACCOUNT_ID,
 ]
 
 
@@ -113,26 +113,27 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_csv_download",
     )
 
-    unallocated = load_unallocated_mbank(valuation_date)
-    st.markdown("**Transakcje mBank niezaalokowane (mbank_consolidated)**")
+    unallocated = load_unallocated_pool(valuation_date)
+    st.markdown("**Transakcje niezaalokowane (per pool_id)**")
     st.caption(
-        "Wszystkie konta mBank PLN+EUR po usunieciu przeplywow wewnetrznych, "
-        "bez wierszy przypisanych do inwestycji z analyse_assets_config."
+        "Konta ROR po usunieciu przeplywow wewnetrznych, "
+        "bez wierszy przypisanych do inwestycji z analyse_assets_config. "
+        "Produkty: `_unallocated_{pool_id}.parquet`."
     )
     st.caption(f"Liczba wierszy: {len(unallocated):,}".replace(",", " "))
     if unallocated.empty:
-        st.info("Brak niezaalokowanych transakcji mBank (wszystko przypisane do inwestycji).")
+        st.info("Brak niezaalokowanych transakcji (wszystko przypisane do inwestycji).")
     else:
         preview = unallocated.copy()
         for column in (
-            MBankFile.MBANK_TITLE,
-            MBankFile.MBANK_TRANSACTION_PARTY,
-            MBankFile.MBANK_DESCRIPTION,
-            MBankFile.MBANK_ACCOUNT_NUMBER,
+            AccountTx.TITLE,
+            AccountTx.COUNTERPARTY,
+            AccountTx.OPERATION_TYPE,
+            AccountTx.ACCOUNT_NUMBER,
         ):
             if column in preview.columns:
                 preview[column] = preview[column].map(normalize_whitespace)
-        display_columns = [column for column in MBANK_UNALLOCATED_DISPLAY_COLUMNS if column in preview.columns]
+        display_columns = [column for column in UNALLOCATED_DISPLAY_COLUMNS if column in preview.columns]
         st.dataframe(preview[display_columns], width="stretch", hide_index=True, height=240)
 
         unallocated_export = preview[display_columns]

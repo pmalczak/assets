@@ -16,6 +16,7 @@ class AssetsFileCls(GenericStructureClass):
     KIND = 'RODZAJ*'
     CURRENCY = 'waluta'
     NOTES = 'dostęp'
+    POOL_ID = "pool_id"
 
     def __init__(self):
         super().__init__()
@@ -28,7 +29,8 @@ class AssetsFileCls(GenericStructureClass):
             self.DESCR,
             self.KIND,
             self.CURRENCY,
-            self.NOTES}
+            self.NOTES,
+            self.POOL_ID,}
         return required
 
     def check_structure(self, df: pd.DataFrame, file=None):

@@ -56,10 +56,10 @@ def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
     check_wrong_catalogs(data_root, assets)
     assets = evaluate_assets(data_root, assets, fx_rates, valuation_date)
 
-    return _finalize_assets_snapshot(assets, valuation_date)
+    return finalize_assets_snapshot(assets, valuation_date)
 
 
-def _finalize_assets_snapshot(assets: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
+def finalize_assets_snapshot(assets: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
     result = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
     result = result[result[AssetsDef.VALUE] != 0]
     result = result.drop(columns=[AssetsDef.NOTES, LastFx.FX])

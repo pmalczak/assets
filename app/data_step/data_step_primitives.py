@@ -53,15 +53,36 @@ class DataStepPrimitives:
 
         data_steps_root = self.find_data_step_root(start=root)
         if self._initialised and self._data_steps_root == data_steps_root:
+            # Streamlit / przerwany run: ten sam root, ale stos mógł zostać brudny.
+            self._reset_dependency_stack()
+            self._dependencies = Dependencies()
             return
 
         self._data_steps_root = data_steps_root
         # metadata_params = self.data_steps + self._meta_parameters
         self.metadata = Metadata(data_steps_root)
-        self._dependencies_stack = ['top', ]  # first element is already on stack in order to get 'previous' one
+        self._reset_dependency_stack()
         self._dependencies = Dependencies()
         self._cache = {}
         self._initialised = True
+
+    def _reset_dependency_stack(self) -> None:
+        """Sentinel 'top' musi zawsze zostać — inaczej kolejny obtain → IndexError."""
+        self._dependencies_stack = ["top"]
+
+    def _ensure_dependency_stack(self) -> None:
+        if not self._dependencies_stack:
+            self._reset_dependency_stack()
+
+    def _pop_dependency_frame(self, product: str) -> str:
+        """Zdejmij ramkę obtain; nigdy nie zdejmuj sentinela 'top'."""
+        self._ensure_dependency_stack()
+        if self._dependencies_stack[-1] == product:
+            return self._dependencies_stack.pop()
+        # Stos uszkodzony (np. reset mid-flight) — nie zdejmuj 'top'.
+        if self._dependencies_stack[-1] == "top":
+            return "top"
+        return self._dependencies_stack.pop()
 
     def read_featured_file(self, data_file: Path) -> pd.DataFrame:
         self.is_initialised()
@@ -217,7 +238,14 @@ class DataStepPrimitives:
             self.metadata.is_dependent(product, source_item)
 
         predecessor_item = self._dependencies_stack[-1]
-        assert predecessor_item == product
+        if predecessor_item != product:
+            raise RuntimeError(
+                "DATA_STEP stack mismatch while reading cache: "
+                f"expected product={product!r} on top, got {predecessor_item!r}, "
+                f"stack={self._dependencies_stack!r}. "
+                "Zwykle po przerwanym runie Streamlit — zrestartuj appkę "
+                "(init_steps czyści stos przy kolejnym starcie)."
+            )
         # data_file_path = self.get_absolute_file_path(product)
         data_file_path = self.metadata.token_as_path(product)
         data = self.read_featured_file(data_file_path)

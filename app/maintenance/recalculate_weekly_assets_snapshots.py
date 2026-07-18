@@ -21,14 +21,15 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
+from data_step.data_step import DATA_STEP
 from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE, ASSETS_SNAPSHOT_STEP
-from app_proc.recalculate_snapshots import (
-    recalculate_weekly_snapshots,
-    valuation_dates_one_year_back,
-)
+from app_proc.recalculate_snapshots import recalculate_weekly_snapshots, valuation_dates_one_year_back
 
 
 def main() -> int:
+    local_data_steps_root = Path(__file__)
+    DATA_STEP.init_steps(root=local_data_steps_root)
+
     parser = argparse.ArgumentParser(
         description=f"Przelicz snapshoty portfela ({ASSETS_SNAPSHOT_STEP}) we wtorki, srody, piatki i niedziele z ostatniego roku.",
     )

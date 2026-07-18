@@ -2,9 +2,7 @@
 """
 Walidacja analyse_assets_config.xlsx względem schematu i rzeczywistych procedur.
 
-Wspiera źródła mbank_pln i mbank_eur (pola MBANK_*).
-Rozszerzenie o Revolut: dodać źródło do SUPPORTED_TRANSACTION_SOURCES
-oraz zestaw pól w FIELDS_BY_SOURCE / OPERATORS_BY_FIELD.
+Wspiera pool_id z POOL_IDS (pola semantyczne + aliasy MBANK_*).
 """
 from __future__ import annotations
 
@@ -23,44 +21,58 @@ from analyse_assets.build_selector import (
     is_blank_rule_value,
     rule_cell_str,
 )
-from analyse_assets.accounts_pools import load_mbank_pool
+from analyse_assets.accounts_pools import load_accounts_pool
 from analyse_assets.build_selector import build_step_selector, get_mapping
 from analyse_assets.select_asset import select_asset
-from analyse_assets.config_model import CATALOG_SHEET, CATEGORY_NAMES, DEFAULT_TRANSACTION_SOURCE
+from analyse_assets.config_model import CATALOG_SHEET, CATEGORY_NAMES, DEFAULT_POOL_ID
 from analyse_assets.config_model import MANUAL_SHEET, MANUAL_TRANSACTION_SOURCE
-from analyse_assets.config_model import MBANK_EUR_TRANSACTION_SOURCE, MAPPING_NAMES, OPERATOR_NAMES
+from analyse_assets.config_model import MAPPING_NAMES, OPERATOR_NAMES
 from analyse_assets.config_model import RULES_SHEET
 from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsManual, AnalyseAssetsRules
+from analyse_assets.account_tx import AccountTx
 from analyse_assets.data_model import AssetRw
+from importers.assets.pool_id import POOL_IDS, MBANK_PLN
 from roi.config import get_config_file, read_analyse_config
 
 Severity = Literal["error", "warning"]
 
-_MBANK_FIELDS = frozenset({
+_ACCOUNT_TX_FIELDS = frozenset({
+    "OPERATION_TYPE",
+    "TITLE",
+    "COUNTERPARTY",
+    "ACCOUNT_NUMBER",
+    "AMOUNT",
+    "ACCOUNT_ID",
+    "POOL_ID",
+    "YEAR",
+    # Aliasy przejściowe
     "MBANK_TITLE",
     "MBANK_TRANSACTION_PARTY",
     "MBANK_ACCOUNT_NUMBER",
     "MBANK_AMOUNT",
     "MBANK_DESCRIPTION",
     "MBANK_SOURCE_ACCOUNT",
-    "YEAR",
     "SOURCE",
 })
 
-# Źródła obsługiwane przez walidator / alokację (rozszerzać przy nowych poolach).
-SUPPORTED_TRANSACTION_SOURCES = frozenset({
-    DEFAULT_TRANSACTION_SOURCE,  # mbank_pln
-    MBANK_EUR_TRANSACTION_SOURCE,  # mbank_eur
-})
+# pool_id obsługiwane przez walidator / alokację.
+SUPPORTED_TRANSACTION_SOURCES = frozenset(POOL_IDS)
+SUPPORTED_POOL_IDS = SUPPORTED_TRANSACTION_SOURCES
 
-# Pola reguł dozwolone dla danego źródła transakcji.
+# Pola reguł dozwolone dla danego pool_id.
 FIELDS_BY_SOURCE: dict[str, frozenset[str]] = {
-    DEFAULT_TRANSACTION_SOURCE: _MBANK_FIELDS,
-    MBANK_EUR_TRANSACTION_SOURCE: _MBANK_FIELDS,
+    pool_id: _ACCOUNT_TX_FIELDS for pool_id in POOL_IDS
 }
 
 # Operatory sensowne dla pola (zgodne z apply_condition).
 OPERATORS_BY_FIELD: dict[str, frozenset[str]] = {
+    "TITLE": frozenset({"contains", "contains_no_regex", "equals"}),
+    "COUNTERPARTY": frozenset({"contains", "contains_no_regex", "equals"}),
+    "OPERATION_TYPE": frozenset({"contains", "contains_no_regex", "equals"}),
+    "ACCOUNT_NUMBER": frozenset({"contains", "contains_no_regex", "equals"}),
+    "ACCOUNT_ID": frozenset({"contains", "contains_no_regex", "equals"}),
+    "AMOUNT": frozenset({"equals", "gt", "gte", "lte", "lt"}),
+    "POOL_ID": frozenset({"equals", "contains", "contains_no_regex"}),
     "MBANK_TITLE": frozenset({"contains", "contains_no_regex", "equals"}),
     "MBANK_TRANSACTION_PARTY": frozenset({"contains", "contains_no_regex", "equals"}),
     "MBANK_DESCRIPTION": frozenset({"contains", "contains_no_regex", "equals"}),
@@ -130,17 +142,17 @@ def _loc_manual(asset_id, row_idx) -> str:
 
 
 def _catalog_source(row: pd.Series) -> str:
-    if AnalyseAssetsCatalog.SOURCE not in row.index or is_blank_rule_value(
-        row[AnalyseAssetsCatalog.SOURCE]
+    if AnalyseAssetsCatalog.POOL_ID not in row.index or is_blank_rule_value(
+        row[AnalyseAssetsCatalog.POOL_ID]
     ):
-        return DEFAULT_TRANSACTION_SOURCE
-    return str(row[AnalyseAssetsCatalog.SOURCE]).strip()
+        return DEFAULT_POOL_ID
+    return str(row[AnalyseAssetsCatalog.POOL_ID]).strip()
 
 
 def _step_effective_source(step_rules: pd.DataFrame, default_source: str) -> str:
-    if AnalyseAssetsRules.SOURCE not in step_rules.columns:
+    if AnalyseAssetsRules.POOL_ID not in step_rules.columns:
         return default_source
-    for value in step_rules[AnalyseAssetsRules.SOURCE].tolist():
+    for value in step_rules[AnalyseAssetsRules.POOL_ID].tolist():
         if not is_blank_rule_value(value):
             return str(value).strip()
     return default_source
@@ -189,16 +201,16 @@ def _validate_catalog(catalog: pd.DataFrame, report: ValidationReport) -> set[st
                 CATALOG_SHEET,
                 loc,
                 "invalid_catalog_source",
-                f"source={source!r} jest zarezerwowane dla wierszy manual",
+                f"pool_id={source!r} jest zarezerwowane dla wierszy manual",
             )
-        elif source not in SUPPORTED_TRANSACTION_SOURCES:
+        elif source not in SUPPORTED_POOL_IDS:
             report.add(
                 "error",
                 CATALOG_SHEET,
                 loc,
                 "unsupported_source",
-                f"source={source!r} nie jest obsługiwane "
-                f"(dozwolone: {sorted(SUPPORTED_TRANSACTION_SOURCES)})",
+                f"pool_id={source!r} nie jest obsługiwane "
+                f"(dozwolone: {sorted(SUPPORTED_POOL_IDS)})",
             )
 
     duplicates = {a for a in asset_ids if asset_ids.count(a) > 1}
@@ -274,7 +286,7 @@ def _validate_rule_value(field_name: str, operator: str, value, report: Validati
                 f"YEAR zwykle jest 4-cyfrowe, jest {value!r}",
             )
 
-    if field_name == "MBANK_AMOUNT" or (
+    if field_name in {"MBANK_AMOUNT", "AMOUNT"} or (
         field_name != "YEAR" and operator in {"gte", "gt", "lte", "lt"}
     ):
         if field_name == "YEAR":
@@ -290,7 +302,7 @@ def _validate_rule_value(field_name: str, operator: str, value, report: Validati
                 f"value={value!r} musi być liczbą dla {field_name}/{operator}",
             )
 
-    if field_name == "MBANK_ACCOUNT_NUMBER" and not is_blank_rule_value(value):
+    if field_name in {"MBANK_ACCOUNT_NUMBER", "ACCOUNT_NUMBER"} and not is_blank_rule_value(value):
         text = str(value).strip().replace(".0", "")
         if " " in text or not text.isdigit():
             report.add(
@@ -301,16 +313,16 @@ def _validate_rule_value(field_name: str, operator: str, value, report: Validati
                 f"Numer konta zwykle to same cyfry bez spacji, jest {value!r}",
             )
 
-    if field_name == "SOURCE" and not is_blank_rule_value(value):
+    if field_name in {"SOURCE", "POOL_ID"} and not is_blank_rule_value(value):
         text = str(value).strip()
-        if text not in SUPPORTED_TRANSACTION_SOURCES and text != MANUAL_TRANSACTION_SOURCE:
+        if text not in SUPPORTED_POOL_IDS and text != MANUAL_TRANSACTION_SOURCE:
             report.add(
                 "warning",
                 RULES_SHEET,
                 loc,
                 "source_filter_unknown",
-                f"Selektor SOURCE={text!r} nie pasuje do znanych źródeł poola "
-                f"{sorted(SUPPORTED_TRANSACTION_SOURCES)}",
+                f"Selektor {field_name}={text!r} nie pasuje do znanych pool_id "
+                f"{sorted(SUPPORTED_POOL_IDS)}",
             )
 
 
@@ -392,7 +404,7 @@ def _validate_rules(
                 f"(dozwolone: {sorted(OPERATOR_NAMES)})",
             )
 
-        rule_source = row.get(AnalyseAssetsRules.SOURCE)
+        rule_source = row.get(AnalyseAssetsRules.POOL_ID)
         if not is_blank_rule_value(rule_source):
             rule_source = str(rule_source).strip()
             if rule_source == MANUAL_TRANSACTION_SOURCE:
@@ -401,22 +413,22 @@ def _validate_rules(
                     RULES_SHEET,
                     loc,
                     "invalid_rule_source",
-                    f"source={rule_source!r} jest zarezerwowane dla wierszy manual",
+                    f"pool_id={rule_source!r} jest zarezerwowane dla wierszy manual",
                 )
-            elif rule_source not in SUPPORTED_TRANSACTION_SOURCES:
+            elif rule_source not in SUPPORTED_POOL_IDS:
                 report.add(
                     "error",
                     RULES_SHEET,
                     loc,
                     "unsupported_source",
-                    f"source={rule_source!r} nie jest obsługiwane "
-                    f"(puste=inherit, dozwolone: {sorted(SUPPORTED_TRANSACTION_SOURCES)})",
+                    f"pool_id={rule_source!r} nie jest obsługiwane "
+                    f"(puste=inherit, dozwolone: {sorted(SUPPORTED_POOL_IDS)})",
                 )
 
-        default_source = catalog_source_by_id.get(asset_id, DEFAULT_TRANSACTION_SOURCE)
+        default_source = catalog_source_by_id.get(asset_id, DEFAULT_POOL_ID)
         effective = (
             str(rule_source).strip()
-            if not is_blank_rule_value(row.get(AnalyseAssetsRules.SOURCE))
+            if not is_blank_rule_value(row.get(AnalyseAssetsRules.POOL_ID))
             else default_source
         )
         allowed_fields = FIELDS_BY_SOURCE.get(effective)
@@ -665,9 +677,9 @@ def _validate_against_pool(
 
     if AssetRw.YEAR not in pool.columns:
         pool = AssetRw.add_ymd_columns(pool.copy())
-    if AnalyseAssetsCatalog.SOURCE not in pool.columns:
+    if AccountTx.POOL_ID not in pool.columns:
         pool = pool.copy()
-        pool[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
+        pool[AccountTx.POOL_ID] = DEFAULT_POOL_ID
 
     enabled = catalog[catalog[AnalyseAssetsCatalog.ENABLED].astype(bool)]
     for _, asset_row in enabled.iterrows():
@@ -677,7 +689,7 @@ def _validate_against_pool(
         if asset_rules.empty:
             continue
 
-        remaining = pool
+        remaining = pool[pool[AccountTx.POOL_ID].astype(str) == default_source].copy()
         for (step_id, step_order), step_rules in asset_rules.groupby(
             [AnalyseAssetsRules.STEP_ID, AnalyseAssetsRules.STEP_ORDER],
             sort=False,
@@ -685,14 +697,14 @@ def _validate_against_pool(
             loc = f"asset_id={asset_id!r} step_id={step_id!r} step_order={step_order}"
             mapping_name = str(step_rules[AnalyseAssetsRules.MAPPING].iloc[0])
             effective = _step_effective_source(step_rules, default_source)
-            if effective not in SUPPORTED_TRANSACTION_SOURCES:
+            if effective not in SUPPORTED_POOL_IDS:
                 report.add(
                     "warning",
                     RULES_SHEET,
                     loc,
                     "pool_source_skip",
-                    f"Krok source={effective!r} — walidacja poola pominięta "
-                    f"(obsługiwane: {sorted(SUPPORTED_TRANSACTION_SOURCES)})",
+                    f"Krok pool_id={effective!r} — walidacja poola pominięta "
+                    f"(obsługiwane: {sorted(SUPPORTED_POOL_IDS)})",
                 )
                 continue
             try:
@@ -770,7 +782,21 @@ def validate_analyse_config(
 
     if check_pool:
         if pool is None:
-            pool = load_mbank_pool()
+            frames = []
+            for pool_id in sorted(
+                {
+                    _catalog_source(row)
+                    for _, row in catalog.iterrows()
+                    if bool(row.get(AnalyseAssetsCatalog.ENABLED, True))
+                }
+            ):
+                if pool_id in SUPPORTED_POOL_IDS:
+                    frames.append(load_accounts_pool(pool_id))
+            pool = (
+                pd.concat([f for f in frames if f is not None and not f.empty], ignore_index=True)
+                if frames
+                else load_accounts_pool(MBANK_PLN)
+            )
         _validate_against_pool(catalog, rules, pool, report)
 
     return report

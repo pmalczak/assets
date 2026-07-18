@@ -2,51 +2,62 @@ from __future__ import annotations
 
 import pandas as pd
 
-from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_many_drop_internal_transfers
-from analyse_assets.config_model import DEFAULT_TRANSACTION_SOURCE, MBANK_EUR_TRANSACTION_SOURCE
-from analyse_assets.config_model import AnalyseAssetsCatalog, MBANK_SOURCE_ACCOUNT_COLUMN
+from analyse_assets.account_tx import (
+    AccountTx,
+    empty_account_tx,
+    mbank_statement_to_account_tx,
+    revolut_statement_to_account_tx,
+)
+from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_account_tx_drop_internal_transfers
 from app_proc.data_root import get_online_data_root
-from importers.assets.data_model import AssetsFile, KindDomain
+from importers.assets.data_model import AssetsFile
+from importers.assets.pool_id import POOL_ID_COLUMN, POOL_IDS
 from importers.assets.read_assets import read_assets
 from importers.mbank.read_m_transactions import read_m_transactions
+from importers.revolut.read_r_transactions import read_revolut_account_transactions
 
 
-MBANK_PLN = 'mbank_pln'
-MBANK_EUR = 'mbank_eur'
-REVOLUT_PLN = 'revolut_pln'
-REVOLUT_EUR = 'revolut_eur'
+def load_accounts_pool(pool_id: str) -> pd.DataFrame:
+    """Wczytuje i konsoliduje transakcje ROR dla danego pool_id (AccountTx)."""
+    if pool_id not in POOL_IDS:
+        raise ValueError(f"Nieznany pool_id={pool_id!r}; dozwolone: {POOL_IDS}")
 
-POOL_IDS = (MBANK_EUR, MBANK_PLN, REVOLUT_EUR, REVOLUT_PLN)
-
-
-def load_mbank_pool() -> pd.DataFrame:
     assets = read_assets()
-    assets = assets[assets[AssetsFile.KIND].str.startswith(KindDomain.MBANK)]
-    assets = assets[assets[AssetsFile.CURRENCY].isin(["PLN", "EUR"])]
+    assets = assets[assets[POOL_ID_COLUMN].astype(str) == pool_id]
+    if assets.empty:
+        return empty_account_tx()
 
     data_root = get_online_data_root()
-    statements = []
-    for _, asset_row in assets.iterrows():
-        asset_id = str(asset_row[AssetsFile.ID])
-        source = _mbank_source_for_currency(asset_row[AssetsFile.CURRENCY])
-        df = read_m_transactions(data_root, asset_id)
-        df[MBANK_SOURCE_ACCOUNT_COLUMN] = asset_id
-        df[AnalyseAssetsCatalog.SOURCE] = source
-        statements.append(df)
+    statements: list[pd.DataFrame] = []
+
+    if pool_id.startswith("mbank"):
+        for _, asset_row in assets.iterrows():
+            asset_id = str(asset_row[AssetsFile.ID])
+            raw = read_m_transactions(data_root, asset_id)
+            statements.append(
+                mbank_statement_to_account_tx(raw, account_id=asset_id, pool_id=pool_id)
+            )
+        bank = "mbank"
+    elif pool_id.startswith("revolut"):
+        for _, asset_row in assets.iterrows():
+            asset_id = str(asset_row[AssetsFile.ID])
+            raw = read_revolut_account_transactions(data_root / asset_id, asset_id)
+            statements.append(
+                revolut_statement_to_account_tx(raw, account_id=asset_id, pool_id=pool_id)
+            )
+        bank = "revolut"
+    else:
+        raise ValueError(f"Brak obsługi banku dla pool_id={pool_id!r}")
 
     if not statements:
-        return pd.DataFrame()
+        return empty_account_tx()
 
-    df, _report, _meta = consolidate_many_drop_internal_transfers(statements)
-    if AnalyseAssetsCatalog.SOURCE not in df.columns:
-        df[AnalyseAssetsCatalog.SOURCE] = DEFAULT_TRANSACTION_SOURCE
+    df, _report, _meta = consolidate_account_tx_drop_internal_transfers(
+        statements, bank=bank
+    )
+    if AccountTx.POOL_ID not in df.columns:
+        df[AccountTx.POOL_ID] = pool_id
+    else:
+        df[AccountTx.POOL_ID] = df[AccountTx.POOL_ID].fillna(pool_id).astype(str)
+        df.loc[df[AccountTx.POOL_ID].isin({"", "nan"}), AccountTx.POOL_ID] = pool_id
     return df
-
-
-def _mbank_source_for_currency(currency: str) -> str:
-    code = str(currency).strip().upper()
-    if code == "EUR":
-        return MBANK_EUR_TRANSACTION_SOURCE
-    if code == "PLN":
-        return DEFAULT_TRANSACTION_SOURCE
-    raise ValueError(f"Nieobsługiwana waluta konta mBank w poolu ROI: {currency!r}")

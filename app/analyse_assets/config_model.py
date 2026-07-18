@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+from analyse_assets.account_tx import AccountTx
+from importers.assets.pool_id import MBANK_EUR, MBANK_PLN, REVOLUT_EUR, REVOLUT_PLN
 from importers.data_model_generic import GenericStructureClass
 
 
@@ -10,7 +12,9 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
     ORDER = "order"
     ENABLED = "enabled"
     PROPERTIES_ID = "properties_id"
-    SOURCE = "source"
+    POOL_ID = "pool_id"
+    # Alias przejściowy (stara kolumna Excel `source`).
+    SOURCE = POOL_ID
 
     def expected_columns(self) -> set:
         return {
@@ -19,7 +23,7 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
             self.ORDER,
             self.ENABLED,
             self.PROPERTIES_ID,
-            self.SOURCE,
+            self.POOL_ID,
         }
 
 
@@ -33,7 +37,8 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
     OPERATOR = "operator"
     VALUE = "value"
     UWAGI = "Uwagi"
-    SOURCE = "source"
+    POOL_ID = "pool_id"
+    SOURCE = POOL_ID
 
     def expected_columns(self) -> set:
         return {
@@ -46,7 +51,7 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
             self.OPERATOR,
             self.VALUE,
             self.UWAGI,
-            self.SOURCE,
+            self.POOL_ID,
         }
 
 
@@ -78,12 +83,14 @@ CATALOG_SHEET = "assets"
 RULES_SHEET = "rules"
 MANUAL_SHEET = "manual"
 
-DEFAULT_TRANSACTION_SOURCE = "mbank_pln"
-MBANK_EUR_TRANSACTION_SOURCE = "mbank_eur"
+DEFAULT_POOL_ID = MBANK_PLN
+DEFAULT_TRANSACTION_SOURCE = DEFAULT_POOL_ID
+MBANK_EUR_TRANSACTION_SOURCE = MBANK_EUR
 MANUAL_TRANSACTION_SOURCE = "manual"
 
-# Kolumna poola ze id konta źródłowego (np. g_m_56_3217_eur).
-MBANK_SOURCE_ACCOUNT_COLUMN = "_source"
+# Kolumna id konta źródłowego w AccountTx.
+ACCOUNT_ID_COLUMN = AccountTx.ACCOUNT_ID
+MBANK_SOURCE_ACCOUNT_COLUMN = ACCOUNT_ID_COLUMN
 
 MAPPING_NAMES = {
     "initial_investment",
@@ -93,14 +100,22 @@ MAPPING_NAMES = {
     "inflow",
 }
 
+# Preferowane nazwy semantyczne + aliasy MBANK_* / SOURCE.
 FIELD_NAMES = {
+    "OPERATION_TYPE",
+    "TITLE",
+    "COUNTERPARTY",
+    "ACCOUNT_NUMBER",
+    "AMOUNT",
+    "ACCOUNT_ID",
+    "POOL_ID",
+    "YEAR",
     "MBANK_TITLE",
     "MBANK_TRANSACTION_PARTY",
     "MBANK_ACCOUNT_NUMBER",
     "MBANK_AMOUNT",
     "MBANK_DESCRIPTION",
     "MBANK_SOURCE_ACCOUNT",
-    "YEAR",
     "SOURCE",
 }
 
@@ -120,3 +135,5 @@ CATEGORY_NAMES = {
     "OUTFLOW",
     "CLOSING",
 }
+
+KNOWN_POOL_IDS = frozenset({MBANK_PLN, MBANK_EUR, REVOLUT_PLN, REVOLUT_EUR})

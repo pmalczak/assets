@@ -6,12 +6,9 @@ from datetime import date
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before, format_date_columns
-from importers.assets.data_model import AssetsDef, Properties, PropertyValuations
-from importers.assets.property_lifecycle import (
-    latest_valuation_on_date,
-    load_property_close_dates,
-    property_ids_in_scope,
-)
+from importers.assets.data_model import AssetsDef, PropertyValuations
+from importers.assets.property_lifecycle import latest_valuation_on_date, load_property_close_dates
+from importers.assets.property_lifecycle import property_ids_in_scope
 from importers.assets.read_assets import get_assets_file, read_property_valuations
 from roi.config import read_analyse_config
 

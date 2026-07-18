@@ -22,7 +22,7 @@ if str(APP_ROOT) not in sys.path:
 from analyse_assets.config_model import (
     CONFIG_FILE_NAME,
     CATALOG_SHEET,
-    DEFAULT_TRANSACTION_SOURCE,
+    DEFAULT_POOL_ID,
     MANUAL_SHEET,
     MBANK_EUR_TRANSACTION_SOURCE,
     RULES_SHEET,
@@ -33,17 +33,17 @@ from app_proc.data_root import get_online_data_root
 def _catalog() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "source": DEFAULT_TRANSACTION_SOURCE},
-            {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "properties_id": "cash", "source": MBANK_EUR_TRANSACTION_SOURCE},
+            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "properties_id": "cash", "pool_id": MBANK_EUR_TRANSACTION_SOURCE},
         ]
     )
 
@@ -58,7 +58,7 @@ def _rule(
     operator: str,
     value,
     uwagi: str = "",
-    source: str = "",
+    pool_id: str = "",
 ) -> dict:
     return {
         "asset_id": asset_id,
@@ -70,7 +70,7 @@ def _rule(
         "operator": operator,
         "value": value,
         "Uwagi": uwagi,
-        "source": source,
+        "pool_id": pool_id,
     }
 
 
@@ -203,13 +203,13 @@ def _rules() -> pd.DataFrame:
     add("karpacz", "r3", 1, "inflow_outflow", 2, "MBANK_ACCOUNT_NUMBER", "equals", "52105000997198105701000230")
 
     # cash (mbank EUR g_m_56_3217_eur) — zasilenia kapitału
-    add("cash", "r0", 0, "initial_investment", 1, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
-    add("cash", "r0", 0, "initial_investment", 1, "MBANK_TITLE", "contains", "DYWIDENDA")
-    add("cash", "r0", 0, "initial_investment", 2, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
-    add("cash", "r0", 0, "initial_investment", 2, "MBANK_TITLE", "contains", "FINGO EARN OUT")
-    add("cash", "r0", 0, "initial_investment", 3, "MBANK_SOURCE_ACCOUNT", "equals", "g_m_56_3217_eur")
-    add("cash", "r0", 0, "initial_investment", 3, "MBANK_DESCRIPTION", "equals", "PRZELEW WALUTOWY PRZYCHODZĄCY")
-    add("cash", "r0", 0, "initial_investment", 3, "MBANK_AMOUNT", "gte", 1000)
+    add("cash", "r0", 0, "initial_investment", 1, "ACCOUNT_ID", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 1, "TITLE", "contains", "DYWIDENDA")
+    add("cash", "r0", 0, "initial_investment", 2, "ACCOUNT_ID", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 2, "TITLE", "contains", "FINGO EARN OUT")
+    add("cash", "r0", 0, "initial_investment", 3, "ACCOUNT_ID", "equals", "g_m_56_3217_eur")
+    add("cash", "r0", 0, "initial_investment", 3, "OPERATION_TYPE", "equals", "PRZELEW WALUTOWY PRZYCHODZĄCY")
+    add("cash", "r0", 0, "initial_investment", 3, "AMOUNT", "gte", 1000)
 
     return pd.DataFrame(rows)
 

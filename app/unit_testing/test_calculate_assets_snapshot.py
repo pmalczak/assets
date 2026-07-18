@@ -4,10 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from app_proc.calculate_assets import (
-    _finalize_assets_snapshot,
-    calculate_assets, ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE, assets_snapshot_resource,
-)
+from app_proc.calculate_assets import finalize_assets_snapshot, calculate_assets, assets_snapshot_resource
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
 from app_proc.data_steps_root import get_data_steps_root
 from importers.assets.data_model import AssetsDef, AssetsFile
 
@@ -42,7 +40,7 @@ class FinalizeAssetsSnapshotTests(unittest.TestCase):
                 }
             ]
         )
-        result = _finalize_assets_snapshot(assets, date(2026, 7, 7))
+        result = finalize_assets_snapshot(assets, date(2026, 7, 7))
         self.assertEqual(result[PORTFOLIO_VALUATION_DATE].iloc[0], "2026-07-07")
         self.assertNotIn("fx", result.columns)
         self.assertNotIn(AssetsFile.NOTES, result.columns)

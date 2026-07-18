@@ -179,13 +179,13 @@ class ManualAllocationTests(unittest.TestCase):
         raw = pd.DataFrame(
             [
                 {
-                    AssetRw.MBANK_TRANSACTION_DATE: "2020-01-01",
-                    AssetRw.MBANK_AMOUNT: -100.0,
+                    AssetRw.TRANSACTION_DATE: "2020-01-01",
+                    AssetRw.AMOUNT: -100.0,
                     AssetRw.CAT: AssetRw.CAT_INVESTMENT,
-                    AssetRw.MBANK_DESCRIPTION: "PRZELEW",
-                    MBankFile.MBANK_TITLE: "  umowa   nr   123  ",
-                    MBankFile.MBANK_TRANSACTION_PARTY: "  Jan   Kowalski  ",
-                    MBankFile.MBANK_ACCOUNT_NUMBER: "  12 3456 7890  ",
+                    AssetRw.OPERATION_TYPE: "PRZELEW",
+                    AssetRw.TITLE: "  umowa   nr   123  ",
+                    AssetRw.COUNTERPARTY: "  Jan   Kowalski  ",
+                    AssetRw.ACCOUNT_NUMBER: "  12 3456 7890  ",
                 }
             ]
         )

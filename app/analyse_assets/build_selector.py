@@ -5,32 +5,49 @@ __author__ = "pmalczak@gmail.com"
 
 import pandas as pd
 
-from analyse_assets.config_model import (
-    AnalyseAssetsCatalog,
-    AnalyseAssetsRules,
-    MBANK_SOURCE_ACCOUNT_COLUMN,
-    OPERATOR_NAMES,
-)
+from analyse_assets.account_tx import AccountTx
+from analyse_assets.config_model import AnalyseAssetsRules, OPERATOR_NAMES
 from analyse_assets.data_model import AssetRw
 
 
 FIELD_MAP = {
-    "MBANK_TITLE": AssetRw.MBANK_TITLE,
-    "MBANK_TRANSACTION_PARTY": AssetRw.MBANK_TRANSACTION_PARTY,
-    "MBANK_ACCOUNT_NUMBER": AssetRw.MBANK_ACCOUNT_NUMBER,
-    "MBANK_AMOUNT": AssetRw.MBANK_AMOUNT,
-    "MBANK_DESCRIPTION": AssetRw.MBANK_DESCRIPTION,
-    "MBANK_SOURCE_ACCOUNT": MBANK_SOURCE_ACCOUNT_COLUMN,
-    "YEAR": AssetRw.YEAR,
-    "SOURCE": AnalyseAssetsCatalog.SOURCE,
+    # Preferowane nazwy semantyczne → AccountTx
+    "OPERATION_TYPE": AccountTx.OPERATION_TYPE,
+    "TITLE": AccountTx.TITLE,
+    "COUNTERPARTY": AccountTx.COUNTERPARTY,
+    "ACCOUNT_NUMBER": AccountTx.ACCOUNT_NUMBER,
+    "AMOUNT": AccountTx.AMOUNT,
+    "ACCOUNT_ID": AccountTx.ACCOUNT_ID,
+    "POOL_ID": AccountTx.POOL_ID,
+    "YEAR": AccountTx.YEAR,
+    # Aliasy przejściowe (Excel rules)
+    "MBANK_TITLE": AccountTx.TITLE,
+    "MBANK_TRANSACTION_PARTY": AccountTx.COUNTERPARTY,
+    "MBANK_ACCOUNT_NUMBER": AccountTx.ACCOUNT_NUMBER,
+    "MBANK_AMOUNT": AccountTx.AMOUNT,
+    "MBANK_DESCRIPTION": AccountTx.OPERATION_TYPE,
+    "MBANK_SOURCE_ACCOUNT": AccountTx.ACCOUNT_ID,
+    "SOURCE": AccountTx.POOL_ID,
 }
 
 TEXT_FIELDS = {
+    "OPERATION_TYPE",
+    "TITLE",
+    "COUNTERPARTY",
+    "ACCOUNT_NUMBER",
+    "ACCOUNT_ID",
+    "POOL_ID",
     "MBANK_TITLE",
     "MBANK_TRANSACTION_PARTY",
     "MBANK_DESCRIPTION",
     "MBANK_SOURCE_ACCOUNT",
+    "MBANK_ACCOUNT_NUMBER",
+    "SOURCE",
 }
+
+AMOUNT_FIELDS = frozenset({"AMOUNT", "MBANK_AMOUNT"})
+ACCOUNT_NUMBER_FIELDS = frozenset({"ACCOUNT_NUMBER", "MBANK_ACCOUNT_NUMBER"})
+ACCOUNT_ID_FIELDS = frozenset({"ACCOUNT_ID", "MBANK_SOURCE_ACCOUNT"})
 
 MAPPING_MAP = {
     "initial_investment": AssetRw.initial_investment_mapping,
@@ -84,7 +101,7 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
     if col not in df.columns:
         return pd.Series(False, index=df.index)
     series = df[col]
-    if field == "MBANK_ACCOUNT_NUMBER":
+    if field in ACCOUNT_NUMBER_FIELDS:
         series = series.astype("string").str.replace(r"\.0$", "", regex=True)
 
     if operator == "contains":
@@ -94,11 +111,11 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
     if operator == "equals":
         if field == "YEAR":
             return series.astype("string") == str(value)
-        if field == "MBANK_AMOUNT":
+        if field in AMOUNT_FIELDS:
             return series == float(value)
-        if field == "MBANK_ACCOUNT_NUMBER":
+        if field in ACCOUNT_NUMBER_FIELDS:
             return series.astype("string") == str(value).replace(".0", "")
-        if field == "MBANK_SOURCE_ACCOUNT":
+        if field in ACCOUNT_ID_FIELDS:
             return series.astype("string").fillna("") == str(value).strip()
         if field in TEXT_FIELDS:
             normalized = series.astype("string").fillna("").map(normalize_whitespace)
@@ -109,7 +126,7 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
             return series.astype("string") >= str(value)
         return series >= float(value)
     if operator == "gt":
-        if field == "MBANK_AMOUNT":
+        if field in AMOUNT_FIELDS:
             return series > float(value)
         return series > value
     if operator == "lte":

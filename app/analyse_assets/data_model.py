@@ -1,26 +1,53 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 import pandas as pd
-from importers.mbank.data_model import MBankFileCls, MbankOperationType
+
+from analyse_assets.account_tx import AccountTx, add_ymd_columns
+from importers.mbank.data_model import MbankOperationType
 
 
-class ExpectedPositiveValue(Exception): pass
-class ExpectedNegativeValue(Exception): pass
+class ExpectedPositiveValue(Exception):
+    pass
 
 
-class AssetRWCls(MBankFileCls):
-    YEAR = 'ROK'
-    MONTH = 'MIESIAC'
-    DAY = 'DZIEN'
-    CAT = 'category'
+class ExpectedNegativeValue(Exception):
+    pass
 
-    CAT_INVESTMENT = '  INWESTYCJA'
-    CAT_INFLOW = ' WPŁYWY'
-    CAT_OUTFLOW = ' WYDATKI'
-    CAT_CLOSING = ' ZAMKNIĘCIE'
+
+class AssetRWCls:
+    """Warstwa ROI na kolumnach AccountTx (aliasy MBANK_* dla kompatybilności)."""
+
+    YEAR = AccountTx.YEAR
+    MONTH = AccountTx.MONTH
+    DAY = AccountTx.DAY
+    CAT = AccountTx.CAT
+
+    TRANSACTION_DATE = AccountTx.TRANSACTION_DATE
+    OPERATION_TYPE = AccountTx.OPERATION_TYPE
+    TITLE = AccountTx.TITLE
+    COUNTERPARTY = AccountTx.COUNTERPARTY
+    ACCOUNT_NUMBER = AccountTx.ACCOUNT_NUMBER
+    AMOUNT = AccountTx.AMOUNT
+    BALANCE = AccountTx.BALANCE
+    ACCOUNT_ID = AccountTx.ACCOUNT_ID
+    POOL_ID = AccountTx.POOL_ID
+
+    # Aliasy legacy (testy / stare reguły FIELD_MAP).
+    MBANK_TRANSACTION_DATE = AccountTx.TRANSACTION_DATE
+    MBANK_DESCRIPTION = AccountTx.OPERATION_TYPE
+    MBANK_TITLE = AccountTx.TITLE
+    MBANK_TRANSACTION_PARTY = AccountTx.COUNTERPARTY
+    MBANK_ACCOUNT_NUMBER = AccountTx.ACCOUNT_NUMBER
+    MBANK_AMOUNT = AccountTx.AMOUNT
+    MBANK_OUTSTANDING_BALANCE = AccountTx.BALANCE
+    MBANK_BOOKING_DATE = AccountTx.TRANSACTION_DATE
+
+    CAT_INVESTMENT = "  INWESTYCJA"
+    CAT_INFLOW = " WPŁYWY"
+    CAT_OUTFLOW = " WYDATKI"
+    CAT_CLOSING = " ZAMKNIĘCIE"
 
     def __init__(self):
-        super().__init__()
         self.inflow_outflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
@@ -40,10 +67,8 @@ class AssetRWCls(MBankFileCls):
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_INVESTMENT,
-            # Zasilenie cash (wpływ na konto EUR) — znak ujemny ustawia select_asset.
             MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WALUTOWY_PRZYCHODZACY: self.CAT_INVESTMENT,
-            # Wypłata gotówki z konta (np. cash EUR) — już ujemna na wyciągu.
             MbankOperationType.WYPLATA: self.CAT_INVESTMENT,
         }
         self.investment_refund_mapping = {
@@ -55,29 +80,13 @@ class AssetRWCls(MBankFileCls):
         }
 
     def add_ymd_columns(self, df):
-        if df is None or df.empty or self.MBANK_TRANSACTION_DATE not in df.columns:
-            return df
-
-        # Stare nazwy z ogonkami (mbank_consolidated) — usun i przebuduj.
-        legacy = [c for c in ("MIESIĄC", "DZIEŃ") if c in df.columns]
-        if legacy:
-            df = df.drop(columns=legacy)
-
-        if self.YEAR in df.columns and self.MONTH in df.columns and self.DAY in df.columns:
-            if df[self.YEAR].dtype == object or str(df[self.YEAR].dtype) == "string":
-                return df
-
-        x = pd.to_datetime(df[self.MBANK_TRANSACTION_DATE], errors="coerce")
-        df[self.YEAR] = x.dt.year.astype("string")
-        df[self.MONTH] = x.dt.month.astype("string")
-        df[self.DAY] = x.dt.day.astype("string")
-        return df
+        return add_ymd_columns(df)
 
     def check_values(self, _df: pd.DataFrame):
         df = _df.copy()
         for cat, df_group in df.groupby(self.CAT):
-            pos = df_group[df_group[self.MBANK_AMOUNT] >= 0.0]
-            neg = df_group[df_group[self.MBANK_AMOUNT] < 0.0]
+            pos = df_group[df_group[self.AMOUNT] >= 0.0]
+            neg = df_group[df_group[self.AMOUNT] < 0.0]
             if cat in (self.CAT_INVESTMENT, self.CAT_OUTFLOW):
                 if not pos.empty:
                     raise ExpectedNegativeValue(pos)
@@ -89,10 +98,10 @@ class AssetRWCls(MBankFileCls):
 
     def create(self, data: list) -> pd.DataFrame:
         cols = (
-            self.MBANK_TRANSACTION_DATE,
-            self.MBANK_AMOUNT,
+            self.TRANSACTION_DATE,
+            self.AMOUNT,
             self.CAT,
-            self.MBANK_DESCRIPTION,
+            self.OPERATION_TYPE,
         )
         r0 = pd.DataFrame(data=data, columns=cols)
         r0 = AssetRw.add_ymd_columns(r0)

@@ -97,6 +97,48 @@ class AnalyseConfigSourceTests(unittest.TestCase):
         config = read_analyse_config(path)
         self.assertEqual(config["rules"].iloc[0][AnalyseAssetsRules.SOURCE], "")
 
+    def test_legacy_source_column_renamed_to_pool_id(self):
+        catalog = pd.DataFrame(
+            [
+                {
+                    "asset_id": "aquamarina",
+                    "output_file": "mbank_aquamarina.xlsx",
+                    "order": 1,
+                    "enabled": 1,
+                    "properties_id": "aquamarina",
+                    "source": DEFAULT_TRANSACTION_SOURCE,
+                }
+            ]
+        )
+        rules = pd.DataFrame(
+            [
+                {
+                    "asset_id": "aquamarina",
+                    "step_id": "r0",
+                    "step_order": 0,
+                    "mapping": "initial_investment",
+                    "condition_group": 1,
+                    "field": "MBANK_TITLE",
+                    "operator": "contains",
+                    "value": "X",
+                    "Uwagi": "",
+                    "source": "",
+                }
+            ]
+        )
+        manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
+        path = self._write_config(catalog, rules, manual)
+
+        config = read_analyse_config(path)
+        self.assertIn(AnalyseAssetsCatalog.POOL_ID, config["catalog"].columns)
+        self.assertNotIn("source", config["catalog"].columns)
+        self.assertEqual(
+            config["catalog"].iloc[0][AnalyseAssetsCatalog.POOL_ID],
+            DEFAULT_TRANSACTION_SOURCE,
+        )
+        self.assertIn(AnalyseAssetsRules.POOL_ID, config["rules"].columns)
+
 
 if __name__ == "__main__":
     unittest.main()
+
