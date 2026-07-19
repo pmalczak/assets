@@ -7,7 +7,7 @@ import streamlit as st
 
 from app_proc.data_steps_root import get_data_steps_root
 
-TAB_LABELS = ["Wykres portfela", "Raporty", "Wyszukiwanie transakcji", "ROI", "Import wyciągów"]
+TAB_LABELS = ["Raporty", "Wykres portfela", "ROI", "Import wyciągów", "Wyszukiwanie transakcji"]
 DEFAULT_TAB = "Raporty"
 TABS_STATE_KEY = "app_assets_tab"
 

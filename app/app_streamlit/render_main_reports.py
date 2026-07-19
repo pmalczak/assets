@@ -9,7 +9,9 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.recalculate_snapshots import recalculate_today_snapshot
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
+from app_streamlit.build_data import build_portfolio_history_from_snapshots
 
 
 @st.cache_data(show_spinner=False)
@@ -20,16 +22,60 @@ def load_snapshot_for_date(snapshot_date: date) -> pd.DataFrame:
     return load_snapshot(path)
 
 
+def _clear_reports_related_cache() -> None:
+    build_portfolio_history_from_snapshots.clear()
+    load_snapshot_for_date.clear()
+
+
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import rap1, rap2
 
     st.subheader("Raporty (jak w main.py)")
 
+    today = date.today()
+    btn_col, info_col = st.columns([1, 3])
+    with btn_col:
+        generate = st.button(
+            f"Generuj snapshot ({today:%Y-%m-%d})",
+            key="generate_today_snapshot_button",
+            type="primary",
+            help="Przelicza snapshot na dziś bezwarunkowo — także gdy plik już istnieje.",
+        )
+    with info_col:
+        st.caption(
+            "Bezwarunkowe przeliczenie `calculate_assets()` na datę bieżącą "
+            f"(`{ASSETS_SNAPSHOT_STEP}/{today:%Y-%m-%d}.parquet`), niezależnie od cache."
+        )
+
+    if generate:
+        try:
+            with st.spinner(f"Generowanie snapshotu {today:%Y-%m-%d}..."):
+                result = recalculate_today_snapshot(force_read_all_data=True)
+            _clear_reports_related_cache()
+            st.session_state["reports_last_generated_snapshot"] = result.to_row()
+            st.success(
+                f"Snapshot {result.valuation_date:%Y-%m-%d}: "
+                f"{result.rows} wierszy, suma PLN {result.total_pln:,}".replace(",", " ")
+            )
+            st.rerun()
+        except Exception as exc:
+            st.error("Nie udało się wygenerować snapshotu na dziś.")
+            st.exception(exc)
+            return
+
+    last_generated = st.session_state.get("reports_last_generated_snapshot")
+    if last_generated:
+        st.caption(
+            f"Ostatnio wygenerowano w tej sesji: {last_generated['valuation_date']} "
+            f"({last_generated['rows']} wierszy)."
+        )
+
     snapshot_files = list_snapshot_files(snapshots_directory())
     if not snapshot_files:
         st.warning(
             f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
-            "Uruchom `maintenance/recalculate_weekly_assets_snapshots.py`."
+            "Użyj przycisku powyżej albo uruchom "
+            "`maintenance/recalculate_weekly_assets_snapshots.py`."
         )
         return
 
@@ -37,6 +83,8 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     default_index = len(available_dates) - 1
     if snapshot_date in available_dates:
         default_index = available_dates.index(snapshot_date)
+    if today in available_dates:
+        default_index = available_dates.index(today)
 
     selected_date = st.selectbox(
         "Data snapshotu",

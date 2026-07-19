@@ -170,12 +170,15 @@ def main():
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    tab_chart, tab_reports, tab_search, tab_roi, tab_import = st.tabs(
+    tab_reports, tab_chart, tab_roi, tab_import, tab_search = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
         on_change=on_tab_changed,
     )
+
+    with tab_reports:
+        render_main_reports(data["latest_snapshot_date"], data["latest_snapshot"])
 
     with tab_chart:
         render_portfolio_history(
@@ -185,17 +188,14 @@ def main():
         )
         render_diagnostics(data)
 
-    with tab_reports:
-        render_main_reports(data["latest_snapshot_date"], data["latest_snapshot"])
-
-    with tab_search:
-        render_transaction_search()
-
     with tab_roi:
         render_roi(data["latest_snapshot_date"])
 
     with tab_import:
         render_import_wyciagow()
+
+    with tab_search:
+        render_transaction_search()
 
 
 if __name__ == "__main__":

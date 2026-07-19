@@ -6,10 +6,16 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyse_assets.account_tx import AccountTx, add_ymd_columns, empty_account_tx
+from analyse_assets.account_tx import add_ymd_columns, empty_account_tx
 from analyse_assets.accounts_pools import load_accounts_pool
 from analyse_assets.config_model import AnalyseAssetsCatalog, DEFAULT_POOL_ID
 from analyse_assets.build_selector import is_blank_rule_value
+from app_proc.data_root import get_online_data_output
+from app_proc.export_product_excel import (
+    export_roi_product_excels,
+    export_roi_summary_excel,
+    unallocated_excel_filename,
+)
 from data_step.data_step import DATA_STEP
 from importers.assets.pool_id import POOL_IDS
 from roi.allocate import allocate_catalog
@@ -23,8 +29,8 @@ def roi_catalog_resource(assets_date: date) -> str:
     return f"{ROI_STEP}/{assets_date:%Y-%m-%d}/_catalog.parquet"
 
 
-def roi_unallocated_resource(assets_date: date, pool_id: str) -> str:
-    return f"{ROI_STEP}/{assets_date:%Y-%m-%d}/_unallocated_{pool_id}.parquet"
+def roi_summary_resource(assets_date: date) -> str:
+    return f"{ROI_STEP}/{assets_date:%Y-%m-%d}/_roi_summary.parquet"
 
 
 def add_account_tx_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,6 +61,26 @@ def load_catalog_events(
     return _split_by_asset(r.data_frame(), config["catalog"])
 
 
+def load_roi_summary(
+    assets_date: date,
+    config: dict[str, pd.DataFrame] | None = None,
+    *,
+    config_path: Path | None = None,
+) -> pd.DataFrame:
+    """Summary ROI z DATA_STEP (XIRR liczone przy rebuildzie)."""
+    if config is None:
+        config = read_analyse_config(config_path)
+
+    config_file = get_config_file(config_path)
+    r = DATA_STEP.obtain_dependent(
+        roi_summary_resource(assets_date),
+        _build_roi_summary,
+        config_file,
+        assets_date=assets_date,
+    )
+    return r.data_frame()
+
+
 def load_unallocated_pool(
     assets_date: date,
     pool_id: str | None = None,
@@ -63,13 +89,13 @@ def load_unallocated_pool(
     config_path: Path | None = None,
 ) -> pd.DataFrame:
     """
-    Niezaalokowane transakcje.
+    Niezaalokowane transakcje z Excel w product/{date}/.
+    Wymusza rebuild katalogu (eksport Excel), potem czyta pliki.
     z pool_id: jeden DF; bez: concat wszystkich znanych produktów dla daty.
     """
     if config is None:
         config = read_analyse_config(config_path)
 
-    # Catalog rebuild materializuje unallocated per pool_id.
     load_catalog_events(assets_date, config, config_path=config_path)
 
     if pool_id is not None:
@@ -79,17 +105,13 @@ def load_unallocated_pool(
     else:
         pool_ids = _enabled_pool_ids(config["catalog"])
 
-    config_file = get_config_file(config_path)
+    out_dir = get_online_data_output(assets_date)
     frames: list[pd.DataFrame] = []
     for pid in pool_ids:
-        r = DATA_STEP.obtain_dependent(
-            roi_unallocated_resource(assets_date, pid),
-            _build_unallocated_for_pool,
-            config_file,
-            assets_date=assets_date,
-            pool_id=pid,
-        )
-        frames.append(add_account_tx_ymd_columns(r.data_frame()))
+        path = out_dir / unallocated_excel_filename(pid)
+        if not path.is_file():
+            continue
+        frames.append(add_account_tx_ymd_columns(pd.read_excel(path)))
 
     if not frames:
         return empty_account_tx()
@@ -158,22 +180,12 @@ def _build_catalog_events(
     config = read_analyse_config(source_file)
     events_by_asset, unallocated_by_pool = _build_allocation(config)
 
-    for pool_id, unallocated in unallocated_by_pool.items():
-
-        def _materialize(unalloc=unallocated, **_kw) -> pd.DataFrame:
-            return unalloc
-
-        DATA_STEP.obtain(
-            roi_unallocated_resource(assets_date, pool_id),
-            _materialize,
-        )
-
-    all_unallocated = (
-        pd.concat(list(unallocated_by_pool.values()), ignore_index=True)
-        if unallocated_by_pool
-        else empty_account_tx()
+    export_roi_product_excels(
+        events_by_asset,
+        unallocated_by_pool,
+        config["catalog"],
+        assets_date,
     )
-    _export_roi_mbank_excels(events_by_asset, all_unallocated, config["catalog"], assets_date)
 
     frames = [events for events in events_by_asset.values() if not events.empty]
     if not frames:
@@ -187,34 +199,42 @@ def _build_catalog_events(
     return result
 
 
-def _build_unallocated_for_pool(
+def _build_roi_summary(
     source_file: Path | None = None,
     *,
     assets_date: date,
-    pool_id: str,
     **_kwargs,
 ) -> pd.DataFrame:
+    from importers.assets.property_lifecycle import catalog_properties_id
+    from importers.assets.read_assets import read_property_valuations
+    from roi.compute_roi import compute_roi, roi_summary_to_row
+
     config = read_analyse_config(source_file)
-    _events_by_asset, unallocated_by_pool = _build_allocation(config)
-    return add_account_tx_ymd_columns(
-        unallocated_by_pool.get(pool_id, empty_account_tx())
-    )
+    catalog = config["catalog"]
+    catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
 
+    events_by_asset = load_catalog_events(assets_date, config, config_path=source_file)
+    properties_sheet = read_property_valuations()
 
-def _export_roi_mbank_excels(
-    events_by_asset: dict[str, pd.DataFrame],
-    unallocated: pd.DataFrame,
-    catalog: pd.DataFrame,
-    assets_date: date,
-) -> None:
-    from app_proc.export_product_excel import export_roi_mbank_excels
+    summaries = []
+    for _, asset_row in catalog.iterrows():
+        asset_id = str(asset_row["asset_id"])
+        properties_id = catalog_properties_id(asset_row)
+        events = events_by_asset.get(
+            asset_id, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+        )
+        summary = compute_roi(
+            asset_id,
+            events,
+            properties_sheet,
+            assets_date,
+            properties_id=properties_id,
+        )
+        summaries.append(roi_summary_to_row(summary))
 
-    export_roi_mbank_excels(
-        events_by_asset,
-        add_account_tx_ymd_columns(unallocated),
-        catalog,
-        assets_date,
-    )
+    result = pd.DataFrame(summaries)
+    export_roi_summary_excel(result, assets_date)
+    return result
 
 
 def _split_by_asset(all_events: pd.DataFrame, catalog: pd.DataFrame) -> dict[str, pd.DataFrame]:

@@ -16,6 +16,7 @@ class AssetsFileCls(GenericStructureClass):
     KIND = 'RODZAJ*'
     CURRENCY = 'waluta'
     NOTES = 'dostęp'
+    # pool_id jest kolumną runtime (assign_pool_id), nie częścią Excela.
     POOL_ID = "pool_id"
 
     def __init__(self):
@@ -30,7 +31,7 @@ class AssetsFileCls(GenericStructureClass):
             self.KIND,
             self.CURRENCY,
             self.NOTES,
-            self.POOL_ID,}
+        }
         return required
 
     def check_structure(self, df: pd.DataFrame, file=None):
@@ -64,6 +65,10 @@ class AssetsCls(AssetsFileCls):
         result[self.IBAN] = ''
         result[self.EVALUATION_DATE] = None
         result[self.VALUE] = 0.0
+        # Odrzuć kolumny runtime (np. pool_id z read_assets), spoza schematu AssetsDef.
+        extras = [key for key in result.index if key not in self.expected_columns()]
+        if extras:
+            result = result.drop(labels=extras)
         return result
 
 

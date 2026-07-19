@@ -11,10 +11,11 @@ from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
 from roi.roi_products import (
     load_catalog_events,
+    load_roi_summary,
     load_unallocated_mbank,
     load_unallocated_pool,
     roi_catalog_resource,
-    roi_unallocated_resource,
+    roi_summary_resource,
 )
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
 
@@ -30,11 +31,12 @@ __all__ = [
     "get_config_file",
     "is_asset_sold",
     "load_catalog_events",
+    "load_roi_summary",
     "load_unallocated_mbank",
     "load_unallocated_pool",
     "read_analyse_config",
     "resolve_terminal_value",
     "roi_catalog_resource",
+    "roi_summary_resource",
     "roi_summary_to_row",
-    "roi_unallocated_resource",
 ]

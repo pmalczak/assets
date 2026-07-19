@@ -8,8 +8,6 @@ from pathlib import Path
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.property_lifecycle import catalog_properties_id
-from importers.assets.read_assets import read_property_valuations
 from roi.categories import INFLOW, INVESTMENT, OUTFLOW
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
@@ -106,27 +104,9 @@ def compute_portfolio_roi(
     valuation_date: date,
     config_path: Path | None = None,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-    from roi.roi_products import load_catalog_events
+    from roi.roi_products import load_catalog_events, load_roi_summary
 
     config = read_analyse_config(config_path)
-    catalog = config["catalog"]
-    catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
-
-    properties_sheet = read_property_valuations()
+    summary = load_roi_summary(valuation_date, config, config_path=config_path)
     events_by_asset = load_catalog_events(valuation_date, config, config_path=config_path)
-
-    summaries = []
-    for _, asset_row in catalog.iterrows():
-        asset_id = str(asset_row["asset_id"])
-        properties_id = catalog_properties_id(asset_row)
-        events = events_by_asset.get(asset_id, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
-        summary = compute_roi(
-            asset_id,
-            events,
-            properties_sheet,
-            valuation_date,
-            properties_id=properties_id,
-        )
-        summaries.append(roi_summary_to_row(summary))
-
-    return pd.DataFrame(summaries), events_by_asset
+    return summary, events_by_asset

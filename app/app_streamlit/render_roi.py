@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import io
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from analyse_assets.account_tx import AccountTx
 from analyse_assets.config_model import CONFIG_FILE_NAME
-from analyse_assets.data_model import AssetRw
-from app_proc.export_product_excel import MBANK_CONSOLIDATED_FILE
+from app_proc.export_product_excel import (
+    list_roi_product_excel_files,
+    roi_summary_excel_filename,
+)
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from roi import CashFlowEvent, get_config_file, compute_portfolio_roi, load_unallocated_pool
-from roi.allocate import normalize_whitespace
+from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 
 ROI_DISPLAY_COLUMNS = {
     "asset_id": "Aktywo",
@@ -35,19 +35,6 @@ ROI_FLOW_DISPLAY_COLUMNS = {
     CashFlowEvent.COUNTERPARTY: "Kontrahent",
     CashFlowEvent.ACCOUNT_NUMBER: "Numer konta",
 }
-UNALLOCATED_DISPLAY_COLUMNS = [
-    AccountTx.POOL_ID,
-    AccountTx.TRANSACTION_DATE,
-    AssetRw.YEAR,
-    AssetRw.MONTH,
-    AssetRw.DAY,
-    AccountTx.AMOUNT,
-    AccountTx.OPERATION_TYPE,
-    AccountTx.TITLE,
-    AccountTx.COUNTERPARTY,
-    AccountTx.ACCOUNT_NUMBER,
-    AccountTx.ACCOUNT_ID,
-]
 
 
 def render_roi(default_valuation_date: date | None) -> None:
@@ -113,39 +100,7 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_csv_download",
     )
 
-    unallocated = load_unallocated_pool(valuation_date)
-    st.markdown("**Transakcje niezaalokowane (per pool_id)**")
-    st.caption(
-        "Konta ROR po usunieciu przeplywow wewnetrznych, "
-        "bez wierszy przypisanych do inwestycji z analyse_assets_config. "
-        "Produkty: `_unallocated_{pool_id}.parquet`."
-    )
-    st.caption(f"Liczba wierszy: {len(unallocated):,}".replace(",", " "))
-    if unallocated.empty:
-        st.info("Brak niezaalokowanych transakcji (wszystko przypisane do inwestycji).")
-    else:
-        preview = unallocated.copy()
-        for column in (
-            AccountTx.TITLE,
-            AccountTx.COUNTERPARTY,
-            AccountTx.OPERATION_TYPE,
-            AccountTx.ACCOUNT_NUMBER,
-        ):
-            if column in preview.columns:
-                preview[column] = preview[column].map(normalize_whitespace)
-        display_columns = [column for column in UNALLOCATED_DISPLAY_COLUMNS if column in preview.columns]
-        st.dataframe(preview[display_columns], width="stretch", hide_index=True, height=240)
-
-        unallocated_export = preview[display_columns]
-        unallocated_buffer = io.BytesIO()
-        unallocated_export.to_excel(unallocated_buffer, index=False)
-        st.download_button(
-            label=f"Pobierz {MBANK_CONSOLIDATED_FILE}",
-            data=unallocated_buffer.getvalue(),
-            file_name=MBANK_CONSOLIDATED_FILE,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="roi_unallocated_xlsx",
-        )
+    _render_product_excel_downloads(valuation_date)
 
     warned = summary[summary["warnings"].astype(str).str.len() > 0]
     if not warned.empty:
@@ -163,3 +118,33 @@ def render_roi(default_valuation_date: date | None) -> None:
         flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
         flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
         st.dataframe(flow_display, width='stretch', hide_index=True, height=280)
+
+
+def _render_product_excel_downloads(valuation_date: date) -> None:
+    st.markdown("**Pliki Excel (product)**")
+    st.caption(
+        f"Katalog `INWESTYCJE/product/{valuation_date:%Y-%m-%d}/` — "
+        f"`{roi_summary_excel_filename(valuation_date)}`, "
+        "`unallocated_{pool_id}.xlsx`, per-asset `mbank_*.xlsx`."
+    )
+    files = list_roi_product_excel_files(valuation_date)
+    if not files:
+        st.caption("Brak plikow Excel — wygeneruj ROI (alokacja) lub sprawdz katalog product.")
+        return
+
+    for path in files:
+        _download_excel_file(path, key_prefix=f"roi_xlsx_{valuation_date:%Y%m%d}")
+
+
+def _download_excel_file(path: Path, *, key_prefix: str) -> None:
+    if not path.is_file():
+        st.caption(f"Brak pliku: `{path.name}`")
+        return
+    data = path.read_bytes()
+    st.download_button(
+        label=f"Pobierz {path.name}",
+        data=data,
+        file_name=path.name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"{key_prefix}_{path.name}",
+    )

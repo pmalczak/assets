@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-
 import streamlit as st
 
 
@@ -18,25 +16,12 @@ def render_diagnostics(data: dict[str, object]):
     c3.metric("Grup", history["group"].nunique() if not history.empty else 0)
 
     st.markdown(f"**Katalog:** `{data['snapshots_dir']}`")
-    st.markdown("**Lista snapshotow**")
     if summaries.empty:
         st.info("Brak plikow parquet w katalogu snapshotow.")
-    else:
-        display = summaries.copy()
-        display["date"] = display["date"].apply(lambda d: d.isoformat() if isinstance(d, date) else d)
-        st.dataframe(display.sort_values("date"), width='stretch', hide_index=True)
 
     st.markdown("**Ostatni snapshot per grupa**")
     st.dataframe(
         data["snapshot_by_group"].sort_values("group"),
         width='stretch',
         hide_index=True,
-    )
-
-    st.markdown("**Historia per grupa (z snapshotow)**")
-    st.dataframe(
-        history.sort_values(["date", "group"]),
-        width='stretch',
-        hide_index=True,
-        height=280,
     )

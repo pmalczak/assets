@@ -23,7 +23,8 @@ from importers.assets.pool_id import (
 )
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from importers.revolut.account_data_model import RevolutAccountFile
-from roi.roi_products import roi_unallocated_resource
+from app_proc.export_product_excel import unallocated_excel_filename
+from roi.roi_products import roi_summary_resource
 
 
 class AssignPoolIdTests(unittest.TestCase):
@@ -218,12 +219,20 @@ class SelectorFieldAliasTests(unittest.TestCase):
         self.assertFalse(alias_mask.iloc[1])
 
 
-class UnallocatedResourcePathTests(unittest.TestCase):
-    def test_unallocated_path_includes_pool_id(self):
+class RoiProductPathTests(unittest.TestCase):
+    def test_unallocated_excel_filename_includes_pool_id(self):
+        self.assertEqual(
+            unallocated_excel_filename(MBANK_EUR),
+            "unallocated_mbank_eur.xlsx",
+        )
+
+    def test_roi_summary_resource_includes_date(self):
         from datetime import date
 
-        path = roi_unallocated_resource(date(2026, 7, 17), MBANK_EUR)
-        self.assertEqual(path, "10 roi/2026-07-17/_unallocated_mbank_eur.parquet")
+        self.assertEqual(
+            roi_summary_resource(date(2026, 7, 17)),
+            "10 roi/2026-07-17/_roi_summary.parquet",
+        )
 
 
 if __name__ == "__main__":

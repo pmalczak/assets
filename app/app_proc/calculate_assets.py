@@ -30,15 +30,20 @@ def calculate_assets(
     if force_read_all_data:
         DATA_STEP.force_read_data()
 
-    assets_resorce = assets_snapshot_resource(valuation_date)
-    result = DATA_STEP.obtain(
-        assets_resorce,
-        _build_assets_snapshot,
-        valuation_date=valuation_date,
-    )
-    assets = result.data_frame()
-    export_assets_evaluation(assets, valuation_date)
-    return assets
+    try:
+        assets_resorce = assets_snapshot_resource(valuation_date)
+        result = DATA_STEP.obtain(
+            assets_resorce,
+            _build_assets_snapshot,
+            valuation_date=valuation_date,
+        )
+        assets = result.data_frame()
+        export_assets_evaluation(assets, valuation_date)
+        return assets
+    finally:
+        if force_read_all_data:
+            # force_update jest globalne na DATA_STEP — wyłącz po wymuszonym odświeżeniu.
+            DATA_STEP.metadata.force_read_data(False)
 
 
 def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
