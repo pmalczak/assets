@@ -45,7 +45,8 @@ def _catalog() -> pd.DataFrame:
             {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "pool_id": DEFAULT_POOL_ID},
             {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "properties_id": "cash", "pool_id": MBANK_EUR},
             # properties_id=zloto-monety: marker terminala qty×cena (nie lookup w properties-wyceny).
-            # CAPEX: reguły w arkuszu rules (kwoty z banku); ceny jednostkowe osobno w zloto-monety-ceny.
+            # CAPEX: wyłącznie rules (jak inne aktywa). Inventory sztuk: zloto-monety-zakupy (join po dacie).
+            # Ceny: zloto-monety-ceny.
             {"asset_id": "zloto-monety", "output_file": "mbank_zloto_monety.xlsx", "order": 12, "enabled": 1, "properties_id": "zloto-monety", "pool_id": DEFAULT_POOL_ID},
         ]
     )

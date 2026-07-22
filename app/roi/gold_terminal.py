@@ -1,48 +1,126 @@
 # -*- coding: utf-8 -*-
-"""Terminal ROI dla złoto-monety: Σ sztuki × cena_jednostkowa."""
+"""Terminal ROI dla złoto-monety: CAPEX z analyse rules + inventory po dacie → Σ qty×cena."""
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import GoldCoinPurchaseRules, GoldCoinUnitPrices
-from importers.assets.match_bank_transaction import RuleMatchOutcome
-from importers.assets.read_assets import read_assets, read_gold_coin_purchase_rules, read_gold_coin_unit_prices
+from importers.assets.data_model import GoldCoinInventory, GoldCoinUnitPrices
+from importers.assets.read_assets import read_gold_coin_inventory, read_gold_coin_unit_prices
+from roi.categories import INVESTMENT
+from roi.data_model import CashFlowEvent
 
 GOLD_COINS_ROI_ASSET_ID = "zloto-monety"
+
+
+class GoldInventoryJoinError(ValueError):
+    """CAPEX złota bez jednoznacznego wiersza inventory (zloto-monety-zakupy)."""
 
 
 def is_gold_roi_asset(asset_id: str | None, properties_id: str | None = None) -> bool:
     return (properties_id or asset_id) == GOLD_COINS_ROI_ASSET_ID
 
 
-def holdings_from_outcomes(
-    outcomes: list[RuleMatchOutcome],
-    purchase_rules: pd.DataFrame,
-) -> dict[str, float]:
-    """Zsumuj sztuki z dopasowanych reguł zakupu (metadata moneta/sztuki)."""
-    if purchase_rules.empty or not outcomes:
-        return {}
+def _normalize_day(value) -> pd.Timestamp | None:
+    ts = pd.to_datetime(value, errors="coerce")
+    if pd.isna(ts):
+        return None
+    return pd.Timestamp(ts).normalize()
 
-    by_rule = purchase_rules.set_index(GoldCoinPurchaseRules.RULE_ID, drop=False)
+
+def _capex_inventory_context(event: pd.Series) -> str:
+    day = _normalize_day(event[CashFlowEvent.DATE])
+    date_s = day.strftime("%Y-%m-%d") if day is not None else str(event[CashFlowEvent.DATE])
+    source = str(event.get(CashFlowEvent.SOURCE, "") or "")
+    title = str(event.get(CashFlowEvent.TITLE, "") or "")
+    counterparty = str(event.get(CashFlowEvent.COUNTERPARTY, "") or "")
+    return f"date={date_s} source={source!r} title={title!r} counterparty={counterparty!r}"
+
+
+def holdings_from_inventory(
+    inventory: pd.DataFrame,
+    valuation_date: date,
+) -> dict[str, float]:
+    """Suma sztuk per moneta z inventory z Data ≤ valuation_date (snapshot bez CAPEX)."""
+    if inventory is None or inventory.empty:
+        return {}
+    filtered = filter_excel_rows_on_or_before(inventory, GoldCoinInventory.DATE, valuation_date)
+    if filtered.empty:
+        return {}
     holdings: dict[str, float] = {}
-    for outcome in outcomes:
-        if outcome.status != "ok":
-            continue
-        if outcome.rule_id not in by_rule.index:
-            continue
-        row = by_rule.loc[outcome.rule_id]
-        if isinstance(row, pd.DataFrame):
-            row = row.iloc[0]
-        coin = str(row[GoldCoinPurchaseRules.COIN]).strip()
-        qty = float(row[GoldCoinPurchaseRules.QUANTITY])
+    for _, row in filtered.iterrows():
+        coin = str(row[GoldCoinInventory.COIN]).strip()
+        qty = pd.to_numeric(row[GoldCoinInventory.QUANTITY], errors="coerce")
         if not coin or pd.isna(qty):
             continue
-        holdings[coin] = holdings.get(coin, 0.0) + qty
+        holdings[coin] = holdings.get(coin, 0.0) + float(qty)
     return holdings
+
+
+def holdings_from_capex_and_inventory(
+    cashflows: pd.DataFrame,
+    inventory: pd.DataFrame,
+    valuation_date: date,
+) -> tuple[dict[str, float], list[str]]:
+    """
+    Join INVESTMENT CAPEX ↔ inventory po dacie.
+    Udany join → sztuki/moneta.
+    Brak / niejednoznaczne / niekompletne inventory → GoldInventoryJoinError.
+    """
+    holdings: dict[str, float] = {}
+
+    if cashflows is None or cashflows.empty:
+        return holdings, []
+
+    filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
+    if filtered.empty:
+        return holdings, []
+
+    capex = filtered[filtered[CashFlowEvent.CATEGORY] == INVESTMENT]
+    if capex.empty:
+        return holdings, []
+
+    inv_by_date: dict[pd.Timestamp, pd.DataFrame] = {}
+    if inventory is not None and not inventory.empty:
+        inv = inventory.copy()
+        inv["_day"] = pd.to_datetime(inv[GoldCoinInventory.DATE], errors="coerce").dt.normalize()
+        inv = inv.dropna(subset=["_day"])
+        for day, group in inv.groupby("_day", sort=False):
+            inv_by_date[pd.Timestamp(day)] = group
+
+    for _, event in capex.iterrows():
+        ctx = _capex_inventory_context(event)
+        day = _normalize_day(event[CashFlowEvent.DATE])
+
+        if day is None:
+            raise GoldInventoryJoinError(
+                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} (powod=invalid_capex_date)."
+            )
+
+        group = inv_by_date.get(day)
+        if group is None or group.empty:
+            raise GoldInventoryJoinError(
+                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} (powod=no_inventory_row)."
+            )
+        if len(group) > 1:
+            raise GoldInventoryJoinError(
+                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} "
+                f"(powod=ambiguous_inventory_date, rows={len(group)})."
+            )
+
+        row = group.iloc[0]
+        coin = str(row[GoldCoinInventory.COIN]).strip()
+        qty = pd.to_numeric(row[GoldCoinInventory.QUANTITY], errors="coerce")
+        if not coin or pd.isna(qty):
+            raise GoldInventoryJoinError(
+                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} "
+                f"(powod=incomplete_inventory_row)."
+            )
+        holdings[coin] = holdings.get(coin, 0.0) + float(qty)
+
+    return holdings, []
 
 
 def latest_unit_price(
@@ -95,33 +173,32 @@ def mark_to_market(
 def resolve_gold_terminal_unrealized(
     valuation_date: date,
     *,
+    cashflows: pd.DataFrame | None = None,
     holdings: dict[str, float] | None = None,
     unit_prices: pd.DataFrame | None = None,
-    outcomes: list[RuleMatchOutcome] | None = None,
-    purchase_rules: pd.DataFrame | None = None,
-    data_root: Path | None = None,
-    assets_catalog: pd.DataFrame | None = None,
+    inventory: pd.DataFrame | None = None,
 ) -> tuple[float, list[str]]:
     """
     Terminal unrealized dla złoto-monety.
 
-    Testy mogą podać `holdings` + `unit_prices` bezpośrednio.
-    Produkcja buduje stan z dopasowanych zakupów i arkusza zloto-monety-ceny.
+    Produkcja: CAPEX cashflows + inventory (join po dacie) + zloto-monety-ceny.
+    Testy mogą podać `holdings` / `unit_prices` bezpośrednio.
     """
     warnings: list[str] = []
 
     if holdings is None:
-        if purchase_rules is None:
-            purchase_rules = read_gold_coin_purchase_rules()
-        if outcomes is None:
-            outcomes, match_warnings = _match_purchases(
-                valuation_date,
-                purchase_rules,
-                data_root=data_root,
-                assets_catalog=assets_catalog,
+        if inventory is None:
+            inventory = read_gold_coin_inventory()
+        if cashflows is None:
+            warnings.append(
+                "Brak cashflow CAPEX dla zloto-monety — terminal qty×cena = 0."
             )
-            warnings.extend(match_warnings)
-        holdings = holdings_from_outcomes(outcomes, purchase_rules)
+            holdings = {}
+        else:
+            holdings, join_warnings = holdings_from_capex_and_inventory(
+                cashflows, inventory, valuation_date
+            )
+            warnings.extend(join_warnings)
 
     if unit_prices is None:
         unit_prices = read_gold_coin_unit_prices()
@@ -137,26 +214,3 @@ def resolve_gold_terminal_unrealized(
     value, mtm_warnings = mark_to_market(holdings, unit_prices, valuation_date)
     warnings.extend(mtm_warnings)
     return value, warnings
-
-
-def _match_purchases(
-    valuation_date: date,
-    purchase_rules: pd.DataFrame,
-    *,
-    data_root: Path | None,
-    assets_catalog: pd.DataFrame | None,
-) -> tuple[list[RuleMatchOutcome], list[str]]:
-    from app_proc.data_root import get_online_data_root
-    from evaluators.evaluate_zloto_monety import match_all_gold_purchase_rules
-
-    warnings: list[str] = []
-    if purchase_rules.empty:
-        warnings.append("Brak reguł zakupu w zakładce zloto-monety-zakupy.")
-        return [], warnings
-
-    root = data_root if data_root is not None else get_online_data_root()
-    catalog = assets_catalog if assets_catalog is not None else read_assets()
-    outcomes = match_all_gold_purchase_rules(
-        root, catalog, purchase_rules, warnings, valuation_date
-    )
-    return outcomes, warnings

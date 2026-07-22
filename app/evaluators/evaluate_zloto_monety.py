@@ -9,26 +9,13 @@ import pandas as pd
 
 from importers.assets.data_model import (
     AssetsDef,
-    AssetsFile,
-    GoldCoinPurchaseRules,
-    GoldCoinValuations,
+    GoldCoinInventory,
     GroupDomain,
-    KindDomain,
     TypeDomain,
 )
-from evaluators.valuation_date import filter_excel_rows_on_or_before, filter_on_or_before
-from importers.assets.match_bank_transaction import (
-    RuleMatchOutcome,
-    match_purchase_rules,
-    normalize_mbank_transactions,
-    normalize_revolut_transactions,
-)
-from importers.mbank.data_model import MBankFile
-from importers.revolut.account_data_model import RevolutAccountFile
-from importers.assets.read_assets import read_gold_coin_purchase_rules, read_gold_coin_valuations
-from importers.mbank.read_m_transactions import read_m_transactions
-from importers.revolut.read_r_transactions import read_revolut_account_transactions
-from roi.gold_terminal import holdings_from_outcomes, resolve_gold_terminal_unrealized
+from evaluators.valuation_date import filter_excel_rows_on_or_before
+from importers.assets.read_assets import read_gold_coin_inventory
+from roi.gold_terminal import holdings_from_inventory, resolve_gold_terminal_unrealized
 
 
 def evaluate_zloto_monety(
@@ -37,25 +24,17 @@ def evaluate_zloto_monety(
     assets_catalog: pd.DataFrame,
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
-    purchase_rules = read_gold_coin_purchase_rules()
-    valuations = read_gold_coin_valuations()
+    del data_root, assets_catalog  # CAPEX/match bankowy nie tu — analyse_assets_config
+    inventory = read_gold_coin_inventory()
     warnings: list[str] = []
 
-    if purchase_rules.empty:
-        warnings.append("Brak reguł zakupu w zakładce zloto-monety-zakupy.")
+    if inventory.empty:
+        warnings.append("Brak inventory w zakładce zloto-monety-zakupy.")
     else:
-        GoldCoinPurchaseRules.check_structure(purchase_rules)
-
-    outcomes = match_all_gold_purchase_rules(
-        data_root, assets_catalog, purchase_rules, warnings, valuation_date
-    )
-    purchase_cost_pln = _sum_matched_purchases(outcomes, purchase_rules)
+        GoldCoinInventory.check_structure(inventory)
 
     value_pln, evaluation_date = _resolve_portfolio_value(
-        valuations,
-        outcomes,
-        purchase_rules,
-        purchase_cost_pln,
+        inventory,
         valuation_date,
         warnings,
     )
@@ -65,122 +44,34 @@ def evaluate_zloto_monety(
     assets_row[AssetsDef.TYPE] = TypeDomain.GOLD_COINS
     assets_row[AssetsDef.VALUE] = value_pln
     assets_row[AssetsDef.EVALUATION_DATE] = evaluation_date
-    assets_row[AssetsDef.DESCR] = _build_description(outcomes, purchase_rules)
+    assets_row[AssetsDef.DESCR] = _build_description(inventory, valuation_date)
 
     result = pd.DataFrame([assets_row])
     AssetsDef.check_structure(result)
     return result, warnings
 
 
-def match_all_gold_purchase_rules(
-    data_root: Path,
-    assets_catalog: pd.DataFrame,
-    purchase_rules: pd.DataFrame,
-    warnings: list[str],
-    valuation_date: date,
-) -> list[RuleMatchOutcome]:
-    if purchase_rules.empty:
-        return []
-
-    catalog = assets_catalog.set_index(AssetsFile.ID, drop=False)
-    outcomes: list[RuleMatchOutcome] = []
-
-    for source_account, rules in purchase_rules.groupby(GoldCoinPurchaseRules.SOURCE_ACCOUNT):
-        source_account = str(source_account)
-        if source_account not in catalog.index:
-            warnings.append(f"Nieznane konto źródłowe {source_account!r} w regułach zakupu monet.")
-            continue
-
-        source_row = catalog.loc[source_account]
-        if isinstance(source_row, pd.DataFrame):
-            source_row = source_row.iloc[0]
-
-        transactions = _load_source_transactions(data_root, source_row, valuation_date)
-        account_outcomes = match_purchase_rules(rules, transactions)
-        for outcome in account_outcomes:
-            if outcome.message:
-                warnings.append(outcome.message)
-        outcomes.extend(account_outcomes)
-
-    return outcomes
-
-
-def _load_source_transactions(data_root: Path, source_row: pd.Series, valuation_date: date) -> pd.DataFrame:
-    source_id = str(source_row[AssetsFile.ID])
-    kind = str(source_row[AssetsFile.KIND])
-
-    if kind.startswith(KindDomain.MBANK):
-        raw = read_m_transactions(data_root, source_id)
-        raw = filter_on_or_before(raw, MBankFile.MBANK_TRANSACTION_DATE, valuation_date)
-        return normalize_mbank_transactions(raw)
-
-    if kind.startswith(KindDomain.REVOLUT):
-        raw = read_revolut_account_transactions(data_root / source_id, source_id)
-        raw = filter_on_or_before(raw, RevolutAccountFile.DATE, valuation_date)
-        return normalize_revolut_transactions(raw)
-
-    raise ValueError(f"Nieobslugiwane konto zrodlowe {source_id!r} ({kind}).")
-
-
-def _sum_matched_purchases(
-    outcomes: list[RuleMatchOutcome],
-    purchase_rules: pd.DataFrame,
-) -> float:
-    total = 0.0
-
-    for outcome in outcomes:
-        if outcome.status != "ok":
-            continue
-        amount = float(outcome.matches.iloc[0]["amount"])
-        total += abs(amount)
-
-    return total
-
-
 def _resolve_portfolio_value(
-    valuations: pd.DataFrame,
-    outcomes: list[RuleMatchOutcome],
-    purchase_rules: pd.DataFrame,
-    purchase_cost_pln: float,
+    inventory: pd.DataFrame,
     valuation_date: date,
     warnings: list[str],
 ) -> tuple[float, str | None]:
-    """
-    1) zloto-monety-wyceny (wartość całego holdingu), jeśli jest
-    2) inaczej Σ qty×cena z zloto-monety-ceny
-    3) inaczej suma dopasowanych zakupów
-    """
-    if not valuations.empty:
-        GoldCoinValuations.check_structure(valuations)
-        filtered = filter_excel_rows_on_or_before(
-            valuations, GoldCoinValuations.DATE, valuation_date
-        )
-        if not filtered.empty:
-            latest = filtered.sort_values(GoldCoinValuations.DATE, ascending=False).iloc[0]
-            evaluation_date = pd.Timestamp(latest[GoldCoinValuations.DATE]).strftime("%Y-%m-%d")
-            return float(latest[GoldCoinValuations.VALUE]), evaluation_date
-        warnings.append(f"Brak wyceny zlota-monety na date {valuation_date}.")
-    else:
-        warnings.append("Brak zakładki zloto-monety-wyceny.")
-
-    holdings = holdings_from_outcomes(outcomes, purchase_rules)
+    """Σ qty×cena z inventory + zloto-monety-ceny; brak inventory → 0."""
+    holdings = holdings_from_inventory(inventory, valuation_date)
     mtm_value, mtm_warnings = resolve_gold_terminal_unrealized(
         valuation_date,
         holdings=holdings,
     )
     warnings.extend(mtm_warnings)
-    if holdings and (mtm_value > 0 or not mtm_warnings):
-        warnings.append("Wycena portfela z zloto-monety-ceny (qty×cena).")
+    if holdings:
         return mtm_value, valuation_date.isoformat()
-    if holdings and mtm_value == 0:
-        # są sztuki, ale brak cen — i tak zwróć 0 z warningami MTM
-        return 0.0, valuation_date.isoformat()
 
-    warnings.append("Wartość = koszt dopasowanych zakupów.")
-    return purchase_cost_pln, None
+    warnings.append("Brak inventory — wartość = 0.")
+    return 0.0, None
 
 
-def _build_description(outcomes: list[RuleMatchOutcome], purchase_rules: pd.DataFrame) -> str:
-    ok_count = sum(1 for outcome in outcomes if outcome.status == "ok")
-    total_rules = len(purchase_rules)
-    return f"dopasowane zakupy: {ok_count}/{total_rules}"
+def _build_description(inventory: pd.DataFrame, valuation_date: date) -> str:
+    if inventory.empty:
+        return "inventory: 0"
+    filtered = filter_excel_rows_on_or_before(inventory, GoldCoinInventory.DATE, valuation_date)
+    return f"inventory wiersze: {len(filtered)}"

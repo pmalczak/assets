@@ -13,8 +13,7 @@ from analyse_assets.config_model import (
     AnalyseAssetsRules,
 )
 from analyse_assets.data_model import AssetRw
-from importers.assets.data_model import GoldCoinPurchaseRules, GoldCoinUnitPrices
-from importers.assets.match_bank_transaction import RuleMatchOutcome
+from importers.assets.data_model import GoldCoinInventory, GoldCoinUnitPrices
 from importers.assets.pool_id import REVOLUT_PLN
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from importers.revolut.account_data_model import RevolutOperationType
@@ -23,7 +22,8 @@ from roi.categories import INVESTMENT
 from roi.data_model import CashFlowEvent
 from roi.gold_terminal import (
     GOLD_COINS_ROI_ASSET_ID,
-    holdings_from_outcomes,
+    GoldInventoryJoinError,
+    holdings_from_capex_and_inventory,
     mark_to_market,
     resolve_gold_terminal_unrealized,
 )
@@ -55,6 +55,43 @@ def _tx(
     }
 
 
+def _capex_event(
+    *,
+    tx_date: str,
+    amount: float = -15000.0,
+    source: str = DEFAULT_POOL_ID,
+    title: str = "GRUPA GOLDENMARK",
+    counterparty: str = "GOLDENMARK SP Z O O",
+) -> dict:
+    return {
+        CashFlowEvent.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+        CashFlowEvent.DATE: tx_date,
+        CashFlowEvent.AMOUNT: amount,
+        CashFlowEvent.CATEGORY: INVESTMENT,
+        CashFlowEvent.SOURCE: source,
+        CashFlowEvent.DESCRIPTION: "CAPEX",
+        CashFlowEvent.TITLE: title,
+        CashFlowEvent.COUNTERPARTY: counterparty,
+        CashFlowEvent.ACCOUNT_NUMBER: "",
+    }
+
+
+def _inventory_row(
+    *,
+    tx_date: str,
+    coin: str,
+    quantity: float = 1.0,
+    weight: str = "1oz",
+) -> dict:
+    return {
+        GoldCoinInventory.DATE: tx_date,
+        GoldCoinInventory.COIN: coin,
+        GoldCoinInventory.WEIGHT: weight,
+        GoldCoinInventory.QUANTITY: quantity,
+        GoldCoinInventory.NOTES: "",
+    }
+
+
 class GoldTerminalMtmTests(unittest.TestCase):
     def test_mark_to_market_two_coins(self):
         holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
@@ -82,7 +119,6 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
         value, warnings = mark_to_market(holdings, prices, date(2026, 7, 1))
         self.assertEqual(warnings, [])
-        # 2×11000 + 1×9500
         self.assertAlmostEqual(value, 31500.0)
 
     def test_missing_unit_price_warns_and_skips_coin(self):
@@ -102,31 +138,73 @@ class GoldTerminalMtmTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("Unknown", warnings[0])
 
-    def test_holdings_from_matched_outcomes(self):
-        rules = pd.DataFrame(
+    def test_holdings_join_capex_and_inventory_by_date(self):
+        cashflows = pd.DataFrame(
             [
-                {
-                    GoldCoinPurchaseRules.RULE_ID: "r1",
-                    GoldCoinPurchaseRules.COIN: "Krugerrand 1oz",
-                    GoldCoinPurchaseRules.QUANTITY: 2,
-                },
-                {
-                    GoldCoinPurchaseRules.RULE_ID: "r2",
-                    GoldCoinPurchaseRules.COIN: "Maple Leaf 1oz",
-                    GoldCoinPurchaseRules.QUANTITY: 1,
-                },
+                _capex_event(tx_date="2024-03-15", title="MENNICA A"),
+                _capex_event(tx_date="2024-05-10", title="MENNICA B", amount=-9000.0),
             ]
         )
-        outcomes = [
-            RuleMatchOutcome("r1", "ok", pd.DataFrame([{"amount": -20000.0}]), ""),
-            RuleMatchOutcome("r2", "ok", pd.DataFrame([{"amount": -9000.0}]), ""),
-            RuleMatchOutcome("r3", "no_match", pd.DataFrame(), "missing"),
-        ]
-        holdings = holdings_from_outcomes(outcomes, rules)
+        inventory = pd.DataFrame(
+            [
+                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=2),
+                _inventory_row(tx_date="2024-05-10", coin="Maple Leaf 1oz", quantity=1),
+            ]
+        )
+        holdings, warnings = holdings_from_capex_and_inventory(
+            cashflows, inventory, date(2026, 7, 1)
+        )
+        self.assertEqual(warnings, [])
         self.assertEqual(holdings, {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0})
 
-    def test_resolve_gold_terminal_with_injected_holdings(self):
-        holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
+    def test_holdings_missing_inventory_raises_with_capex_context(self):
+        cashflows = pd.DataFrame(
+            [
+                _capex_event(
+                    tx_date="2026-05-06",
+                    source="mbank_pln",
+                    title="GRUPA GOLDENMARK...",
+                    counterparty="GOLDENMARK",
+                ),
+            ]
+        )
+        inventory = pd.DataFrame(columns=list(GoldCoinInventory.expected_columns()))
+        with self.assertRaises(GoldInventoryJoinError) as ctx:
+            holdings_from_capex_and_inventory(cashflows, inventory, date(2026, 7, 1))
+        msg = str(ctx.exception)
+        self.assertIn("date=2026-05-06", msg)
+        self.assertIn("source='mbank_pln'", msg)
+        self.assertIn("title='GRUPA GOLDENMARK...'", msg)
+        self.assertIn("counterparty='GOLDENMARK'", msg)
+        self.assertIn("no_inventory_row", msg)
+
+    def test_holdings_ambiguous_inventory_date_raises(self):
+        cashflows = pd.DataFrame([_capex_event(tx_date="2024-03-15")])
+        inventory = pd.DataFrame(
+            [
+                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", coin="Maple Leaf 1oz", quantity=1),
+            ]
+        )
+        with self.assertRaises(GoldInventoryJoinError) as ctx:
+            holdings_from_capex_and_inventory(cashflows, inventory, date(2026, 7, 1))
+        msg = str(ctx.exception)
+        self.assertIn("ambiguous_inventory_date", msg)
+        self.assertIn("date=2024-03-15", msg)
+
+    def test_resolve_gold_terminal_from_capex_join(self):
+        cashflows = pd.DataFrame(
+            [
+                _capex_event(tx_date="2024-03-15"),
+                _capex_event(tx_date="2024-05-10", amount=-9000.0),
+            ]
+        )
+        inventory = pd.DataFrame(
+            [
+                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=2),
+                _inventory_row(tx_date="2024-05-10", coin="Maple Leaf 1oz", quantity=1),
+            ]
+        )
         prices = pd.DataFrame(
             [
                 {
@@ -145,24 +223,25 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
         value, warnings = resolve_gold_terminal_unrealized(
             date(2026, 7, 1),
-            holdings=holdings,
+            cashflows=cashflows,
+            inventory=inventory,
             unit_prices=prices,
         )
         self.assertEqual(warnings, [])
         self.assertAlmostEqual(value, 35000.0)
 
-    def test_resolve_terminal_value_gold_branch(self):
-        empty_cf = pd.DataFrame(columns=list(CashFlowEvent.expected_columns()))
+    def test_resolve_terminal_value_gold_branch_passes_cashflows(self):
+        cashflows = pd.DataFrame([_capex_event(tx_date="2024-03-15")])
         with patch(
             "roi.terminal_value.resolve_gold_terminal_unrealized",
             return_value=(35000.0, []),
-        ), patch(
+        ) as mocked, patch(
             "roi.terminal_value.is_asset_sold",
             return_value=False,
         ):
             realized, unrealized, warnings = resolve_terminal_value(
                 GOLD_COINS_ROI_ASSET_ID,
-                empty_cf,
+                cashflows,
                 None,
                 date(2026, 7, 1),
                 properties_id=GOLD_COINS_ROI_ASSET_ID,
@@ -170,6 +249,11 @@ class GoldTerminalMtmTests(unittest.TestCase):
         self.assertEqual(realized, 0.0)
         self.assertAlmostEqual(unrealized, 35000.0)
         self.assertEqual(warnings, [])
+        kwargs = mocked.call_args.kwargs
+        passed = kwargs["cashflows"]
+        self.assertEqual(len(passed), 1)
+        self.assertAlmostEqual(float(passed.iloc[0][CashFlowEvent.AMOUNT]), -15000.0)
+        self.assertEqual(passed.iloc[0][CashFlowEvent.CATEGORY], INVESTMENT)
 
 
 class GoldCapexAllocationTests(unittest.TestCase):

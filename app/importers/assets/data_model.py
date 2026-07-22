@@ -120,7 +120,34 @@ class PropertyValuationsCls(PropertiesCls):
 PropertyValuations = PropertyValuationsCls()
 
 
+class GoldCoinInventoryCls(GenericStructureClass):
+    """Inventory zakupów: data + moneta + waga + sztuki (bez matchu bankowego)."""
+
+    DATE = 'Data'
+    COIN = 'moneta'
+    WEIGHT = 'waga'
+    QUANTITY = 'sztuki'
+    NOTES = 'notatki'
+
+    def expected_columns(self) -> set:
+        return {
+            self.DATE,
+            self.COIN,
+            self.WEIGHT,
+            self.QUANTITY,
+        }
+
+    def check_structure(self, df: pd.DataFrame, file=None):
+        """Wymaga Data/moneta/waga/sztuki; notatki i inne kolumny opcjonalne."""
+        del file
+        missing = self.expected_columns() - set(df.columns)
+        if missing:
+            raise ValueError(missing)
+
+
 class GoldCoinPurchaseRulesCls(GenericStructureClass):
+    """Legacy schema — tylko testy / match_bank_transaction (nie arkusz assets_1)."""
+
     RULE_ID = 'rule_id'
     SOURCE_ACCOUNT = 'konto_źródłowe'
     DATE = 'data'
@@ -133,10 +160,10 @@ class GoldCoinPurchaseRulesCls(GenericStructureClass):
     AMOUNT = 'kwota'
     AMOUNT_TOLERANCE = 'tolerancja_kwoty'
     OPERATION_DESCRIPTION = 'opis_operacji'
-    COIN = 'moneta'
-    QUANTITY = 'sztuki'
-    WEIGHT = 'waga'
-    NOTES = 'notatki'
+    COIN = GoldCoinInventoryCls.COIN
+    QUANTITY = GoldCoinInventoryCls.QUANTITY
+    WEIGHT = GoldCoinInventoryCls.WEIGHT
+    NOTES = GoldCoinInventoryCls.NOTES
 
     def expected_columns(self) -> set:
         return {
@@ -168,24 +195,11 @@ class GoldCoinPurchaseRulesCls(GenericStructureClass):
         )
 
 
-class GoldCoinValuationsCls(GenericStructureClass):
-    DATE = 'Data'
-    VALUE = AssetsDef.VALUE
-    NOTES = 'notatki'
-
-    def expected_columns(self) -> set:
-        return {
-            self.DATE,
-            self.VALUE,
-            self.NOTES,
-        }
-
-
 class GoldCoinUnitPricesCls(GenericStructureClass):
-    """Arkusz cen jednostkowych monet (mark-to-market ROI)."""
+    """Arkusz cen jednostkowych monet (mark-to-market ROI / snapshot)."""
 
     DATE = 'Data'
-    COIN = GoldCoinPurchaseRulesCls.COIN
+    COIN = GoldCoinInventoryCls.COIN
     UNIT_PRICE = 'cena_jednostkowa'
     NOTES = 'notatki'
 
@@ -198,13 +212,13 @@ class GoldCoinUnitPricesCls(GenericStructureClass):
         }
 
 
+GoldCoinInventory = GoldCoinInventoryCls()
 GoldCoinPurchaseRules = GoldCoinPurchaseRulesCls()
-GoldCoinValuations = GoldCoinValuationsCls()
 GoldCoinUnitPrices = GoldCoinUnitPricesCls()
 TitleMatchDomain = TitleMatchDomainCls(GoldCoinPurchaseRules.TITLE_MATCH)
 
 GOLD_COIN_PURCHASES_SHEET = 'zloto-monety-zakupy'
-GOLD_COIN_VALUATIONS_SHEET = 'zloto-monety-wyceny'
+GOLD_COIN_INVENTORY_SHEET = GOLD_COIN_PURCHASES_SHEET
 GOLD_COIN_UNIT_PRICES_SHEET = 'zloto-monety-ceny'
 PROPERTIES_VALUATIONS_SHEET = 'properties-wyceny'
 LEGACY_PROPERTIES_SHEET = 'properties'

@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -19,6 +20,7 @@ from roi.allocate import allocate_catalog
 from roi.categories import INVESTMENT
 from roi.compute_roi import compute_roi
 from roi.data_model import CashFlowEvent
+from roi.terminal_value import _latest_cash_value
 
 
 def _tx(
@@ -216,11 +218,78 @@ class CashRoiAllocationTests(unittest.TestCase):
                 }
             ]
         )
-        summary = compute_roi("cash", events, props, date(2026, 1, 1), properties_id="cash")
+        with patch(
+            "roi.terminal_value.read_cash_sheet_valuations",
+            return_value=pd.DataFrame(),
+        ):
+            summary = compute_roi("cash", events, props, date(2026, 1, 1), properties_id="cash")
         self.assertFalse(summary.is_sold)
         self.assertEqual(summary.terminal_unrealized, 120000.0)
         self.assertIsNotNone(summary.xirr)
         self.assertGreater(summary.xirr, 0.0)
+
+    def test_cash_uses_cash_sheet_when_properties_valuation_is_in_future(self):
+        """Arkusz cash ma wcześniejszą wycenę; properties-wyceny tylko przyszłą → bierz cash."""
+        cash_sheet = pd.DataFrame(
+            [
+                {"Data": "2025-11-15", "wartość": 100000.0, "waluta": "EUR"},
+            ]
+        )
+        props = pd.DataFrame(
+            [
+                {
+                    PropertyValuations.ID: "cash",
+                    PropertyValuations.DATE: "2026-10-01",
+                    PropertyValuations.VALUE: 100000.0,
+                    PropertyValuations.CURRENCY: "EUR",
+                    PropertyValuations.SIZE: 1,
+                    PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                    PropertyValuations.UNIT_PRICE: 100000.0,
+                }
+            ]
+        )
+        warnings: list[str] = []
+        value = _latest_cash_value(
+            "cash",
+            props,
+            date(2026, 7, 22),
+            warnings,
+            asset_id="cash",
+            cash_sheet=cash_sheet,
+        )
+        self.assertEqual(warnings, [])
+        self.assertAlmostEqual(value, 100000.0)
+
+    def test_cash_picks_later_of_sheet_and_properties(self):
+        cash_sheet = pd.DataFrame(
+            [
+                {"Data": "2025-11-15", "wartość": 100000.0, "waluta": "EUR"},
+            ]
+        )
+        props = pd.DataFrame(
+            [
+                {
+                    PropertyValuations.ID: "cash",
+                    PropertyValuations.DATE: "2026-06-01",
+                    PropertyValuations.VALUE: 110000.0,
+                    PropertyValuations.CURRENCY: "EUR",
+                    PropertyValuations.SIZE: 1,
+                    PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                    PropertyValuations.UNIT_PRICE: 110000.0,
+                }
+            ]
+        )
+        warnings: list[str] = []
+        value = _latest_cash_value(
+            "cash",
+            props,
+            date(2026, 7, 22),
+            warnings,
+            asset_id="cash",
+            cash_sheet=cash_sheet,
+        )
+        self.assertEqual(warnings, [])
+        self.assertAlmostEqual(value, 110000.0)
 
 
 class CashConfigValidationTests(unittest.TestCase):

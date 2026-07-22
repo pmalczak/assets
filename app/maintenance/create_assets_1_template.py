@@ -3,7 +3,7 @@
 Tworzy plik assets_1.xlsx w katalogu get_online_data_root().
 
 Opcjonalnie kopiuje istniejace zakladki z podanego pliku zrodlowego
-(np. dawnego assets.xlsx) i dodaje zakladki zloto-monety-zakupy oraz zloto-monety-wyceny.
+(np. dawnego assets.xlsx) i dodaje zakladki zloto-monety-zakupy oraz zloto-monety-ceny.
 
 Uzycie:
   cd app
@@ -21,18 +21,18 @@ import pandas as pd
 
 from importers.assets.data_model import (
     AssetsFile,
-    GoldCoinPurchaseRules,
+    GoldCoinInventory,
     GoldCoinUnitPrices,
-    GoldCoinValuations,
-    GOLD_COIN_PURCHASES_SHEET,
+    GOLD_COIN_INVENTORY_SHEET,
     GOLD_COIN_UNIT_PRICES_SHEET,
-    GOLD_COIN_VALUATIONS_SHEET,
     GroupDomain,
     KindDomain,
     TypeDomain,
 )
 from importers.assets.read_assets import ASSETS_FILE_NAME
 from app_proc.data_root import get_online_data_root
+
+_LEGACY_GOLD_VALUATIONS_SHEET = "zloto-monety-wyceny"
 
 
 def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
@@ -45,59 +45,27 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
                 AssetsFile.DESCR: "Złote monety bulionowe",
                 AssetsFile.KIND: f"{KindDomain.ASSETS}.zloto-monety",
                 AssetsFile.CURRENCY: "PLN",
-                AssetsFile.NOTES: "wycena manualna w osobnej zakladce",
+                AssetsFile.NOTES: "MTM: inventory (zakupy) × ceny (zloto-monety-ceny)",
             }
         ]
     )
 
-    purchases = pd.DataFrame(
+    inventory = pd.DataFrame(
         [
             {
-                GoldCoinPurchaseRules.RULE_ID: "km-przyklad",
-                GoldCoinPurchaseRules.SOURCE_ACCOUNT: "p_m_34_9142",
-                GoldCoinPurchaseRules.DATE: "2024-03-15",
-                GoldCoinPurchaseRules.DATE_FROM: pd.NA,
-                GoldCoinPurchaseRules.DATE_TO: pd.NA,
-                GoldCoinPurchaseRules.TITLE: "MENNICA",
-                GoldCoinPurchaseRules.TITLE_MATCH: "contains",
-                GoldCoinPurchaseRules.COUNTERPARTY: "MENNICA",
-                GoldCoinPurchaseRules.COUNTERPARTY_IBAN: "PL61102010260000042270201111",
-                GoldCoinPurchaseRules.AMOUNT: -15000,
-                GoldCoinPurchaseRules.AMOUNT_TOLERANCE: 0.01,
-                GoldCoinPurchaseRules.OPERATION_DESCRIPTION: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
-                GoldCoinPurchaseRules.COIN: "Krugerrand 1oz",
-                GoldCoinPurchaseRules.QUANTITY: 1,
-                GoldCoinPurchaseRules.WEIGHT: "1oz",
-                GoldCoinPurchaseRules.NOTES: "przyklad reguly mbank",
+                GoldCoinInventory.DATE: "2024-03-15",
+                GoldCoinInventory.COIN: "Krugerrand 1oz",
+                GoldCoinInventory.WEIGHT: "1oz",
+                GoldCoinInventory.QUANTITY: 1,
+                GoldCoinInventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
             },
             {
-                GoldCoinPurchaseRules.RULE_ID: "km-revolut-przyklad",
-                GoldCoinPurchaseRules.SOURCE_ACCOUNT: "p_re_eur",
-                GoldCoinPurchaseRules.DATE: "2024-05-10",
-                GoldCoinPurchaseRules.DATE_FROM: pd.NA,
-                GoldCoinPurchaseRules.DATE_TO: pd.NA,
-                GoldCoinPurchaseRules.TITLE: "Gold purchase",
-                GoldCoinPurchaseRules.TITLE_MATCH: "contains",
-                GoldCoinPurchaseRules.COUNTERPARTY: pd.NA,
-                GoldCoinPurchaseRules.COUNTERPARTY_IBAN: pd.NA,
-                GoldCoinPurchaseRules.AMOUNT: -4000,
-                GoldCoinPurchaseRules.AMOUNT_TOLERANCE: 0.01,
-                GoldCoinPurchaseRules.OPERATION_DESCRIPTION: pd.NA,
-                GoldCoinPurchaseRules.COIN: "Maple Leaf 1oz",
-                GoldCoinPurchaseRules.QUANTITY: 1,
-                GoldCoinPurchaseRules.WEIGHT: "1oz",
-                GoldCoinPurchaseRules.NOTES: "przyklad reguly revolut",
+                GoldCoinInventory.DATE: "2024-05-10",
+                GoldCoinInventory.COIN: "Maple Leaf 1oz",
+                GoldCoinInventory.WEIGHT: "1oz",
+                GoldCoinInventory.QUANTITY: 1,
+                GoldCoinInventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
             },
-        ]
-    )
-
-    valuations = pd.DataFrame(
-        [
-            {
-                GoldCoinValuations.DATE: "2026-07-01",
-                GoldCoinValuations.VALUE: 0,
-                GoldCoinValuations.NOTES: "uzupelnij reczna wycene calego holdingu",
-            }
         ]
     )
 
@@ -107,21 +75,20 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
                 GoldCoinUnitPrices.DATE: "2026-07-01",
                 GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
                 GoldCoinUnitPrices.UNIT_PRICE: 0,
-                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI mark-to-market)",
+                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
             },
             {
                 GoldCoinUnitPrices.DATE: "2026-07-01",
                 GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
                 GoldCoinUnitPrices.UNIT_PRICE: 0,
-                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI mark-to-market)",
+                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
             },
         ]
     )
 
     return {
         "assets": assets_row,
-        GOLD_COIN_PURCHASES_SHEET: purchases,
-        GOLD_COIN_VALUATIONS_SHEET: valuations,
+        GOLD_COIN_INVENTORY_SHEET: inventory,
         GOLD_COIN_UNIT_PRICES_SHEET: unit_prices,
     }
 
@@ -134,6 +101,7 @@ def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
 
     existing = pd.read_excel(source_file, sheet_name=None)
     sheets = dict(existing)
+    sheets.pop(_LEGACY_GOLD_VALUATIONS_SHEET, None)
 
     assets = sheets.get("assets")
     if assets is None:
@@ -141,8 +109,7 @@ def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
     elif "zloto-monety" not in assets[AssetsFile.ID].astype(str).tolist():
         sheets["assets"] = pd.concat([assets, gold_sheets["assets"]], ignore_index=True)
 
-    sheets[GOLD_COIN_PURCHASES_SHEET] = gold_sheets[GOLD_COIN_PURCHASES_SHEET]
-    sheets[GOLD_COIN_VALUATIONS_SHEET] = gold_sheets[GOLD_COIN_VALUATIONS_SHEET]
+    sheets[GOLD_COIN_INVENTORY_SHEET] = gold_sheets[GOLD_COIN_INVENTORY_SHEET]
     if GOLD_COIN_UNIT_PRICES_SHEET not in sheets:
         sheets[GOLD_COIN_UNIT_PRICES_SHEET] = gold_sheets[GOLD_COIN_UNIT_PRICES_SHEET]
     return sheets

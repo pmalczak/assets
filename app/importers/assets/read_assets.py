@@ -7,9 +7,9 @@ import pandas as pd
 
 from importers.assets.data_model import (
     AssetsFile,
-    GOLD_COIN_PURCHASES_SHEET,
+    GOLD_COIN_INVENTORY_SHEET,
     GOLD_COIN_UNIT_PRICES_SHEET,
-    GOLD_COIN_VALUATIONS_SHEET,
+    GoldCoinInventory,
     GoldCoinUnitPrices,
     LEGACY_PROPERTIES_SHEET,
     PROPERTIES_VALUATIONS_SHEET,
@@ -47,10 +47,11 @@ __all__ = [
     "read_assets",
     "read_asset_sheet",
     "read_asset_sheet_optional",
+    "GOLD_COIN_INVENTORY_SHEET",
     "GOLD_COIN_UNIT_PRICES_SHEET",
+    "read_gold_coin_inventory",
     "read_gold_coin_purchase_rules",
     "read_gold_coin_unit_prices",
-    "read_gold_coin_valuations",
     "read_property_valuations",
 ]
 
@@ -93,13 +94,18 @@ def read_asset_sheet_optional(sheet_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def read_gold_coin_inventory() -> pd.DataFrame:
+    """Inventory zakupów (Data, moneta, waga, sztuki). Brak zakładki → pusta ramka."""
+    source_file = get_assets_file()
+    inventory = read_asset_sheet_optional(GOLD_COIN_INVENTORY_SHEET)
+    if not inventory.empty:
+        GoldCoinInventory.check_structure(inventory, file=source_file)
+    return inventory
+
+
 def read_gold_coin_purchase_rules() -> pd.DataFrame:
-    return read_asset_sheet(GOLD_COIN_PURCHASES_SHEET)
-
-
-def read_gold_coin_valuations() -> pd.DataFrame:
-    """Wartość całego holdingu (snapshot). Brak zakładki → pusta ramka."""
-    return read_asset_sheet_optional(GOLD_COIN_VALUATIONS_SHEET)
+    """Alias kompatybilności — to samo co read_gold_coin_inventory()."""
+    return read_gold_coin_inventory()
 
 
 def read_gold_coin_unit_prices() -> pd.DataFrame:
@@ -117,6 +123,11 @@ def read_property_valuations() -> pd.DataFrame:
     valuations = pd.read_excel(source_file, sheet_name=sheet_name)
     PropertyValuations.check_structure(valuations, file=source_file)
     return valuations
+
+
+def read_cash_sheet_valuations() -> pd.DataFrame:
+    """Arkusz `cash` (Data, wartość, waluta) — NAV gotówki dla snapshot / ROI."""
+    return read_asset_sheet_optional("cash")
 
 
 def _property_valuations_sheet_name(source_file: Path) -> str:
