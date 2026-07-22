@@ -54,3 +54,12 @@ class RevolutAccountFileCls(GenericStructureClass):
 
 
 RevolutAccountFile = RevolutAccountFileCls()
+
+
+class RevolutOperationTypeClass:
+    """Wartości kolumny Rodzaj (AccountTx.operation_type) z wyciągów Revolut."""
+
+    CARD_PAYMENT = "Płatność kartą"
+
+
+RevolutOperationType = RevolutOperationTypeClass()

@@ -6,9 +6,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyse_assets.account_tx import add_ymd_columns, empty_account_tx
+from analyse_assets.account_tx import AccountTx, add_ymd_columns, empty_account_tx
 from analyse_assets.accounts_pools import load_accounts_pool
-from analyse_assets.config_model import AnalyseAssetsCatalog, DEFAULT_POOL_ID
+from analyse_assets.config_model import (
+    AnalyseAssetsCatalog,
+    AnalyseAssetsRules,
+    DEFAULT_POOL_ID,
+)
 from analyse_assets.build_selector import is_blank_rule_value
 from app_proc.data_root import get_online_data_output
 from app_proc.export_product_excel import (
@@ -18,7 +22,7 @@ from app_proc.export_product_excel import (
 )
 from data_step.data_step import DATA_STEP
 from importers.assets.pool_id import POOL_IDS
-from roi.allocate import allocate_catalog
+from roi.allocate import allocate_catalog, collect_pool_ids_from_rules
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
 
@@ -103,7 +107,7 @@ def load_unallocated_pool(
             raise ValueError(f"Nieznany pool_id={pool_id!r}")
         pool_ids = [pool_id]
     else:
-        pool_ids = _enabled_pool_ids(config["catalog"])
+        pool_ids = _allocation_pool_ids(config["catalog"], config["rules"])
 
     out_dir = get_online_data_output(assets_date)
     frames: list[pd.DataFrame] = []
@@ -131,6 +135,7 @@ def load_unallocated_mbank(
 
 
 def _enabled_pool_ids(catalog: pd.DataFrame) -> list[str]:
+    """Pool'e z katalogu (assets.pool_id) — bez reguł."""
     enabled = catalog[catalog["enabled"].astype(bool)]
     if enabled.empty or AnalyseAssetsCatalog.POOL_ID not in enabled.columns:
         return [DEFAULT_POOL_ID]
@@ -145,6 +150,38 @@ def _enabled_pool_ids(catalog: pd.DataFrame) -> list[str]:
     return ordered or [DEFAULT_POOL_ID]
 
 
+def _allocation_pool_ids(catalog: pd.DataFrame, rules: pd.DataFrame) -> list[str]:
+    """Unia assets.pool_id + pooli z rules (kolumna pool_id lub field=POOL_ID equals)."""
+    ordered = list(_enabled_pool_ids(catalog))
+    enabled = catalog[catalog["enabled"].astype(bool)]
+    if enabled.empty:
+        return ordered
+
+    enabled_ids = set(enabled[AnalyseAssetsCatalog.ASSET_ID].astype(str).str.strip())
+    for pid in collect_pool_ids_from_rules(rules, enabled_ids):
+        if pid not in ordered:
+            ordered.append(pid)
+    return ordered or [DEFAULT_POOL_ID]
+
+
+def _split_unallocated_by_pool(
+    unallocated: pd.DataFrame,
+    pool_ids: list[str],
+) -> dict[str, pd.DataFrame]:
+    """Podziel remaining po AccountTx.POOL_ID; brakujące pool'e → pusta ramka."""
+    result: dict[str, pd.DataFrame] = {}
+    frame = add_account_tx_ymd_columns(unallocated)
+    col = AccountTx.POOL_ID
+    for pool_id in pool_ids:
+        if frame.empty or col not in frame.columns:
+            result[pool_id] = frame.iloc[0:0].copy() if not frame.empty else empty_account_tx()
+            continue
+        mask = frame[col].astype("string").fillna("") == pool_id
+        part = frame.loc[mask].copy()
+        result[pool_id] = part if not part.empty else empty_account_tx()
+    return result
+
+
 def _build_allocation(
     config: dict[str, pd.DataFrame],
 ) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
@@ -153,21 +190,18 @@ def _build_allocation(
     rules = config["rules"]
     manual = config["manual"]
 
-    events_by_asset: dict[str, pd.DataFrame] = {}
-    unallocated_by_pool: dict[str, pd.DataFrame] = {}
+    pool_ids = _allocation_pool_ids(catalog, rules)
+    frames = [load_accounts_pool(pool_id) for pool_id in pool_ids]
+    if frames:
+        combined = pd.concat(frames, ignore_index=True)
+    else:
+        combined = empty_account_tx()
 
-    for pool_id in _enabled_pool_ids(catalog):
-        pool = load_accounts_pool(pool_id)
-        sub_catalog = enabled[
-            enabled[AnalyseAssetsCatalog.POOL_ID].astype(str).str.strip() == pool_id
-        ]
-        if sub_catalog.empty:
-            unallocated_by_pool[pool_id] = add_account_tx_ymd_columns(pool)
-            continue
-        events, unallocated = allocate_catalog(pool, sub_catalog, rules, manual)
-        events_by_asset.update(events)
-        unallocated_by_pool[pool_id] = add_account_tx_ymd_columns(unallocated)
+    if enabled.empty:
+        return {}, _split_unallocated_by_pool(combined, pool_ids)
 
+    events_by_asset, unallocated = allocate_catalog(combined, enabled, rules, manual)
+    unallocated_by_pool = _split_unallocated_by_pool(unallocated, pool_ids)
     return events_by_asset, unallocated_by_pool
 
 

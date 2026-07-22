@@ -27,3 +27,9 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             save_last_tab("Import wyciągów", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Import wyciągów")
+
+    def test_save_and_load_validate_tab_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab("Waliduj", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")

@@ -6,7 +6,7 @@ import pandas as pd
 
 from analyse_assets.config_model import (
     CATALOG_SHEET,
-    DEFAULT_TRANSACTION_SOURCE,
+    DEFAULT_POOL_ID,
     MANUAL_SHEET,
     RULES_SHEET,
     AnalyseAssetsCatalog,
@@ -16,7 +16,7 @@ from analyse_assets.config_model import (
 from roi.config import read_analyse_config
 
 
-class AnalyseConfigSourceTests(unittest.TestCase):
+class AnalyseConfigPoolIdTests(unittest.TestCase):
     def _write_config(self, catalog: pd.DataFrame, rules: pd.DataFrame, manual: pd.DataFrame) -> Path:
         path = Path(tempfile.mkdtemp()) / "analyse_assets_config.xlsx"
         with pd.ExcelWriter(path, engine="openpyxl") as writer:
@@ -25,7 +25,7 @@ class AnalyseConfigSourceTests(unittest.TestCase):
             manual.to_excel(writer, sheet_name=MANUAL_SHEET, index=False)
         return path
 
-    def test_missing_catalog_source_filled_with_default(self):
+    def test_blank_catalog_pool_id_filled_with_default(self):
         catalog = pd.DataFrame(
             [
                 {
@@ -34,6 +34,7 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
                     AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
+                    AnalyseAssetsCatalog.POOL_ID: "",
                 }
             ]
         )
@@ -45,10 +46,11 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "X",
                     AnalyseAssetsRules.UWAGI: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 }
             ]
         )
@@ -57,12 +59,12 @@ class AnalyseConfigSourceTests(unittest.TestCase):
 
         config = read_analyse_config(path)
         self.assertEqual(
-            config["catalog"].iloc[0][AnalyseAssetsCatalog.SOURCE],
-            DEFAULT_TRANSACTION_SOURCE,
+            config["catalog"].iloc[0][AnalyseAssetsCatalog.POOL_ID],
+            DEFAULT_POOL_ID,
         )
-        self.assertEqual(config["rules"].iloc[0][AnalyseAssetsRules.SOURCE], "")
+        self.assertEqual(config["rules"].iloc[0][AnalyseAssetsRules.POOL_ID], "")
 
-    def test_blank_rule_source_stays_blank_for_inherit(self):
+    def test_blank_rule_pool_id_stays_blank_for_inherit(self):
         catalog = pd.DataFrame(
             [
                 {
@@ -71,7 +73,7 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
                     AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
-                    AnalyseAssetsCatalog.SOURCE: DEFAULT_TRANSACTION_SOURCE,
+                    AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
                 }
             ]
         )
@@ -83,11 +85,11 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "X",
                     AnalyseAssetsRules.UWAGI: "",
-                    AnalyseAssetsRules.SOURCE: None,
+                    AnalyseAssetsRules.POOL_ID: None,
                 }
             ]
         )
@@ -95,9 +97,9 @@ class AnalyseConfigSourceTests(unittest.TestCase):
         path = self._write_config(catalog, rules, manual)
 
         config = read_analyse_config(path)
-        self.assertEqual(config["rules"].iloc[0][AnalyseAssetsRules.SOURCE], "")
+        self.assertEqual(config["rules"].iloc[0][AnalyseAssetsRules.POOL_ID], "")
 
-    def test_legacy_source_column_renamed_to_pool_id(self):
+    def test_legacy_source_column_is_rejected(self):
         catalog = pd.DataFrame(
             [
                 {
@@ -106,7 +108,7 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     "order": 1,
                     "enabled": 1,
                     "properties_id": "aquamarina",
-                    "source": DEFAULT_TRANSACTION_SOURCE,
+                    "source": DEFAULT_POOL_ID,
                 }
             ]
         )
@@ -118,7 +120,7 @@ class AnalyseConfigSourceTests(unittest.TestCase):
                     "step_order": 0,
                     "mapping": "initial_investment",
                     "condition_group": 1,
-                    "field": "MBANK_TITLE",
+                    "field": "TITLE",
                     "operator": "contains",
                     "value": "X",
                     "Uwagi": "",
@@ -129,16 +131,9 @@ class AnalyseConfigSourceTests(unittest.TestCase):
         manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
         path = self._write_config(catalog, rules, manual)
 
-        config = read_analyse_config(path)
-        self.assertIn(AnalyseAssetsCatalog.POOL_ID, config["catalog"].columns)
-        self.assertNotIn("source", config["catalog"].columns)
-        self.assertEqual(
-            config["catalog"].iloc[0][AnalyseAssetsCatalog.POOL_ID],
-            DEFAULT_TRANSACTION_SOURCE,
-        )
-        self.assertIn(AnalyseAssetsRules.POOL_ID, config["rules"].columns)
+        with self.assertRaises(Exception):
+            read_analyse_config(path)
 
 
 if __name__ == "__main__":
     unittest.main()
-

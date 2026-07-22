@@ -11,7 +11,6 @@ from analyse_assets.data_model import AssetRw
 
 
 FIELD_MAP = {
-    # Preferowane nazwy semantyczne → AccountTx
     "OPERATION_TYPE": AccountTx.OPERATION_TYPE,
     "TITLE": AccountTx.TITLE,
     "COUNTERPARTY": AccountTx.COUNTERPARTY,
@@ -20,14 +19,6 @@ FIELD_MAP = {
     "ACCOUNT_ID": AccountTx.ACCOUNT_ID,
     "POOL_ID": AccountTx.POOL_ID,
     "YEAR": AccountTx.YEAR,
-    # Aliasy przejściowe (Excel rules)
-    "MBANK_TITLE": AccountTx.TITLE,
-    "MBANK_TRANSACTION_PARTY": AccountTx.COUNTERPARTY,
-    "MBANK_ACCOUNT_NUMBER": AccountTx.ACCOUNT_NUMBER,
-    "MBANK_AMOUNT": AccountTx.AMOUNT,
-    "MBANK_DESCRIPTION": AccountTx.OPERATION_TYPE,
-    "MBANK_SOURCE_ACCOUNT": AccountTx.ACCOUNT_ID,
-    "SOURCE": AccountTx.POOL_ID,
 }
 
 TEXT_FIELDS = {
@@ -37,17 +28,11 @@ TEXT_FIELDS = {
     "ACCOUNT_NUMBER",
     "ACCOUNT_ID",
     "POOL_ID",
-    "MBANK_TITLE",
-    "MBANK_TRANSACTION_PARTY",
-    "MBANK_DESCRIPTION",
-    "MBANK_SOURCE_ACCOUNT",
-    "MBANK_ACCOUNT_NUMBER",
-    "SOURCE",
 }
 
-AMOUNT_FIELDS = frozenset({"AMOUNT", "MBANK_AMOUNT"})
-ACCOUNT_NUMBER_FIELDS = frozenset({"ACCOUNT_NUMBER", "MBANK_ACCOUNT_NUMBER"})
-ACCOUNT_ID_FIELDS = frozenset({"ACCOUNT_ID", "MBANK_SOURCE_ACCOUNT"})
+AMOUNT_FIELDS = frozenset({"AMOUNT"})
+ACCOUNT_NUMBER_FIELDS = frozenset({"ACCOUNT_NUMBER"})
+ACCOUNT_ID_FIELDS = frozenset({"ACCOUNT_ID"})
 
 MAPPING_MAP = {
     "initial_investment": AssetRw.initial_investment_mapping,
@@ -105,9 +90,14 @@ def apply_condition(df: pd.DataFrame, field: str, operator: str, value) -> pd.Se
         series = series.astype("string").str.replace(r"\.0$", "", regex=True)
 
     if operator == "contains":
-        return series.astype("string").fillna("").str.contains(str(value), regex=True, na=False)
+        # Case-insensitive: mBank często UPPERCASE, Revolut mieszany zapis.
+        return series.astype("string").fillna("").str.contains(
+            str(value), regex=True, case=False, na=False
+        )
     if operator == "contains_no_regex":
-        return series.astype("string").fillna("").str.contains(str(value), regex=False, na=False)
+        return series.astype("string").fillna("").str.contains(
+            str(value), regex=False, case=False, na=False
+        )
     if operator == "equals":
         if field == "YEAR":
             return series.astype("string") == str(value)

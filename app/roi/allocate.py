@@ -10,6 +10,7 @@ from analyse_assets.build_selector import (
     get_mapping,
     is_blank_rule_value,
     normalize_whitespace,
+    rule_cell_str,
 )
 from analyse_assets.config_model import (
     DEFAULT_POOL_ID,
@@ -39,13 +40,81 @@ def _catalog_default_pool_id(asset_row: pd.Series) -> str:
     return str(value).strip()
 
 
+def _pool_id_from_field_equals(step_rules: pd.DataFrame) -> str | None:
+    """Fallback: field=POOL_ID + operator=equals (gdy kolumna rules.pool_id pusta)."""
+    if step_rules is None or step_rules.empty:
+        return None
+    needed = (
+        AnalyseAssetsRules.FIELD,
+        AnalyseAssetsRules.OPERATOR,
+        AnalyseAssetsRules.VALUE,
+    )
+    if any(col not in step_rules.columns for col in needed):
+        return None
+    for _, row in step_rules.iterrows():
+        field = rule_cell_str(row[AnalyseAssetsRules.FIELD])
+        operator = rule_cell_str(row[AnalyseAssetsRules.OPERATOR])
+        if field != "POOL_ID" or operator != "equals":
+            continue
+        if is_blank_rule_value(row[AnalyseAssetsRules.VALUE]):
+            continue
+        return str(row[AnalyseAssetsRules.VALUE]).strip()
+    return None
+
+
 def _effective_rule_pool_id(step_rules: pd.DataFrame, default_pool_id: str) -> str:
-    if AnalyseAssetsRules.POOL_ID not in step_rules.columns:
-        return default_pool_id
-    for value in step_rules[AnalyseAssetsRules.POOL_ID].tolist():
-        if not is_blank_rule_value(value):
-            return str(value).strip()
+    """
+    Pool kroku:
+    1) niepusta kolumna rules.pool_id
+    2) inaczej field=POOL_ID equals <value>
+    3) inaczej assets.pool_id (default)
+    """
+    if AnalyseAssetsRules.POOL_ID in step_rules.columns:
+        for value in step_rules[AnalyseAssetsRules.POOL_ID].tolist():
+            if not is_blank_rule_value(value):
+                return str(value).strip()
+    from_field = _pool_id_from_field_equals(step_rules)
+    if from_field is not None:
+        return from_field
     return default_pool_id
+
+
+def collect_pool_ids_from_rules(rules: pd.DataFrame, enabled_asset_ids: set[str]) -> list[str]:
+    """Pool'e wskazane kolumną rules.pool_id lub field=POOL_ID equals."""
+    if rules is None or rules.empty or not enabled_asset_ids:
+        return []
+    asset_rules = rules[
+        rules[AnalyseAssetsRules.ASSET_ID].astype(str).str.strip().isin(enabled_asset_ids)
+    ]
+    if asset_rules.empty:
+        return []
+
+    ordered: list[str] = []
+    if AnalyseAssetsRules.POOL_ID in asset_rules.columns:
+        for value in asset_rules[AnalyseAssetsRules.POOL_ID].tolist():
+            if is_blank_rule_value(value):
+                continue
+            pid = str(value).strip()
+            if pid not in ordered:
+                ordered.append(pid)
+
+    needed = (
+        AnalyseAssetsRules.FIELD,
+        AnalyseAssetsRules.OPERATOR,
+        AnalyseAssetsRules.VALUE,
+    )
+    if all(col in asset_rules.columns for col in needed):
+        for _, row in asset_rules.iterrows():
+            field = rule_cell_str(row[AnalyseAssetsRules.FIELD])
+            operator = rule_cell_str(row[AnalyseAssetsRules.OPERATOR])
+            if field != "POOL_ID" or operator != "equals":
+                continue
+            if is_blank_rule_value(row[AnalyseAssetsRules.VALUE]):
+                continue
+            pid = str(row[AnalyseAssetsRules.VALUE]).strip()
+            if pid not in ordered:
+                ordered.append(pid)
+    return ordered
 
 
 def _split_pool_by_pool_id(
@@ -92,10 +161,8 @@ def allocate_asset_from_mbank_pool(
 
     steps.sort(key=lambda item: item[1])
 
-    scoped_pool, other_pools = _split_pool_by_pool_id(df, pool_id)
-
     event_parts: list[pd.DataFrame] = []
-    remaining = scoped_pool
+    remaining = df.copy()
     for step_kind, _, payload in steps:
         if step_kind == "manual":
             part = _build_manual_part(payload)
@@ -106,21 +173,28 @@ def allocate_asset_from_mbank_pool(
 
         _step_id, step_rules = payload
         mapping_name = str(step_rules[AnalyseAssetsRules.MAPPING].iloc[0])
-        effective_pool_id = _effective_rule_pool_id(step_rules, pool_id)
-        selector = build_step_selector(remaining, step_rules)
-        remaining, selected = select_asset(remaining, selector, get_mapping(mapping_name))
+        # rules.pool_id niepuste → pool kroku; puste → assets.pool_id (katalog).
+        step_pool_id = _effective_rule_pool_id(step_rules, pool_id)
+        step_remaining, other_pools = _split_pool_by_pool_id(remaining, step_pool_id)
+        selector = build_step_selector(step_remaining, step_rules)
+        step_remaining, selected = select_asset(
+            step_remaining,
+            selector,
+            get_mapping(mapping_name),
+            asset_id=asset_id,
+            step_rules=step_rules,
+        )
+        remaining = pd.concat([step_remaining, other_pools], ignore_index=True)
         event_parts.append(
-            asset_rw_to_cashflow_events(selected, asset_id, source=effective_pool_id)
+            asset_rw_to_cashflow_events(selected, asset_id, source=step_pool_id)
         )
 
-    merged_remaining = pd.concat([remaining, other_pools], ignore_index=True)
-
     if not event_parts:
-        return df, _empty_events(asset_id)
+        return remaining, _empty_events(asset_id)
 
     events = pd.concat(event_parts, ignore_index=True)
     CashFlowEvent.check_structure(events)
-    return merged_remaining, events
+    return remaining, events
 
 
 def asset_rw_to_cashflow_events(
@@ -205,9 +279,3 @@ def _build_manual_part(step_rows: pd.DataFrame) -> pd.DataFrame:
 
 def _empty_events(asset_id: str) -> pd.DataFrame:
     return pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
-
-
-# Kompatybilność
-_split_pool_by_source = _split_pool_by_pool_id
-_catalog_default_source = _catalog_default_pool_id
-_effective_rule_source = _effective_rule_pool_id

@@ -28,6 +28,7 @@ from importers.revolut.account_data_model import RevolutAccountFile
 from importers.assets.read_assets import read_gold_coin_purchase_rules, read_gold_coin_valuations
 from importers.mbank.read_m_transactions import read_m_transactions
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
+from roi.gold_terminal import holdings_from_outcomes, resolve_gold_terminal_unrealized
 
 
 def evaluate_zloto_monety(
@@ -45,24 +46,19 @@ def evaluate_zloto_monety(
     else:
         GoldCoinPurchaseRules.check_structure(purchase_rules)
 
-    outcomes = _match_all_purchase_rules(data_root, assets_catalog, purchase_rules, warnings, valuation_date)
+    outcomes = match_all_gold_purchase_rules(
+        data_root, assets_catalog, purchase_rules, warnings, valuation_date
+    )
     purchase_cost_pln = _sum_matched_purchases(outcomes, purchase_rules)
 
-    if valuations.empty:
-        warnings.append("Brak wycen w zakładce zloto-monety-wyceny.")
-        evaluation_date = None
-        value_pln = purchase_cost_pln
-    else:
-        GoldCoinValuations.check_structure(valuations)
-        valuations = filter_excel_rows_on_or_before(valuations, GoldCoinValuations.DATE, valuation_date)
-        if valuations.empty:
-            warnings.append(f"Brak wyceny zlota-monety na date {valuation_date}.")
-            evaluation_date = None
-            value_pln = purchase_cost_pln
-        else:
-            latest = valuations.sort_values(GoldCoinValuations.DATE, ascending=False).iloc[0]
-            evaluation_date = pd.Timestamp(latest[GoldCoinValuations.DATE]).strftime("%Y-%m-%d")
-            value_pln = float(latest[GoldCoinValuations.VALUE])
+    value_pln, evaluation_date = _resolve_portfolio_value(
+        valuations,
+        outcomes,
+        purchase_rules,
+        purchase_cost_pln,
+        valuation_date,
+        warnings,
+    )
 
     assets_row = AssetsDef.as_assets_row(assets_file_row)
     assets_row[AssetsDef.GROUP] = GroupDomain.GOLD_COINS
@@ -76,7 +72,7 @@ def evaluate_zloto_monety(
     return result, warnings
 
 
-def _match_all_purchase_rules(
+def match_all_gold_purchase_rules(
     data_root: Path,
     assets_catalog: pd.DataFrame,
     purchase_rules: pd.DataFrame,
@@ -139,6 +135,49 @@ def _sum_matched_purchases(
         total += abs(amount)
 
     return total
+
+
+def _resolve_portfolio_value(
+    valuations: pd.DataFrame,
+    outcomes: list[RuleMatchOutcome],
+    purchase_rules: pd.DataFrame,
+    purchase_cost_pln: float,
+    valuation_date: date,
+    warnings: list[str],
+) -> tuple[float, str | None]:
+    """
+    1) zloto-monety-wyceny (wartość całego holdingu), jeśli jest
+    2) inaczej Σ qty×cena z zloto-monety-ceny
+    3) inaczej suma dopasowanych zakupów
+    """
+    if not valuations.empty:
+        GoldCoinValuations.check_structure(valuations)
+        filtered = filter_excel_rows_on_or_before(
+            valuations, GoldCoinValuations.DATE, valuation_date
+        )
+        if not filtered.empty:
+            latest = filtered.sort_values(GoldCoinValuations.DATE, ascending=False).iloc[0]
+            evaluation_date = pd.Timestamp(latest[GoldCoinValuations.DATE]).strftime("%Y-%m-%d")
+            return float(latest[GoldCoinValuations.VALUE]), evaluation_date
+        warnings.append(f"Brak wyceny zlota-monety na date {valuation_date}.")
+    else:
+        warnings.append("Brak zakładki zloto-monety-wyceny.")
+
+    holdings = holdings_from_outcomes(outcomes, purchase_rules)
+    mtm_value, mtm_warnings = resolve_gold_terminal_unrealized(
+        valuation_date,
+        holdings=holdings,
+    )
+    warnings.extend(mtm_warnings)
+    if holdings and (mtm_value > 0 or not mtm_warnings):
+        warnings.append("Wycena portfela z zloto-monety-ceny (qty×cena).")
+        return mtm_value, valuation_date.isoformat()
+    if holdings and mtm_value == 0:
+        # są sztuki, ale brak cen — i tak zwróć 0 z warningami MTM
+        return 0.0, valuation_date.isoformat()
+
+    warnings.append("Wartość = koszt dopasowanych zakupów.")
+    return purchase_cost_pln, None
 
 
 def _build_description(outcomes: list[RuleMatchOutcome], purchase_rules: pd.DataFrame) -> str:

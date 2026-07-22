@@ -24,11 +24,11 @@ if str(APP_ROOT) not in sys.path:
 from analyse_assets.config_model import (
     CATALOG_SHEET,
     CONFIG_FILE_NAME,
-    MBANK_EUR_TRANSACTION_SOURCE,
     RULES_SHEET,
     AnalyseAssetsCatalog,
     AnalyseAssetsRules,
 )
+from importers.assets.pool_id import MBANK_EUR
 from app_proc.data_root import get_online_data_root
 from maintenance.export_analyse_assets_config import _catalog, _rules
 
@@ -116,7 +116,7 @@ def add_cash(target: Path) -> None:
     if "cash" not in existing:
         row = cash_catalog.iloc[0].to_dict()
         last_cat_row = _append_row(catalog_ws, cat_header_row, cat_headers, row)
-        print(f"Dodano katalog cash (source={MBANK_EUR_TRANSACTION_SOURCE})")
+        print(f"Dodano katalog cash (pool_id={MBANK_EUR})")
     else:
         print("Katalog cash juz istnieje — pomijam")
 

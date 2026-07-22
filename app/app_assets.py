@@ -24,6 +24,7 @@ from app_streamlit.render_portfolio_history import render_portfolio_history
 from app_streamlit.render_roi import render_roi
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
+from app_streamlit.render_validate import render_validate
 from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
 from data_step.data_step import DATA_STEP
 
@@ -170,7 +171,7 @@ def main():
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    tab_reports, tab_chart, tab_roi, tab_import, tab_search = st.tabs(
+    tab_reports, tab_chart, tab_roi, tab_import, tab_search, tab_validate = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
@@ -196,6 +197,9 @@ def main():
 
     with tab_search:
         render_transaction_search()
+
+    with tab_validate:
+        render_validate()
 
 
 if __name__ == "__main__":

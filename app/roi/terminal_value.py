@@ -14,6 +14,7 @@ from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi.categories import CLOSING
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
+from roi.gold_terminal import is_gold_roi_asset, resolve_gold_terminal_unrealized
 
 
 def is_asset_sold(
@@ -59,6 +60,11 @@ def resolve_terminal_value(
             filtered.loc[filtered[CashFlowEvent.CATEGORY] == CLOSING, CashFlowEvent.AMOUNT].sum()
         )
         return terminal_realized, 0.0, warnings
+
+    if is_gold_roi_asset(asset_id, lookup_id):
+        terminal_unrealized, gold_warnings = resolve_gold_terminal_unrealized(valuation_date)
+        warnings.extend(gold_warnings)
+        return 0.0, terminal_unrealized, warnings
 
     terminal_unrealized = _latest_property_value(
         lookup_id,

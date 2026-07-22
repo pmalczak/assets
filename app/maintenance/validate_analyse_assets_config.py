@@ -2,6 +2,9 @@
 """
 Waliduje analyse_assets_config.xlsx względem schematu i procedur.
 
+Akceptuje wyłącznie nową strukturę (AccountTx / pool_id).
+Aliasy wsteczne (MBANK_*, SOURCE, kolumna source) są błędami.
+
 Uzycie:
   cd app
   uv run python maintenance/validate_analyse_assets_config.py

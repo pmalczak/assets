@@ -1,0 +1,396 @@
+# -*- coding: utf-8 -*-
+import unittest
+from datetime import date
+from unittest.mock import patch
+
+import pandas as pd
+
+from analyse_assets.config_model import (
+    ACCOUNT_ID_COLUMN,
+    DEFAULT_POOL_ID,
+    AnalyseAssetsCatalog,
+    AnalyseAssetsManual,
+    AnalyseAssetsRules,
+)
+from analyse_assets.data_model import AssetRw
+from importers.assets.data_model import GoldCoinPurchaseRules, GoldCoinUnitPrices
+from importers.assets.match_bank_transaction import RuleMatchOutcome
+from importers.assets.pool_id import REVOLUT_PLN
+from importers.mbank.data_model import MBankFile, MbankOperationType
+from importers.revolut.account_data_model import RevolutOperationType
+from roi.allocate import allocate_catalog
+from roi.categories import INVESTMENT
+from roi.data_model import CashFlowEvent
+from roi.gold_terminal import (
+    GOLD_COINS_ROI_ASSET_ID,
+    holdings_from_outcomes,
+    mark_to_market,
+    resolve_gold_terminal_unrealized,
+)
+from roi.terminal_value import resolve_terminal_value
+
+
+def _tx(
+    *,
+    title: str,
+    amount: float,
+    description: str,
+    account_id: str = "p_m_34_9142",
+    tx_date: str = "2024-03-15",
+    pool_id: str = DEFAULT_POOL_ID,
+) -> dict:
+    return {
+        AssetRw.TRANSACTION_DATE: tx_date,
+        AssetRw.OPERATION_TYPE: description,
+        AssetRw.TITLE: title,
+        AssetRw.COUNTERPARTY: "MENNICA",
+        AssetRw.ACCOUNT_NUMBER: "123",
+        AssetRw.AMOUNT: amount,
+        AssetRw.BALANCE: 0.0,
+        AssetRw.ACCOUNT_ID: account_id,
+        AssetRw.POOL_ID: pool_id,
+        MBankFile.EFFECTIVE_DATE: tx_date,
+        MBankFile.DEBIT_ACCOUNT: account_id,
+        ACCOUNT_ID_COLUMN: account_id,
+    }
+
+
+class GoldTerminalMtmTests(unittest.TestCase):
+    def test_mark_to_market_two_coins(self):
+        holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
+        prices = pd.DataFrame(
+            [
+                {
+                    GoldCoinUnitPrices.DATE: "2025-06-01",
+                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 10000.0,
+                    GoldCoinUnitPrices.NOTES: "",
+                },
+                {
+                    GoldCoinUnitPrices.DATE: "2025-06-01",
+                    GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 9500.0,
+                    GoldCoinUnitPrices.NOTES: "",
+                },
+                {
+                    GoldCoinUnitPrices.DATE: "2026-01-01",
+                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 11000.0,
+                    GoldCoinUnitPrices.NOTES: "nowsza",
+                },
+            ]
+        )
+        value, warnings = mark_to_market(holdings, prices, date(2026, 7, 1))
+        self.assertEqual(warnings, [])
+        # 2×11000 + 1×9500
+        self.assertAlmostEqual(value, 31500.0)
+
+    def test_missing_unit_price_warns_and_skips_coin(self):
+        holdings = {"Krugerrand 1oz": 1.0, "Unknown": 3.0}
+        prices = pd.DataFrame(
+            [
+                {
+                    GoldCoinUnitPrices.DATE: "2026-01-01",
+                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 10000.0,
+                    GoldCoinUnitPrices.NOTES: "",
+                },
+            ]
+        )
+        value, warnings = mark_to_market(holdings, prices, date(2026, 7, 1))
+        self.assertAlmostEqual(value, 10000.0)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("Unknown", warnings[0])
+
+    def test_holdings_from_matched_outcomes(self):
+        rules = pd.DataFrame(
+            [
+                {
+                    GoldCoinPurchaseRules.RULE_ID: "r1",
+                    GoldCoinPurchaseRules.COIN: "Krugerrand 1oz",
+                    GoldCoinPurchaseRules.QUANTITY: 2,
+                },
+                {
+                    GoldCoinPurchaseRules.RULE_ID: "r2",
+                    GoldCoinPurchaseRules.COIN: "Maple Leaf 1oz",
+                    GoldCoinPurchaseRules.QUANTITY: 1,
+                },
+            ]
+        )
+        outcomes = [
+            RuleMatchOutcome("r1", "ok", pd.DataFrame([{"amount": -20000.0}]), ""),
+            RuleMatchOutcome("r2", "ok", pd.DataFrame([{"amount": -9000.0}]), ""),
+            RuleMatchOutcome("r3", "no_match", pd.DataFrame(), "missing"),
+        ]
+        holdings = holdings_from_outcomes(outcomes, rules)
+        self.assertEqual(holdings, {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0})
+
+    def test_resolve_gold_terminal_with_injected_holdings(self):
+        holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
+        prices = pd.DataFrame(
+            [
+                {
+                    GoldCoinUnitPrices.DATE: "2026-01-01",
+                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 12000.0,
+                    GoldCoinUnitPrices.NOTES: "",
+                },
+                {
+                    GoldCoinUnitPrices.DATE: "2026-01-01",
+                    GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
+                    GoldCoinUnitPrices.UNIT_PRICE: 11000.0,
+                    GoldCoinUnitPrices.NOTES: "",
+                },
+            ]
+        )
+        value, warnings = resolve_gold_terminal_unrealized(
+            date(2026, 7, 1),
+            holdings=holdings,
+            unit_prices=prices,
+        )
+        self.assertEqual(warnings, [])
+        self.assertAlmostEqual(value, 35000.0)
+
+    def test_resolve_terminal_value_gold_branch(self):
+        empty_cf = pd.DataFrame(columns=list(CashFlowEvent.expected_columns()))
+        with patch(
+            "roi.terminal_value.resolve_gold_terminal_unrealized",
+            return_value=(35000.0, []),
+        ), patch(
+            "roi.terminal_value.is_asset_sold",
+            return_value=False,
+        ):
+            realized, unrealized, warnings = resolve_terminal_value(
+                GOLD_COINS_ROI_ASSET_ID,
+                empty_cf,
+                None,
+                date(2026, 7, 1),
+                properties_id=GOLD_COINS_ROI_ASSET_ID,
+            )
+        self.assertEqual(realized, 0.0)
+        self.assertAlmostEqual(unrealized, 35000.0)
+        self.assertEqual(warnings, [])
+
+
+class GoldCapexAllocationTests(unittest.TestCase):
+    def test_capex_from_title_and_amount_rule(self):
+        pool = AssetRw.add_ymd_columns(
+            pd.DataFrame(
+                [
+                    _tx(
+                        title="ZAKUP MENNICA KRUGERRAND",
+                        amount=-15000.0,
+                        description=MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
+                    ),
+                    _tx(
+                        title="INNY PRZELEW",
+                        amount=-100.0,
+                        description=MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
+                        tx_date="2024-03-16",
+                    ),
+                ]
+            )
+        )
+        catalog = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsCatalog.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_zloto_monety.xlsx",
+                    "order": 1,
+                    "enabled": True,
+                    AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
+                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
+                },
+            ]
+        )
+        rules = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "gold_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "MENNICA",
+                    AnalyseAssetsRules.POOL_ID: "",
+                },
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "gold_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "AMOUNT",
+                    AnalyseAssetsRules.OPERATOR: "equals",
+                    AnalyseAssetsRules.VALUE: "-15000",
+                    AnalyseAssetsRules.POOL_ID: "",
+                },
+            ]
+        )
+        manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
+
+        events_by_asset, unallocated = allocate_catalog(pool, catalog, rules, manual)
+
+        self.assertEqual(len(events_by_asset[GOLD_COINS_ROI_ASSET_ID]), 1)
+        event = events_by_asset[GOLD_COINS_ROI_ASSET_ID].iloc[0]
+        self.assertEqual(event[CashFlowEvent.CATEGORY], INVESTMENT)
+        self.assertAlmostEqual(float(event[CashFlowEvent.AMOUNT]), -15000.0)
+        self.assertEqual(len(unallocated), 1)
+
+    def test_capex_from_two_pools_via_field_pool_id_equals(self):
+        """Gdy kolumna rules.pool_id pusta: field=POOL_ID equals ustawia pool kroku."""
+        pool = AssetRw.add_ymd_columns(
+            pd.DataFrame(
+                [
+                    _tx(
+                        title="Grupa Goldenmark",
+                        amount=-35438.0,
+                        description=RevolutOperationType.CARD_PAYMENT,
+                        account_id="p_re_pln",
+                        tx_date="2026-04-21",
+                        pool_id=REVOLUT_PLN,
+                    ),
+                    _tx(
+                        title="INNY",
+                        amount=-10.0,
+                        description=MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
+                        pool_id=DEFAULT_POOL_ID,
+                    ),
+                ]
+            )
+        )
+        catalog = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsCatalog.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsCatalog.OUTPUT_FILE: "a_zloto.xlsx",
+                    "order": 1,
+                    "enabled": True,
+                    AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
+                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
+                },
+            ]
+        )
+        rules = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "revolut_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "POOL_ID",
+                    AnalyseAssetsRules.OPERATOR: "equals",
+                    AnalyseAssetsRules.VALUE: REVOLUT_PLN,
+                    AnalyseAssetsRules.POOL_ID: "",
+                },
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "revolut_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "Grupa Goldenmark",
+                    AnalyseAssetsRules.POOL_ID: "",
+                },
+            ]
+        )
+        manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
+        events_by_asset, unallocated = allocate_catalog(pool, catalog, rules, manual)
+        events = events_by_asset[GOLD_COINS_ROI_ASSET_ID]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events.iloc[0][CashFlowEvent.SOURCE], REVOLUT_PLN)
+        self.assertAlmostEqual(float(events.iloc[0][CashFlowEvent.AMOUNT]), -35438.0)
+        self.assertEqual(len(unallocated), 1)
+
+    def test_capex_from_two_pools_via_rules_pool_id(self):
+        """rules.pool_id wybiera pool kroku; puste → assets.pool_id."""
+        pool = AssetRw.add_ymd_columns(
+            pd.DataFrame(
+                [
+                    _tx(
+                        title="GRUPA GOLDENMARK   /WROCLAW",
+                        amount=-34278.0,
+                        description=MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY,
+                        account_id="p_m_23_2330",
+                        tx_date="2026-05-06",
+                        pool_id=DEFAULT_POOL_ID,
+                    ),
+                    _tx(
+                        title="Grupa Goldenmark",
+                        amount=-35438.0,
+                        description=RevolutOperationType.CARD_PAYMENT,
+                        account_id="p_re_pln",
+                        tx_date="2026-04-21",
+                        pool_id=REVOLUT_PLN,
+                    ),
+                    _tx(
+                        title="INNY",
+                        amount=-10.0,
+                        description=MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
+                        tx_date="2026-05-07",
+                        pool_id=DEFAULT_POOL_ID,
+                    ),
+                ]
+            )
+        )
+        catalog = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsCatalog.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsCatalog.OUTPUT_FILE: "a_zloto.xlsx",
+                    "order": 1,
+                    "enabled": True,
+                    AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
+                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
+                },
+            ]
+        )
+        rules = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "revolut_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 0,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "Grupa Goldenmark",
+                    AnalyseAssetsRules.POOL_ID: REVOLUT_PLN,
+                },
+                {
+                    AnalyseAssetsRules.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
+                    AnalyseAssetsRules.STEP_ID: "mbank_buy",
+                    AnalyseAssetsRules.STEP_ORDER: 1,
+                    AnalyseAssetsRules.MAPPING: "initial_investment",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                    AnalyseAssetsRules.FIELD: "TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "GOLDENMARK",
+                    AnalyseAssetsRules.POOL_ID: "",
+                },
+            ]
+        )
+        manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
+
+        events_by_asset, unallocated = allocate_catalog(pool, catalog, rules, manual)
+        events = events_by_asset[GOLD_COINS_ROI_ASSET_ID]
+
+        self.assertEqual(len(events), 2)
+        by_source = {
+            str(row[CashFlowEvent.SOURCE]): float(row[CashFlowEvent.AMOUNT])
+            for _, row in events.iterrows()
+        }
+        self.assertAlmostEqual(by_source[REVOLUT_PLN], -35438.0)
+        self.assertAlmostEqual(by_source[DEFAULT_POOL_ID], -34278.0)
+        self.assertTrue((events[CashFlowEvent.CATEGORY] == INVESTMENT).all())
+        self.assertEqual(len(unallocated), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

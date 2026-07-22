@@ -8,7 +8,9 @@ import pandas as pd
 from importers.assets.data_model import (
     AssetsFile,
     GOLD_COIN_PURCHASES_SHEET,
+    GOLD_COIN_UNIT_PRICES_SHEET,
     GOLD_COIN_VALUATIONS_SHEET,
+    GoldCoinUnitPrices,
     LEGACY_PROPERTIES_SHEET,
     PROPERTIES_VALUATIONS_SHEET,
     PropertyValuations,
@@ -44,7 +46,10 @@ __all__ = [
     "get_assets_file",
     "read_assets",
     "read_asset_sheet",
+    "read_asset_sheet_optional",
+    "GOLD_COIN_UNIT_PRICES_SHEET",
     "read_gold_coin_purchase_rules",
+    "read_gold_coin_unit_prices",
     "read_gold_coin_valuations",
     "read_property_valuations",
 ]
@@ -78,12 +83,32 @@ def read_asset_sheet(sheet_name: str) -> pd.DataFrame:
     return pd.read_excel(source_file, sheet_name=sheet_name)
 
 
+def read_asset_sheet_optional(sheet_name: str) -> pd.DataFrame:
+    """Jak read_asset_sheet, ale brak zakładki → pusta ramka (bez wyjątku)."""
+    source_file = get_assets_file()
+    assert source_file.is_file(), source_file
+    try:
+        return pd.read_excel(source_file, sheet_name=sheet_name)
+    except ValueError:
+        return pd.DataFrame()
+
+
 def read_gold_coin_purchase_rules() -> pd.DataFrame:
     return read_asset_sheet(GOLD_COIN_PURCHASES_SHEET)
 
 
 def read_gold_coin_valuations() -> pd.DataFrame:
-    return read_asset_sheet(GOLD_COIN_VALUATIONS_SHEET)
+    """Wartość całego holdingu (snapshot). Brak zakładki → pusta ramka."""
+    return read_asset_sheet_optional(GOLD_COIN_VALUATIONS_SHEET)
+
+
+def read_gold_coin_unit_prices() -> pd.DataFrame:
+    """Ceny jednostkowe monet (ROI / MTM). Brak zakładki → pusta ramka."""
+    source_file = get_assets_file()
+    prices = read_asset_sheet_optional(GOLD_COIN_UNIT_PRICES_SHEET)
+    if not prices.empty:
+        GoldCoinUnitPrices.check_structure(prices, file=source_file)
+    return prices
 
 
 def read_property_valuations() -> pd.DataFrame:

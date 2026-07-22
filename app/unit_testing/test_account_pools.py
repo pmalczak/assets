@@ -174,16 +174,14 @@ class ConsolidateAccountTxTests(unittest.TestCase):
         self.assertEqual(len(cleaned), 1)
 
 
-class SelectorFieldAliasTests(unittest.TestCase):
-    def test_semantic_and_mbank_aliases_map_same_columns(self):
+class SelectorFieldMapTests(unittest.TestCase):
+    def test_canonical_fields_map_to_account_tx(self):
         self.assertEqual(FIELD_MAP["TITLE"], AccountTx.TITLE)
-        self.assertEqual(FIELD_MAP["MBANK_TITLE"], AccountTx.TITLE)
         self.assertEqual(FIELD_MAP["OPERATION_TYPE"], AccountTx.OPERATION_TYPE)
-        self.assertEqual(FIELD_MAP["MBANK_DESCRIPTION"], AccountTx.OPERATION_TYPE)
         self.assertEqual(FIELD_MAP["ACCOUNT_ID"], AccountTx.ACCOUNT_ID)
-        self.assertEqual(FIELD_MAP["MBANK_SOURCE_ACCOUNT"], AccountTx.ACCOUNT_ID)
         self.assertEqual(FIELD_MAP["POOL_ID"], AccountTx.POOL_ID)
-        self.assertEqual(FIELD_MAP["SOURCE"], AccountTx.POOL_ID)
+        self.assertNotIn("MBANK_TITLE", FIELD_MAP)
+        self.assertNotIn("SOURCE", FIELD_MAP)
 
     def test_operation_type_selector(self):
         df = pd.DataFrame(
@@ -208,15 +206,15 @@ class SelectorFieldAliasTests(unittest.TestCase):
             [
                 {
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_DESCRIPTION",
+                    AnalyseAssetsRules.FIELD: "OPERATION_TYPE",
                     AnalyseAssetsRules.OPERATOR: "equals",
                     AnalyseAssetsRules.VALUE: MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
                 }
             ]
         )
-        alias_mask = build_step_selector(df, step_rules)
-        self.assertTrue(alias_mask.iloc[0])
-        self.assertFalse(alias_mask.iloc[1])
+        selector_mask = build_step_selector(df, step_rules)
+        self.assertTrue(selector_mask.iloc[0])
+        self.assertFalse(selector_mask.iloc[1])
 
 
 class RoiProductPathTests(unittest.TestCase):

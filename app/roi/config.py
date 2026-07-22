@@ -24,29 +24,14 @@ def _drop_incomplete_rules(rules: pd.DataFrame) -> pd.DataFrame:
     return rules.loc[complete].reset_index(drop=True)
 
 
-def _rename_legacy_source_column(df: pd.DataFrame) -> pd.DataFrame:
-    """Excel: kolumna `source` → `pool_id` (jeśli brak pool_id)."""
-    df = df.copy()
-    if AnalyseAssetsCatalog.POOL_ID not in df.columns and "source" in df.columns:
-        df = df.rename(columns={"source": AnalyseAssetsCatalog.POOL_ID})
-    elif AnalyseAssetsCatalog.POOL_ID in df.columns and "source" in df.columns:
-        # Preferuj pool_id; uzupełnij puste z source.
-        blank = df[AnalyseAssetsCatalog.POOL_ID].map(is_blank_rule_value)
-        df.loc[blank, AnalyseAssetsCatalog.POOL_ID] = df.loc[blank, "source"]
-        df = df.drop(columns=["source"])
-    return df
-
-
 def _normalize_rules_columns(rules: pd.DataFrame) -> pd.DataFrame:
-    rules = _rename_legacy_source_column(rules)
+    rules = rules.copy()
     if AnalyseAssetsRules.UWAGI not in rules.columns:
         rules[AnalyseAssetsRules.UWAGI] = ""
     else:
         rules[AnalyseAssetsRules.UWAGI] = rules[AnalyseAssetsRules.UWAGI].fillna("").astype(str)
 
-    if AnalyseAssetsRules.POOL_ID not in rules.columns:
-        rules[AnalyseAssetsRules.POOL_ID] = ""
-    else:
+    if AnalyseAssetsRules.POOL_ID in rules.columns:
         rules[AnalyseAssetsRules.POOL_ID] = (
             rules[AnalyseAssetsRules.POOL_ID].fillna("").astype(str).str.strip()
         )
@@ -58,10 +43,8 @@ def _normalize_rules_columns(rules: pd.DataFrame) -> pd.DataFrame:
 
 
 def _normalize_catalog_pool_id(catalog: pd.DataFrame) -> pd.DataFrame:
-    catalog = _rename_legacy_source_column(catalog)
-    if AnalyseAssetsCatalog.POOL_ID not in catalog.columns:
-        catalog[AnalyseAssetsCatalog.POOL_ID] = DEFAULT_POOL_ID
-    else:
+    catalog = catalog.copy()
+    if AnalyseAssetsCatalog.POOL_ID in catalog.columns:
         catalog[AnalyseAssetsCatalog.POOL_ID] = (
             catalog[AnalyseAssetsCatalog.POOL_ID]
             .fillna(DEFAULT_POOL_ID)

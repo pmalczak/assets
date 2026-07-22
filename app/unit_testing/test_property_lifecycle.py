@@ -75,7 +75,7 @@ def _catalog() -> pd.DataFrame:
                 AnalyseAssetsCatalog.ORDER: 1,
                 AnalyseAssetsCatalog.ENABLED: 1,
                 AnalyseAssetsCatalog.PROPERTIES_ID: "garaz",
-                AnalyseAssetsCatalog.SOURCE: "mbank_pln",
+                AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
             },
             {
                 AnalyseAssetsCatalog.ASSET_ID: "rumiankowa",
@@ -83,7 +83,7 @@ def _catalog() -> pd.DataFrame:
                 AnalyseAssetsCatalog.ORDER: 2,
                 AnalyseAssetsCatalog.ENABLED: 1,
                 AnalyseAssetsCatalog.PROPERTIES_ID: "rumiankowa",
-                AnalyseAssetsCatalog.SOURCE: "mbank_pln",
+                AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
             },
         ]
     )

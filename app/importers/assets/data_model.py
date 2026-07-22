@@ -181,11 +181,30 @@ class GoldCoinValuationsCls(GenericStructureClass):
         }
 
 
+class GoldCoinUnitPricesCls(GenericStructureClass):
+    """Arkusz cen jednostkowych monet (mark-to-market ROI)."""
+
+    DATE = 'Data'
+    COIN = GoldCoinPurchaseRulesCls.COIN
+    UNIT_PRICE = 'cena_jednostkowa'
+    NOTES = 'notatki'
+
+    def expected_columns(self) -> set:
+        return {
+            self.DATE,
+            self.COIN,
+            self.UNIT_PRICE,
+            self.NOTES,
+        }
+
+
 GoldCoinPurchaseRules = GoldCoinPurchaseRulesCls()
 GoldCoinValuations = GoldCoinValuationsCls()
+GoldCoinUnitPrices = GoldCoinUnitPricesCls()
 TitleMatchDomain = TitleMatchDomainCls(GoldCoinPurchaseRules.TITLE_MATCH)
 
 GOLD_COIN_PURCHASES_SHEET = 'zloto-monety-zakupy'
 GOLD_COIN_VALUATIONS_SHEET = 'zloto-monety-wyceny'
+GOLD_COIN_UNIT_PRICES_SHEET = 'zloto-monety-ceny'
 PROPERTIES_VALUATIONS_SHEET = 'properties-wyceny'
 LEGACY_PROPERTIES_SHEET = 'properties'

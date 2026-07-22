@@ -3,10 +3,10 @@ from datetime import date
 
 import pandas as pd
 
+from importers.assets.pool_id import MBANK_EUR
 from analyse_assets.config_model import (
-    DEFAULT_TRANSACTION_SOURCE,
-    MBANK_EUR_TRANSACTION_SOURCE,
-    MBANK_SOURCE_ACCOUNT_COLUMN,
+    ACCOUNT_ID_COLUMN,
+    DEFAULT_POOL_ID,
     AnalyseAssetsCatalog,
     AnalyseAssetsManual,
     AnalyseAssetsRules,
@@ -33,18 +33,18 @@ def _tx(
     tx_date: str = "2022-04-28",
 ) -> dict:
     return {
-        AssetRw.MBANK_BOOKING_DATE: tx_date,
-        AssetRw.MBANK_TRANSACTION_DATE: tx_date,
-        AssetRw.MBANK_DESCRIPTION: description,
-        AssetRw.MBANK_TITLE: title,
-        AssetRw.MBANK_TRANSACTION_PARTY: party,
-        AssetRw.MBANK_ACCOUNT_NUMBER: account_number,
-        AssetRw.MBANK_AMOUNT: amount,
-        AssetRw.MBANK_OUTSTANDING_BALANCE: 0.0,
+        AssetRw.TRANSACTION_DATE: tx_date,
+        AssetRw.OPERATION_TYPE: description,
+        AssetRw.TITLE: title,
+        AssetRw.COUNTERPARTY: party,
+        AssetRw.ACCOUNT_NUMBER: account_number,
+        AssetRw.AMOUNT: amount,
+        AssetRw.BALANCE: 0.0,
+        AssetRw.ACCOUNT_ID: account_id,
+        AssetRw.POOL_ID: source,
         MBankFile.EFFECTIVE_DATE: tx_date,
         MBankFile.DEBIT_ACCOUNT: account_id,
-        MBANK_SOURCE_ACCOUNT_COLUMN: account_id,
-        AnalyseAssetsCatalog.SOURCE: source,
+        ACCOUNT_ID_COLUMN: account_id,
     }
 
 
@@ -54,14 +54,14 @@ class CashRoiAllocationTests(unittest.TestCase):
             title="UMOWA PLN",
             amount=-100.0,
             description=MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
-            source=DEFAULT_TRANSACTION_SOURCE,
+            source=DEFAULT_POOL_ID,
             account_id="p_m_23_2330",
         )
         eur = _tx(
             title="DYWIDENDA",
             amount=100120.94,
             description=MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
-            source=MBANK_EUR_TRANSACTION_SOURCE,
+            source=MBANK_EUR,
             account_id="g_m_56_3217_eur",
         )
         pool = AssetRw.add_ymd_columns(pd.DataFrame([pln, eur]))
@@ -72,14 +72,14 @@ class CashRoiAllocationTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     "order": 1,
                     "enabled": True,
-                    AnalyseAssetsCatalog.SOURCE: DEFAULT_TRANSACTION_SOURCE,
+                    AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
                 },
                 {
                     AnalyseAssetsCatalog.ASSET_ID: "cash",
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_cash.xlsx",
                     "order": 2,
                     "enabled": True,
-                    AnalyseAssetsCatalog.SOURCE: MBANK_EUR_TRANSACTION_SOURCE,
+                    AnalyseAssetsCatalog.POOL_ID: MBANK_EUR,
                 },
             ]
         )
@@ -91,10 +91,10 @@ class CashRoiAllocationTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "UMOWA PLN",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 },
                 {
                     AnalyseAssetsRules.ASSET_ID: "cash",
@@ -102,10 +102,10 @@ class CashRoiAllocationTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_SOURCE_ACCOUNT",
+                    AnalyseAssetsRules.FIELD: "ACCOUNT_ID",
                     AnalyseAssetsRules.OPERATOR: "equals",
                     AnalyseAssetsRules.VALUE: "g_m_56_3217_eur",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 },
                 {
                     AnalyseAssetsRules.ASSET_ID: "cash",
@@ -113,10 +113,10 @@ class CashRoiAllocationTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "DYWIDENDA",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 },
             ]
         )
@@ -125,9 +125,9 @@ class CashRoiAllocationTests(unittest.TestCase):
         events_by_asset, unallocated = allocate_catalog(pool, catalog, rules, manual)
 
         self.assertEqual(len(events_by_asset["aquamarina"]), 1)
-        self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], DEFAULT_TRANSACTION_SOURCE)
+        self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], DEFAULT_POOL_ID)
         self.assertEqual(len(events_by_asset["cash"]), 1)
-        self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.SOURCE], MBANK_EUR_TRANSACTION_SOURCE)
+        self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.SOURCE], MBANK_EUR)
         self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.CATEGORY], INVESTMENT)
         self.assertLess(events_by_asset["cash"].iloc[0][CashFlowEvent.AMOUNT], 0)
         self.assertEqual(len(unallocated), 0)
@@ -139,14 +139,14 @@ class CashRoiAllocationTests(unittest.TestCase):
             title="DYWIDENDA",
             amount=100.0,
             description=MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
-            source=MBANK_EUR_TRANSACTION_SOURCE,
+            source=MBANK_EUR,
             account_id="g_m_56_3217_eur",
         )
         row_other = _tx(
             title="DYWIDENDA",
             amount=100.0,
             description=MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
-            source=MBANK_EUR_TRANSACTION_SOURCE,
+            source=MBANK_EUR,
             account_id="p_m_63_3209_eur",
         )
         df = AssetRw.add_ymd_columns(pd.DataFrame([row_ok, row_other]))
@@ -154,7 +154,7 @@ class CashRoiAllocationTests(unittest.TestCase):
             [
                 {
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_SOURCE_ACCOUNT",
+                    AnalyseAssetsRules.FIELD: "ACCOUNT_ID",
                     AnalyseAssetsRules.OPERATOR: "equals",
                     AnalyseAssetsRules.VALUE: "g_m_56_3217_eur",
                 }
@@ -172,7 +172,7 @@ class CashRoiAllocationTests(unittest.TestCase):
                         title="DYWIDENDA",
                         amount=100120.94,
                         description=MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
-                        source=MBANK_EUR_TRANSACTION_SOURCE,
+                        source=MBANK_EUR,
                         account_id="g_m_56_3217_eur",
                     )
                 ]
@@ -185,7 +185,7 @@ class CashRoiAllocationTests(unittest.TestCase):
             AssetRw.initial_investment_mapping,
         )
         self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INVESTMENT)
-        self.assertAlmostEqual(float(selected.iloc[0][AssetRw.MBANK_AMOUNT]), -100120.94)
+        self.assertAlmostEqual(float(selected.iloc[0][AssetRw.AMOUNT]), -100120.94)
 
     def test_cash_roi_xirr_with_properties_valuation(self):
         events = pd.DataFrame(
@@ -195,7 +195,7 @@ class CashRoiAllocationTests(unittest.TestCase):
                     CashFlowEvent.DATE: "2022-04-28",
                     CashFlowEvent.AMOUNT: -100120.94,
                     CashFlowEvent.CATEGORY: INVESTMENT,
-                    CashFlowEvent.SOURCE: MBANK_EUR_TRANSACTION_SOURCE,
+                    CashFlowEvent.SOURCE: MBANK_EUR,
                     CashFlowEvent.DESCRIPTION: MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
                     CashFlowEvent.TITLE: "DYWIDENDA",
                     CashFlowEvent.COUNTERPARTY: "GPM",
@@ -239,7 +239,7 @@ class CashConfigValidationTests(unittest.TestCase):
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
                     AnalyseAssetsCatalog.PROPERTIES_ID: "cash",
-                    AnalyseAssetsCatalog.SOURCE: MBANK_EUR_TRANSACTION_SOURCE,
+                    AnalyseAssetsCatalog.POOL_ID: MBANK_EUR,
                 }
             ]
         )
@@ -251,11 +251,11 @@ class CashConfigValidationTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_SOURCE_ACCOUNT",
+                    AnalyseAssetsRules.FIELD: "ACCOUNT_ID",
                     AnalyseAssetsRules.OPERATOR: "equals",
                     AnalyseAssetsRules.VALUE: "g_m_56_3217_eur",
                     AnalyseAssetsRules.UWAGI: "",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 }
             ]
         )

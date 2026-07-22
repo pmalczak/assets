@@ -113,23 +113,21 @@ class AllocateCatalogTests(unittest.TestCase):
         from roi.allocate import allocate_catalog
 
         row_template = {
-            AssetRw.MBANK_TRANSACTION_DATE: "2020-01-01",
-            AssetRw.MBANK_BOOKING_DATE: "2020-01-01",
-            AssetRw.MBANK_AMOUNT: -100.0,
-            AssetRw.MBANK_DESCRIPTION: MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
-            AssetRw.MBANK_TRANSACTION_PARTY: "Kontrahent",
-            AssetRw.MBANK_ACCOUNT_NUMBER: "123",
-            AssetRw.MBANK_OUTSTANDING_BALANCE: 0.0,
+            AssetRw.TRANSACTION_DATE: "2020-01-01",
+            AssetRw.AMOUNT: -100.0,
+            AssetRw.OPERATION_TYPE: MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY,
+            AssetRw.COUNTERPARTY: "Kontrahent",
+            AssetRw.ACCOUNT_NUMBER: "123",
+            AssetRw.BALANCE: 0.0,
             MBankFile.EFFECTIVE_DATE: "2020-01-01",
             MBankFile.DEBIT_ACCOUNT: "acc1",
             "_source": "acc1",
         }
-        matched = {**row_template, AssetRw.MBANK_TITLE: "UMOWA NR AQ/2014/252/180 LOKAL 180"}
+        matched = {**row_template, AssetRw.TITLE: "UMOWA NR AQ/2014/252/180 LOKAL 180"}
         other = {
             **row_template,
-            AssetRw.MBANK_TITLE: "INNY TYTUL",
-            AssetRw.MBANK_TRANSACTION_DATE: "2020-01-02",
-            AssetRw.MBANK_BOOKING_DATE: "2020-01-02",
+            AssetRw.TITLE: "INNY TYTUL",
+            AssetRw.TRANSACTION_DATE: "2020-01-02",
             MBankFile.EFFECTIVE_DATE: "2020-01-02",
         }
         pool = AssetRw.add_ymd_columns(pd.DataFrame([matched, other]))
@@ -141,7 +139,7 @@ class AllocateCatalogTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     "order": 1,
                     "enabled": True,
-                    AnalyseAssetsCatalog.SOURCE: "mbank_pln",
+                    AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
                 }
             ]
         )
@@ -153,10 +151,10 @@ class AllocateCatalogTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 }
             ]
         )
@@ -165,7 +163,7 @@ class AllocateCatalogTests(unittest.TestCase):
         events_by_asset, unallocated = allocate_catalog(pool, catalog, rules, manual)
 
         self.assertEqual(len(unallocated), 1)
-        self.assertEqual(unallocated.iloc[0][AssetRw.MBANK_TITLE], "INNY TYTUL")
+        self.assertEqual(unallocated.iloc[0][AssetRw.TITLE], "INNY TYTUL")
         self.assertEqual(len(events_by_asset["aquamarina"]), 1)
         self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], "mbank_pln")
 
@@ -232,14 +230,13 @@ class ManualAllocationTests(unittest.TestCase):
         from roi.allocate import allocate_catalog
 
         row = {
-            AssetRw.MBANK_BOOKING_DATE: "2020-01-01",
-            AssetRw.MBANK_TRANSACTION_DATE: "2020-01-01",
-            AssetRw.MBANK_DESCRIPTION: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
-            AssetRw.MBANK_TITLE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
-            AssetRw.MBANK_TRANSACTION_PARTY: "X",
-            AssetRw.MBANK_ACCOUNT_NUMBER: "123",
-            AssetRw.MBANK_AMOUNT: -100.0,
-            AssetRw.MBANK_OUTSTANDING_BALANCE: 0.0,
+            AssetRw.TRANSACTION_DATE: "2020-01-01",
+            AssetRw.OPERATION_TYPE: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
+            AssetRw.TITLE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
+            AssetRw.COUNTERPARTY: "X",
+            AssetRw.ACCOUNT_NUMBER: "123",
+            AssetRw.AMOUNT: -100.0,
+            AssetRw.BALANCE: 0.0,
             MBankFile.EFFECTIVE_DATE: "2020-01-01",
             MBankFile.DEBIT_ACCOUNT: "acc1",
             "_source": "acc1",
@@ -252,7 +249,7 @@ class ManualAllocationTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     "order": 1,
                     "enabled": True,
-                    AnalyseAssetsCatalog.SOURCE: "mbank_pln",
+                    AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
                 }
             ]
         )
@@ -264,10 +261,10 @@ class ManualAllocationTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
-                    AnalyseAssetsRules.SOURCE: "revolut",
+                    AnalyseAssetsRules.POOL_ID: "revolut",
                 }
             ]
         )
@@ -287,7 +284,7 @@ class BuildSelectorTests(unittest.TestCase):
                 ("2020-01-01", -100.0, AssetRw.CAT_INVESTMENT, "test"),
             ]
         )
-        df[AssetRw.MBANK_TITLE] = "UMOWA NR AQ/2014/252/180 LOKAL 180"
+        df[AssetRw.TITLE] = "UMOWA NR AQ/2014/252/180 LOKAL 180"
         step_rules = pd.DataFrame(
             [
                 {
@@ -306,7 +303,7 @@ class BuildSelectorTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 2,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "UMOWA NR AQ/2014/252/180 LOKAL 180",
                 },
@@ -315,6 +312,30 @@ class BuildSelectorTests(unittest.TestCase):
 
         selector = build_step_selector(df, step_rules)
         self.assertTrue(selector.iloc[0])
+
+    def test_title_contains_is_case_insensitive(self):
+        from analyse_assets.build_selector import build_step_selector
+        from analyse_assets.config_model import AnalyseAssetsRules
+        from analyse_assets.data_model import AssetRw
+
+        df = AssetRw.create(
+            [
+                ("2026-05-06", -34278.0, AssetRw.CAT_INVESTMENT, "card"),
+            ]
+        )
+        df[AssetRw.TITLE] = "GRUPA GOLDENMARK   /WROCLAW"
+        step_rules = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsRules.FIELD: "TITLE",
+                    AnalyseAssetsRules.OPERATOR: "contains",
+                    AnalyseAssetsRules.VALUE: "Grupa Goldenmark",
+                    AnalyseAssetsRules.CONDITION_GROUP: 1,
+                }
+            ]
+        )
+        selector = build_step_selector(df, step_rules)
+        self.assertTrue(bool(selector.iloc[0]))
 
     def test_drop_incomplete_rules_removes_blank_rows(self):
         from analyse_assets.config_model import AnalyseAssetsRules
@@ -328,7 +349,7 @@ class BuildSelectorTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "test",
                 },

@@ -22,8 +22,10 @@ import pandas as pd
 from importers.assets.data_model import (
     AssetsFile,
     GoldCoinPurchaseRules,
+    GoldCoinUnitPrices,
     GoldCoinValuations,
     GOLD_COIN_PURCHASES_SHEET,
+    GOLD_COIN_UNIT_PRICES_SHEET,
     GOLD_COIN_VALUATIONS_SHEET,
     GroupDomain,
     KindDomain,
@@ -99,10 +101,28 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
         ]
     )
 
+    unit_prices = pd.DataFrame(
+        [
+            {
+                GoldCoinUnitPrices.DATE: "2026-07-01",
+                GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
+                GoldCoinUnitPrices.UNIT_PRICE: 0,
+                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI mark-to-market)",
+            },
+            {
+                GoldCoinUnitPrices.DATE: "2026-07-01",
+                GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
+                GoldCoinUnitPrices.UNIT_PRICE: 0,
+                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI mark-to-market)",
+            },
+        ]
+    )
+
     return {
         "assets": assets_row,
         GOLD_COIN_PURCHASES_SHEET: purchases,
         GOLD_COIN_VALUATIONS_SHEET: valuations,
+        GOLD_COIN_UNIT_PRICES_SHEET: unit_prices,
     }
 
 
@@ -123,6 +143,8 @@ def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
 
     sheets[GOLD_COIN_PURCHASES_SHEET] = gold_sheets[GOLD_COIN_PURCHASES_SHEET]
     sheets[GOLD_COIN_VALUATIONS_SHEET] = gold_sheets[GOLD_COIN_VALUATIONS_SHEET]
+    if GOLD_COIN_UNIT_PRICES_SHEET not in sheets:
+        sheets[GOLD_COIN_UNIT_PRICES_SHEET] = gold_sheets[GOLD_COIN_UNIT_PRICES_SHEET]
     return sheets
 
 

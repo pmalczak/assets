@@ -4,6 +4,7 @@ import pandas as pd
 
 from analyse_assets.account_tx import AccountTx, add_ymd_columns
 from importers.mbank.data_model import MbankOperationType
+from importers.revolut.account_data_model import RevolutOperationType
 
 
 class ExpectedPositiveValue(Exception):
@@ -15,7 +16,7 @@ class ExpectedNegativeValue(Exception):
 
 
 class AssetRWCls:
-    """Warstwa ROI na kolumnach AccountTx (aliasy MBANK_* dla kompatybilności)."""
+    """Warstwa ROI na kolumnach AccountTx."""
 
     YEAR = AccountTx.YEAR
     MONTH = AccountTx.MONTH
@@ -32,16 +33,6 @@ class AssetRWCls:
     ACCOUNT_ID = AccountTx.ACCOUNT_ID
     POOL_ID = AccountTx.POOL_ID
 
-    # Aliasy legacy (testy / stare reguły FIELD_MAP).
-    MBANK_TRANSACTION_DATE = AccountTx.TRANSACTION_DATE
-    MBANK_DESCRIPTION = AccountTx.OPERATION_TYPE
-    MBANK_TITLE = AccountTx.TITLE
-    MBANK_TRANSACTION_PARTY = AccountTx.COUNTERPARTY
-    MBANK_ACCOUNT_NUMBER = AccountTx.ACCOUNT_NUMBER
-    MBANK_AMOUNT = AccountTx.AMOUNT
-    MBANK_OUTSTANDING_BALANCE = AccountTx.BALANCE
-    MBANK_BOOKING_DATE = AccountTx.TRANSACTION_DATE
-
     CAT_INVESTMENT = "  INWESTYCJA"
     CAT_INFLOW = " WPŁYWY"
     CAT_OUTFLOW = " WYDATKI"
@@ -57,6 +48,7 @@ class AssetRWCls:
             MbankOperationType.PRZELEW_EXPRESS_ELIXIR_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESSOWY_PRZELEW_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_OUTFLOW,
+            RevolutOperationType.CARD_PAYMENT: self.CAT_OUTFLOW,
             MbankOperationType.WYPLATA: self.CAT_OUTFLOW,
         }
         self.inflow_mapping = {
@@ -70,6 +62,9 @@ class AssetRWCls:
             MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WALUTOWY_PRZYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.WYPLATA: self.CAT_INVESTMENT,
+            # Zakupy złota kartą (mBank / Revolut).
+            MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_INVESTMENT,
+            RevolutOperationType.CARD_PAYMENT: self.CAT_INVESTMENT,
         }
         self.investment_refund_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INVESTMENT,

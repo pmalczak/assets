@@ -13,8 +13,6 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
     ENABLED = "enabled"
     PROPERTIES_ID = "properties_id"
     POOL_ID = "pool_id"
-    # Alias przejściowy (stara kolumna Excel `source`).
-    SOURCE = POOL_ID
 
     def expected_columns(self) -> set:
         return {
@@ -38,7 +36,6 @@ class AnalyseAssetsRulesCls(GenericStructureClass):
     VALUE = "value"
     UWAGI = "Uwagi"
     POOL_ID = "pool_id"
-    SOURCE = POOL_ID
 
     def expected_columns(self) -> set:
         return {
@@ -84,13 +81,10 @@ RULES_SHEET = "rules"
 MANUAL_SHEET = "manual"
 
 DEFAULT_POOL_ID = MBANK_PLN
-DEFAULT_TRANSACTION_SOURCE = DEFAULT_POOL_ID
-MBANK_EUR_TRANSACTION_SOURCE = MBANK_EUR
 MANUAL_TRANSACTION_SOURCE = "manual"
 
 # Kolumna id konta źródłowego w AccountTx.
 ACCOUNT_ID_COLUMN = AccountTx.ACCOUNT_ID
-MBANK_SOURCE_ACCOUNT_COLUMN = ACCOUNT_ID_COLUMN
 
 MAPPING_NAMES = {
     "initial_investment",
@@ -100,7 +94,6 @@ MAPPING_NAMES = {
     "inflow",
 }
 
-# Preferowane nazwy semantyczne + aliasy MBANK_* / SOURCE.
 FIELD_NAMES = {
     "OPERATION_TYPE",
     "TITLE",
@@ -110,13 +103,6 @@ FIELD_NAMES = {
     "ACCOUNT_ID",
     "POOL_ID",
     "YEAR",
-    "MBANK_TITLE",
-    "MBANK_TRANSACTION_PARTY",
-    "MBANK_ACCOUNT_NUMBER",
-    "MBANK_AMOUNT",
-    "MBANK_DESCRIPTION",
-    "MBANK_SOURCE_ACCOUNT",
-    "SOURCE",
 }
 
 OPERATOR_NAMES = {

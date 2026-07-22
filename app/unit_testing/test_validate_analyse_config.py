@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from analyse_assets.account_tx import AccountTx
 from analyse_assets.config_model import (
     CATALOG_SHEET,
-    DEFAULT_TRANSACTION_SOURCE,
+    DEFAULT_POOL_ID,
     MANUAL_SHEET,
     RULES_SHEET,
     AnalyseAssetsCatalog,
@@ -33,7 +34,7 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             AnalyseAssetsCatalog.ORDER: 1,
             AnalyseAssetsCatalog.ENABLED: 1,
             AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
-            AnalyseAssetsCatalog.SOURCE: DEFAULT_TRANSACTION_SOURCE,
+            AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
         }
         row.update(overrides)
         return pd.DataFrame([row])
@@ -45,11 +46,11 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             AnalyseAssetsRules.STEP_ORDER: 0,
             AnalyseAssetsRules.MAPPING: "initial_investment",
             AnalyseAssetsRules.CONDITION_GROUP: 1,
-            AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+            AnalyseAssetsRules.FIELD: "TITLE",
             AnalyseAssetsRules.OPERATOR: "contains",
             AnalyseAssetsRules.VALUE: "ZAKUP",
             AnalyseAssetsRules.UWAGI: "",
-            AnalyseAssetsRules.SOURCE: "",
+            AnalyseAssetsRules.POOL_ID: "",
         }
         row.update(overrides)
         return pd.DataFrame([row])
@@ -87,9 +88,30 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
         codes = {i.code for i in report.errors}
         self.assertIn("unknown_field", codes)
 
+    def test_legacy_field_is_error(self):
+        path = self._write_config(
+            self._minimal_catalog(),
+            self._minimal_rule(**{AnalyseAssetsRules.FIELD: "MBANK_TITLE"}),
+            self._empty_manual(),
+        )
+        report = validate_analyse_config(path)
+        legacy = [i for i in report.errors if i.code == "legacy_field"]
+        self.assertEqual(len(legacy), 1)
+        self.assertIn("TITLE", legacy[0].message)
+
+    def test_legacy_source_column_is_error(self):
+        catalog = self._minimal_catalog()
+        catalog = catalog.rename(columns={AnalyseAssetsCatalog.POOL_ID: "source"})
+        rules = self._minimal_rule()
+        rules = rules.rename(columns={AnalyseAssetsRules.POOL_ID: "source"})
+        path = self._write_config(catalog, rules, self._empty_manual())
+        report = validate_analyse_config(path)
+        codes = {i.code for i in report.errors}
+        self.assertIn("legacy_column", codes)
+
     def test_unsupported_catalog_source_is_error(self):
         path = self._write_config(
-            self._minimal_catalog(**{AnalyseAssetsCatalog.SOURCE: "revolut"}),
+            self._minimal_catalog(**{AnalyseAssetsCatalog.POOL_ID: "revolut"}),
             self._minimal_rule(),
             self._empty_manual(),
         )
@@ -134,7 +156,7 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             self._minimal_catalog(),
             self._minimal_rule(
                 **{
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "gte",
                     AnalyseAssetsRules.VALUE: "2020",
                 }
@@ -154,11 +176,11 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "initial_investment",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "A",
                     AnalyseAssetsRules.UWAGI: "",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 },
                 {
                     AnalyseAssetsRules.ASSET_ID: "aquamarina",
@@ -166,11 +188,11 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
                     AnalyseAssetsRules.STEP_ORDER: 0,
                     AnalyseAssetsRules.MAPPING: "inflow_outflow",
                     AnalyseAssetsRules.CONDITION_GROUP: 1,
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "B",
                     AnalyseAssetsRules.UWAGI: "",
-                    AnalyseAssetsRules.SOURCE: "",
+                    AnalyseAssetsRules.POOL_ID: "",
                 },
             ]
         )
@@ -180,19 +202,16 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
         self.assertIn("inconsistent_mapping", codes)
 
     def test_pool_selector_reports_missing_mapping_coverage(self):
-        from analyse_assets.config_model import AnalyseAssetsCatalog as Cat
-        from analyse_assets.data_model import AssetRw
-
         pool = pd.DataFrame(
             [
                 {
-                    AssetRw.MBANK_TRANSACTION_DATE: "2020-01-01",
-                    AssetRw.MBANK_DESCRIPTION: MbankOperationType.BLIK_ZAKUP_NFC,
-                    AssetRw.MBANK_TITLE: "ZAKUP TEST",
-                    AssetRw.MBANK_TRANSACTION_PARTY: "X",
-                    AssetRw.MBANK_ACCOUNT_NUMBER: "123",
-                    AssetRw.MBANK_AMOUNT: -10.0,
-                    Cat.SOURCE: DEFAULT_TRANSACTION_SOURCE,
+                    AccountTx.TRANSACTION_DATE: "2020-01-01",
+                    AccountTx.OPERATION_TYPE: MbankOperationType.BLIK_ZAKUP_NFC,
+                    AccountTx.TITLE: "ZAKUP TEST",
+                    AccountTx.COUNTERPARTY: "X",
+                    AccountTx.ACCOUNT_NUMBER: "123",
+                    AccountTx.AMOUNT: -10.0,
+                    AccountTx.POOL_ID: DEFAULT_POOL_ID,
                 }
             ]
         )
@@ -201,7 +220,7 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             self._minimal_rule(
                 **{
                     AnalyseAssetsRules.MAPPING: "initial_investment",
-                    AnalyseAssetsRules.FIELD: "MBANK_TITLE",
+                    AnalyseAssetsRules.FIELD: "TITLE",
                     AnalyseAssetsRules.OPERATOR: "contains",
                     AnalyseAssetsRules.VALUE: "ZAKUP",
                 }
