@@ -125,11 +125,6 @@ def read_property_valuations() -> pd.DataFrame:
     return valuations
 
 
-def read_cash_sheet_valuations() -> pd.DataFrame:
-    """Arkusz `cash` (Data, wartość, waluta) — NAV gotówki dla snapshot / ROI."""
-    return read_asset_sheet_optional("cash")
-
-
 def _property_valuations_sheet_name(source_file: Path) -> str:
     sheet_names = pd.ExcelFile(source_file).sheet_names
     if PROPERTIES_VALUATIONS_SHEET in sheet_names:

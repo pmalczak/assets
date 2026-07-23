@@ -2,6 +2,7 @@
 __author__ = "pmalczak@gmail.com"
 
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -17,43 +18,47 @@ from fx.get_last_fx import get_fx_as_of
 
 
 def evaluate_assets(
-    data_root,
+    data_root: Path,
     assets: pd.DataFrame,
     fx_rates: pd.DataFrame,
     valuation_date: date,
-) -> pd.DataFrame:
-
+) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Ewaluacja wierszy z assets_1.
+    Zwraca (ramka z VALUE_PLN/FX, lista ostrzeżeń).
+    """
     result = []
+    warnings: list[str] = []
     a = assets[assets[AssetsDef.KIND].notnull()]
     for i, assets_file_row in a.iterrows():
         assert isinstance(assets_file_row, pd.Series)
         rodzaj_importu: str = assets_file_row[AssetsDef.KIND]
+        asset_id = str(assets_file_row[AssetsDef.ID])
 
         if rodzaj_importu.startswith(KindDomain.MBANK):
-            asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_mbank(data_root, asset_id, assets_file_row, valuation_date)
             if not r.empty:
                 AssetsDef.check_structure(r)
                 result += [r]
 
         elif rodzaj_importu.startswith(KindDomain.REVOLUT):
-            asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_revolut(data_root, asset_id, assets_file_row, valuation_date)
             if len(r) > 0:
                 AssetsDef.check_structure(r)
                 result += [r]
 
         elif rodzaj_importu == 'obligacje_skarbowe_import':
-            asset_id: str = assets_file_row[AssetsDef.ID]
             r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row, valuation_date)
             if not r.empty:
                 AssetsDef.check_structure(r)
                 result += [r]
 
         elif rodzaj_importu == 'assets.zloto-monety':
-            r, warnings = evaluate_zloto_monety(data_root, assets_file_row, a, valuation_date)
-            for warning in warnings:
-                print(f"OSTRZEZENIE [{assets_file_row[AssetsDef.ID]}]: {warning}")
+            r, gold_warnings = evaluate_zloto_monety(assets_file_row, valuation_date)
+            for warning in gold_warnings:
+                msg = f"[{asset_id}] {warning}"
+                warnings.append(msg)
+                print(f"OSTRZEZENIE {msg}")
             if not r.empty:
                 AssetsDef.check_structure(r)
                 result += [r]
@@ -63,15 +68,22 @@ def evaluate_assets(
             if r is not None and not r.empty:
                 AssetsDef.check_structure(r)
                 result += [r]
+            elif r is None or r.empty:
+                warnings.append(
+                    f"[{asset_id}] Brak wyceny dla {rodzaj_importu!r} na date {valuation_date}."
+                )
 
         else:
-            print(f'brakujący typ: {rodzaj_importu}')
+            msg = f"[{asset_id}] brakujący typ: {rodzaj_importu}"
+            warnings.append(msg)
+            print(msg)
 
+    empty_cols = list(
+        AssetsDef.expected_columns()
+        | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION}
+    )
     if not result:
-        return pd.DataFrame(columns=list(
-            AssetsDef.expected_columns()
-            | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION}
-        ))
+        return pd.DataFrame(columns=empty_cols), warnings
 
     result = pd.concat(result)
     AssetsDef.check_structure(result)
@@ -91,4 +103,4 @@ def evaluate_assets(
     evaluation_date = pd.to_datetime(result_fx[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
     diff = (value_date - evaluation_date).dt.days
     result_fx[AssetsDef.DAYS_AFTER_VALUATION] = diff
-    return format_date_columns(result_fx, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE)
+    return format_date_columns(result_fx, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE), warnings

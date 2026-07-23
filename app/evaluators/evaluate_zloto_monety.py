@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
-from pathlib import Path
-
 from datetime import date
 
 import pandas as pd
@@ -19,12 +17,9 @@ from roi.gold_terminal import holdings_from_inventory, resolve_gold_terminal_unr
 
 
 def evaluate_zloto_monety(
-    data_root: Path,
     assets_file_row: pd.Series,
-    assets_catalog: pd.DataFrame,
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
-    del data_root, assets_catalog  # CAPEX/match bankowy nie tu — analyse_assets_config
     inventory = read_gold_coin_inventory()
     warnings: list[str] = []
 

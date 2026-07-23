@@ -216,6 +216,20 @@ def _bonds_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
 
 def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
     kind = str(asset_row[AssetsDef.KIND])
+
+    if kind == "assets.cash":
+        valuations = read_property_valuations()
+        config = read_analyse_config()
+        close_dates = load_property_close_dates(config["manual"], config["catalog"])
+        properties_id = str(asset_row[AssetsDef.ID])
+        history = property_valuation_history(valuations, properties_id, close_dates)
+        if history.empty:
+            return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
+        history["asset_key"] = properties_id
+        history["group"] = str(asset_row[AssetsDef.GROUP])
+        history["currency"] = history["currency"].astype(str).str.upper()
+        return history[["asset_key", "group", "date", "value", "currency"]]
+
     sheet_name = kind.split(".", 1)[1]
     sheet = pd.read_excel(get_assets_file(), sheet_name=sheet_name)
 
@@ -226,21 +240,6 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
             group_name=str(asset_row[AssetsDef.GROUP]),
             currency=str(asset_row[AssetsDef.CURRENCY]).upper(),
         )
-
-    if kind == "assets.cash":
-        result: list[pd.DataFrame] = []
-        for currency, group in sheet.groupby("waluta"):
-            history = _single_series_history(
-                sheet=group,
-                asset_key=f"{asset_row[AssetsDef.ID]}:{str(currency).upper()}",
-                group_name=str(asset_row[AssetsDef.GROUP]),
-                currency=str(currency).upper(),
-            )
-            if not history.empty:
-                result.append(history)
-        if result:
-            return pd.concat(result, ignore_index=True)
-        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     if kind in ("assets.properties-wyceny", "assets.properties"):
         valuations = read_property_valuations()

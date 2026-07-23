@@ -59,9 +59,30 @@ def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
 
     assets = read_assets()
     check_wrong_catalogs(data_root, assets)
-    assets = evaluate_assets(data_root, assets, fx_rates, valuation_date)
+    assets, _warnings = evaluate_assets(data_root, assets, fx_rates, valuation_date)
 
     return finalize_assets_snapshot(assets, valuation_date)
+
+
+def evaluate_assets_file_for_ui(valuation_date: date) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Ewaluacja assets_1 na datę (bez zapisu snapshotu DATA_STEP).
+    Zwraca (tabela ewaluacji, ostrzeżenia).
+    """
+    data_root = get_online_data_root()
+
+    metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / "fx"
+    if not metadata_root.is_dir():
+        metadata_root.mkdir()
+
+    fx_repo = NbpFxRepository(target_directory=metadata_root, min_year=2005)
+    fx_rates = fx_repo.update_to_date()
+    fx_rates = fx_rates[[NBP_API_EUR]]
+
+    assets = read_assets()
+    check_wrong_catalogs(data_root, assets)
+    evaluated, warnings = evaluate_assets(data_root, assets, fx_rates, valuation_date)
+    return finalize_assets_snapshot(evaluated, valuation_date), warnings
 
 
 def finalize_assets_snapshot(assets: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
