@@ -226,7 +226,9 @@ class CashRoiAllocationTests(unittest.TestCase):
                 }
             ]
         )
-        summary = compute_roi("cash", events, props, date(2026, 1, 1), properties_id="cash")
+        empty_cfg = {"catalog": pd.DataFrame(), "rules": pd.DataFrame(), "manual": pd.DataFrame()}
+        with patch("roi.terminal_value.read_analyse_config", return_value=empty_cfg):
+            summary = compute_roi("cash", events, props, date(2026, 1, 1))
         self.assertFalse(summary.is_sold)
         self.assertEqual(summary.terminal_unrealized, 120000.0)
         self.assertIsNotNone(summary.xirr)
@@ -256,13 +258,14 @@ class CashRoiAllocationTests(unittest.TestCase):
                 },
             ]
         )
-        _, unrealized, warnings = resolve_terminal_value(
-            "cash",
-            events,
-            props,
-            date(2026, 7, 22),
-            properties_id="cash",
-        )
+        empty_cfg = {"catalog": pd.DataFrame(), "rules": pd.DataFrame(), "manual": pd.DataFrame()}
+        with patch("roi.terminal_value.read_analyse_config", return_value=empty_cfg):
+            _, unrealized, warnings = resolve_terminal_value(
+                "cash",
+                events,
+                props,
+                date(2026, 7, 22),
+            )
         self.assertEqual(warnings, [])
         self.assertAlmostEqual(unrealized, 100000.0)
 
@@ -336,7 +339,6 @@ class CashConfigValidationTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_cash.xlsx",
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: "cash",
                     AnalyseAssetsCatalog.POOL_ID: MBANK_EUR,
                 }
             ]

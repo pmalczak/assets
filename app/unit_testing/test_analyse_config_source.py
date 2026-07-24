@@ -33,7 +33,6 @@ class AnalyseConfigPoolIdTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
                     AnalyseAssetsCatalog.POOL_ID: "",
                 }
             ]
@@ -72,7 +71,6 @@ class AnalyseConfigPoolIdTests(unittest.TestCase):
                     AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
                     AnalyseAssetsCatalog.ORDER: 1,
                     AnalyseAssetsCatalog.ENABLED: 1,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
                     AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
                 }
             ]
@@ -107,7 +105,6 @@ class AnalyseConfigPoolIdTests(unittest.TestCase):
                     "output_file": "mbank_aquamarina.xlsx",
                     "order": 1,
                     "enabled": 1,
-                    "properties_id": "aquamarina",
                     "source": DEFAULT_POOL_ID,
                 }
             ]

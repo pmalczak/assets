@@ -41,11 +41,8 @@ def compute_roi(
     cashflows: pd.DataFrame,
     properties_sheet: pd.DataFrame | None,
     valuation_date: date,
-    *,
-    properties_id: str | None = None,
 ) -> RoiSummary:
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
-    lookup_id = properties_id or asset_id
 
     capex = _aggregate_category(filtered, INVESTMENT)
     opex = _aggregate_category(filtered, OUTFLOW)
@@ -55,7 +52,6 @@ def compute_roi(
         cashflows,
         properties_sheet,
         valuation_date,
-        properties_id=lookup_id,
     )
 
     flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
@@ -65,7 +61,6 @@ def compute_roi(
         cashflows,
         properties_sheet,
         valuation_date,
-        properties_id=lookup_id,
     )
 
     xirr_dates, xirr_amounts = cashflows_for_xirr(filtered, valuation_date, terminal_unrealized)

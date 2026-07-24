@@ -11,7 +11,6 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
     OUTPUT_FILE = "output_file"
     ORDER = "order"
     ENABLED = "enabled"
-    PROPERTIES_ID = "properties_id"
     POOL_ID = "pool_id"
 
     def expected_columns(self) -> set:
@@ -20,7 +19,6 @@ class AnalyseAssetsCatalogCls(GenericStructureClass):
             self.OUTPUT_FILE,
             self.ORDER,
             self.ENABLED,
-            self.PROPERTIES_ID,
             self.POOL_ID,
         }
 

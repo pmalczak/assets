@@ -33,7 +33,6 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_aquamarina.xlsx",
             AnalyseAssetsCatalog.ORDER: 1,
             AnalyseAssetsCatalog.ENABLED: 1,
-            AnalyseAssetsCatalog.PROPERTIES_ID: "aquamarina",
             AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
         }
         row.update(overrides)

@@ -72,14 +72,6 @@ def read_analyse_config(config_path: Path | None = None) -> dict[str, pd.DataFra
     )
     manual = pd.read_excel(source, sheet_name=MANUAL_SHEET)
 
-    if AnalyseAssetsCatalog.PROPERTIES_ID not in catalog.columns:
-        catalog[AnalyseAssetsCatalog.PROPERTIES_ID] = catalog[AnalyseAssetsCatalog.ASSET_ID]
-    else:
-        catalog[AnalyseAssetsCatalog.PROPERTIES_ID] = (
-            catalog[AnalyseAssetsCatalog.PROPERTIES_ID]
-            .fillna(catalog[AnalyseAssetsCatalog.ASSET_ID])
-            .astype(str)
-        )
     catalog = _normalize_catalog_pool_id(catalog)
 
     AnalyseAssetsCatalog.check_structure(catalog)

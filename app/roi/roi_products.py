@@ -239,7 +239,6 @@ def _build_roi_summary(
     assets_date: date,
     **_kwargs,
 ) -> pd.DataFrame:
-    from importers.assets.property_lifecycle import catalog_properties_id
     from importers.assets.read_assets import read_property_valuations
     from roi.compute_roi import compute_roi, roi_summary_to_row
 
@@ -253,7 +252,6 @@ def _build_roi_summary(
     summaries = []
     for _, asset_row in catalog.iterrows():
         asset_id = str(asset_row["asset_id"])
-        properties_id = catalog_properties_id(asset_row)
         events = events_by_asset.get(
             asset_id, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
         )
@@ -262,7 +260,6 @@ def _build_roi_summary(
             events,
             properties_sheet,
             assets_date,
-            properties_id=properties_id,
         )
         summaries.append(roi_summary_to_row(summary))
 

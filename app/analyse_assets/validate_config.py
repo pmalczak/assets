@@ -800,6 +800,69 @@ def _validate_against_pool(
                 )
 
 
+def _validate_catalog_vs_valuations(
+    catalog: pd.DataFrame,
+    manual: pd.DataFrame,
+    report: ValidationReport,
+) -> None:
+    """asset_id w katalogu musi być tożsame z id w properties-wyceny (poza złotem)."""
+    from importers.assets.data_model import Properties
+    from importers.assets.read_assets import read_property_valuations
+    from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
+
+    try:
+        valuations = read_property_valuations()
+    except Exception as exc:  # noqa: BLE001
+        report.add(
+            "warning",
+            "properties-wyceny",
+            "-",
+            "valuations_unread",
+            f"Nie udało się odczytać properties-wyceny (pominięto kontrolę id): {exc}",
+        )
+        return
+
+    valuation_ids = {
+        str(value).strip()
+        for value in valuations[Properties.ID].dropna().astype(str)
+        if str(value).strip()
+    }
+    closing_ids: set[str] = set()
+    if not manual.empty and AnalyseAssetsManual.CATEGORY in manual.columns:
+        closing = manual[manual[AnalyseAssetsManual.CATEGORY].astype(str) == "CLOSING"]
+        if not closing.empty:
+            closing_ids = {
+                str(value).strip()
+                for value in closing[AnalyseAssetsManual.ASSET_ID].dropna().astype(str)
+                if str(value).strip()
+            }
+
+    enabled = catalog
+    if AnalyseAssetsCatalog.ENABLED in catalog.columns:
+        try:
+            enabled = catalog.loc[catalog[AnalyseAssetsCatalog.ENABLED].astype(bool)]
+        except (TypeError, ValueError):
+            enabled = catalog
+
+    for _, row in enabled.iterrows():
+        asset_id = row.get(AnalyseAssetsCatalog.ASSET_ID)
+        if is_blank_rule_value(asset_id):
+            continue
+        asset_id = str(asset_id).strip()
+        if asset_id == GOLD_COINS_ROI_ASSET_ID:
+            continue
+        if asset_id in valuation_ids or asset_id in closing_ids:
+            continue
+        report.add(
+            "error",
+            CATALOG_SHEET,
+            _loc_asset(asset_id),
+            "missing_valuation_asset_id",
+            f"Brak id {asset_id!r} w properties-wyceny — "
+            f"asset_id musi być tożsame z kolumną id wycen",
+        )
+
+
 def validate_analyse_config(
     config_path: Path | None = None,
     *,
@@ -850,6 +913,7 @@ def validate_analyse_config(
     _validate_rules(rules, catalog, catalog_ids, report)
     _validate_manual(manual, catalog_ids, report)
     _validate_enabled_coverage(catalog, rules, manual, report)
+    _validate_catalog_vs_valuations(catalog, manual, report)
 
     if check_pool:
         if pool is None:

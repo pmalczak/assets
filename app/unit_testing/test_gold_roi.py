@@ -244,7 +244,6 @@ class GoldTerminalMtmTests(unittest.TestCase):
                 cashflows,
                 None,
                 date(2026, 7, 1),
-                properties_id=GOLD_COINS_ROI_ASSET_ID,
             )
         self.assertEqual(realized, 0.0)
         self.assertAlmostEqual(unrealized, 35000.0)
@@ -283,7 +282,6 @@ class GoldCapexAllocationTests(unittest.TestCase):
                     "order": 1,
                     "enabled": True,
                     AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
                 },
             ]
         )
@@ -353,7 +351,6 @@ class GoldCapexAllocationTests(unittest.TestCase):
                     "order": 1,
                     "enabled": True,
                     AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
                 },
             ]
         )
@@ -430,7 +427,6 @@ class GoldCapexAllocationTests(unittest.TestCase):
                     "order": 1,
                     "enabled": True,
                     AnalyseAssetsCatalog.POOL_ID: DEFAULT_POOL_ID,
-                    AnalyseAssetsCatalog.PROPERTIES_ID: GOLD_COINS_ROI_ASSET_ID,
                 },
             ]
         )

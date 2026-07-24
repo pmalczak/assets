@@ -5,25 +5,18 @@ from datetime import date
 
 import pandas as pd
 
-from analyse_assets.config_model import AnalyseAssetsCatalog, AnalyseAssetsManual
+from analyse_assets.config_model import AnalyseAssetsManual
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import OperationDomain, Properties
 
 CLOSING_CATEGORY = "CLOSING"
 
 
-def catalog_properties_id(asset_row: pd.Series) -> str:
-    value = asset_row.get(AnalyseAssetsCatalog.PROPERTIES_ID)
-    if value is None or pd.isna(value) or str(value).strip() == "":
-        return str(asset_row[AnalyseAssetsCatalog.ASSET_ID])
-    return str(value)
-
-
 def load_property_close_dates(
     manual: pd.DataFrame,
-    catalog: pd.DataFrame | None = None,
+    _catalog: pd.DataFrame | None = None,
 ) -> dict[str, date]:
-    """Daty zamkniecia z ROI manual (CLOSING), indeksowane po id z arkusza wycen."""
+    """Daty zamkniecia z ROI manual (CLOSING), indeksowane po asset_id."""
     if manual.empty:
         return {}
 
@@ -40,16 +33,7 @@ def load_property_close_dates(
     for asset_id, group in closing.groupby(AnalyseAssetsManual.ASSET_ID):
         earliest = group[AnalyseAssetsManual.DATE].min()
         by_asset_id[str(asset_id)] = earliest.date()
-
-    close_dates: dict[str, date] = dict(by_asset_id)
-    if catalog is not None and not catalog.empty:
-        for _, row in catalog.iterrows():
-            asset_id = str(row[AnalyseAssetsCatalog.ASSET_ID])
-            properties_id = catalog_properties_id(row)
-            if asset_id in by_asset_id:
-                close_dates[properties_id] = by_asset_id[asset_id]
-
-    return close_dates
+    return by_asset_id
 
 
 def property_ids_in_scope(

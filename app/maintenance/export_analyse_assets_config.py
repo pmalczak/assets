@@ -33,21 +33,20 @@ from app_proc.data_root import get_online_data_root
 def _catalog() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "properties_id": "aquamarina", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "properties_id": "horbaczewskiego", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "properties_id": "garaż", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "properties_id": "starogajowa", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "properties_id": "kiemliczow_1", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "properties_id": "kiemliczów_9_4", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "properties_id": "kiemliczów_9_3", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "properties_id": "rumiankowa", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "properties_id": "opoczyńska", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "properties_id": "karpacz", "pool_id": DEFAULT_POOL_ID},
-            {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "properties_id": "cash", "pool_id": MBANK_EUR},
-            # properties_id=zloto-monety: marker terminala qty×cena (nie lookup w properties-wyceny).
-            # CAPEX: wyłącznie rules (jak inne aktywa). Inventory sztuk: zloto-monety-zakupy (join po dacie).
-            # Ceny: zloto-monety-ceny.
-            {"asset_id": "zloto-monety", "output_file": "mbank_zloto_monety.xlsx", "order": 12, "enabled": 1, "properties_id": "zloto-monety", "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "aquamarina", "output_file": "mbank_aquamarina.xlsx", "order": 1, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "horbaczewskiego", "output_file": "mbank_horbaczewskiego.xlsx", "order": 2, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "garaz", "output_file": "mbank_garaz.xlsx", "order": 3, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "starogajowa", "output_file": "mbank_starogajowa.xlsx", "order": 4, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_1", "output_file": "mbank_kiemliczow_1.xlsx", "order": 5, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_4", "output_file": "mbank_kiemliczow_4.xlsx", "order": 6, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "kiemliczow_3", "output_file": "mbank_kiemliczow_3.xlsx", "order": 7, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "rumiankowa", "output_file": "mbank_rumiankowa.xlsx", "order": 8, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "pool_id": MBANK_EUR},
+            # zloto-monety: terminal qty×cena (nie lookup w properties-wyceny).
+            # CAPEX: rules. Inventory: zloto-monety-zakupy. Ceny: zloto-monety-ceny.
+            {"asset_id": "zloto-monety", "output_file": "mbank_zloto_monety.xlsx", "order": 12, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
         ]
     )
 

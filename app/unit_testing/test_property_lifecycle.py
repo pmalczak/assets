@@ -74,7 +74,6 @@ def _catalog() -> pd.DataFrame:
                 AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_garaz.xlsx",
                 AnalyseAssetsCatalog.ORDER: 1,
                 AnalyseAssetsCatalog.ENABLED: 1,
-                AnalyseAssetsCatalog.PROPERTIES_ID: "garaz",
                 AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
             },
             {
@@ -82,7 +81,6 @@ def _catalog() -> pd.DataFrame:
                 AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_rumiankowa.xlsx",
                 AnalyseAssetsCatalog.ORDER: 2,
                 AnalyseAssetsCatalog.ENABLED: 1,
-                AnalyseAssetsCatalog.PROPERTIES_ID: "rumiankowa",
                 AnalyseAssetsCatalog.POOL_ID: "mbank_pln",
             },
         ]

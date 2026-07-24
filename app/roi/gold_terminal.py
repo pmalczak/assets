@@ -19,8 +19,8 @@ class GoldInventoryJoinError(ValueError):
     """CAPEX złota bez jednoznacznego wiersza inventory (zloto-monety-zakupy)."""
 
 
-def is_gold_roi_asset(asset_id: str | None, properties_id: str | None = None) -> bool:
-    return (properties_id or asset_id) == GOLD_COINS_ROI_ASSET_ID
+def is_gold_roi_asset(asset_id: str | None) -> bool:
+    return asset_id == GOLD_COINS_ROI_ASSET_ID
 
 
 def _normalize_day(value) -> pd.Timestamp | None:
