@@ -31,17 +31,23 @@ Agent Cursor: czytaj ten plik na początku pracy domenowej; po istotnej decyzji 
 
 ## Założenia domenowe (obowiązujące)
 
-1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`.
+1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`. Brak osobnej zakładki `cash` w `assets_1.xlsx`.
 2. **Sprzedaż = CLOSING** — `is_sold` / zamknięcie wynika z kategorii `CLOSING` w cashflowach lub w arkuszu manual (data zamknięcia). Arkusz wycen / `operacja=sprzedane` nie ustawia flagi sprzedaży.
-3. **Wspólny arkusz wycen** — `asset-evaluation` trzyma NAV dla nieruchomości **oraz** pozycji `assets.cash` (np. `cash`, `rocky-iv`).
-4. **Bez podwójnego liczenia** — przy rozwijaniu `assets.properties` / `properties-wyceny` **wykluczać** ID z wierszy katalogu `RODZAJ*=assets.cash`; te ID idą wyłącznie ścieżką `assets.cash`.
+3. **Wspólny arkusz wycen NAV** — `asset-evaluation` (ex `properties-wyceny`) trzyma NAV dla nieruchomości **oraz** pozycji `assets.cash` (np. `cash`, `rocky-iv`). Snapshot i ROI terminal dla tych ID biorą stąd ostatnią wycenę ≤ data wyceny.
+4. **Bez podwójnego liczenia** — przy rozwijaniu `assets.properties` / `properties-wyceny` / `asset-evaluation` **wykluczać** ID z wierszy katalogu `RODZAJ*=assets.cash`; te ID idą wyłącznie ścieżką `assets.cash`.
 5. **Numer konta w regułach** — dopuszczalny NRB (cyfry) **albo** IBAN (np. `LU91…`).
 6. **Arkusze generyczne w `assets_1.xlsx`**:
-   - `inventory` (ex `zloto-monety-zakupy`), kolumna `instrument`
-   - `unit-price-evaluation` (ex `zloto-monety-wyceny`), kolumna `instrument`
-   - `asset-evaluation` (ex `properties-wyceny`)
-7. **Złoto ROI** — asset_id `zloto-monety`; terminal = qty×cena (inventory + unit-price-evaluation + CAPEX).
-8. **Snapshoty** — raporty UI z `09 assets/*.parquet`; po zmianie logiki wyceny użytkownik regeneruje snapshot (przycisk w Raportach). Nie migrujemy historycznych parquetów bez prośby.
+   - `inventory` (ex `zloto-monety-zakupy`) — ręczne: Data, `instrument`, waga, sztuki (+ opcjonalnie notatki); **bez** matchu bankowego
+   - `unit-price-evaluation` (ex `zloto-monety-ceny`) — ceny jednostkowe per `instrument`
+   - `asset-evaluation` (ex `properties-wyceny`) — NAV pozycji (nieruchomości, cash, rocky-iv, …)
+   - **Usunięte:** `zloto-monety-wyceny` (wycena całego holdingu złota) — nie wraca; złoto MTM wyłącznie qty×cena
+7. **Złoto ROI** (`asset_id=zloto-monety`):
+   - **CAPEX** wyłącznie z `analyse_assets_config` (`rules` / `manual`) via `allocate_catalog` — jak inne aktywa
+   - **Inventory** z arkusza `inventory`; join CAPEX ↔ inventory **wyłącznie po dacie**
+   - **Terminal / snapshot** = Σ sztuki × cena z `unit-price-evaluation`
+   - **Brak / niejednoznaczne / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
+8. **ROI cash a FX** — XIRR / ROI nominalny dla `cash` liczony w **walucie wyceny (EUR)**; bez przeliczania CAPEX/terminal FX w ROI. Przeliczenie na PLN jest w snapshocie portfela (`09 assets`), nie w warstwie ROI cash.
+9. **Snapshoty** — raporty UI z `09 assets/*.parquet`; po zmianie logiki wyceny użytkownik regeneruje snapshot (przycisk w Raportach). Nie migrujemy historycznych parquetów bez prośby. Nowe snapshoty dla gotówki mają `id=cash` (nie `id=EUR`).
 
 ---
 
@@ -61,6 +67,22 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 
 ---
 
+## Import wyciągów (Revolut)
+
+Źródła: `Dropbox/INWESTYCJE/download/pm` (`p_re`), `…/gm` (`g_re`). Przenoszenie do katalogów kont w Dropbox `assets` (`p_re_*` / `g_re_*`).
+
+| Prefiks nazwy pliku | Zachowanie |
+|---------------------|------------|
+| `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`) |
+| stem bez `_` (UUID) | Depozyt → katalog waluty |
+| pusty plik account/deposit | Usuwany; w raporcie importu: „usunięty (pusty)” |
+| `trading-account-statement_*` | Pomijany (nie importujemy trading) |
+| `consolidated-statement-v2_*`, `savings-statement_*` i inne nieznane | Pomijane — **nie** przerywają importu |
+
+mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz z katalogu `assets` → katalogi kont po kluczu numeru rachunku.
+
+---
+
 ## Preferencje pracy z kodem
 
 - Python przez `uv run` z katalogu `app/`.
@@ -68,6 +90,8 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zadania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
+- Zakładka **Waliduj**: walidacja `analyse_assets_config` + ewaluacja `assets_1` (dry-run, bez zapisu snapshotu).
+- **DATA_STEP** — jedyna warstwa cache i łańcucha zależności (`obtain` / `obtain_dependent`). Nie resetować ręcznie `_dependencies_stack` i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
 - Komunikacja z użytkownikiem: zwięźle, po polsku jeśli pyta po polsku.
 
 ---
@@ -77,6 +101,9 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 - Pełna speka algorytmów w tym pliku (to jest kod).
 - Migracja wszystkich historycznych snapshotów przy każdej zmianie modelu.
 - Osobny ledger gotówki bieżącej równoległy do cash pools.
+- Osobna wycena całego holdingu złota (dawne `zloto-monety-wyceny`).
+- Auto-migracja starego Excela inventory → nowy schemat bez prośby.
+- FX w XIRR cash (osobna decyzja, jeśli kiedyś wspólny mianownik PLN z nieruchomościami).
 
 ---
 
