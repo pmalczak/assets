@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Runtime pool_id dla kont ROR (typ=ror) na podstawie RODZAJ* + waluta."""
+"""Runtime pool_id dla kont ROR (typ=cash_pool.ror) na podstawie RODZAJ* + waluta."""
 from __future__ import annotations
 
 import pandas as pd
@@ -43,7 +43,7 @@ def resolve_pool_id(kind: object, currency: object) -> str | None:
 
 
 def assign_pool_id(assets: pd.DataFrame) -> pd.DataFrame:
-    """Dodaje kolumnę pool_id. Każdy typ=ror musi dostać wartość z POOL_IDS."""
+    """Dodaje kolumnę pool_id. Każdy typ=cash_pool.ror musi dostać wartość z POOL_IDS."""
     result = assets.copy()
     result[POOL_ID_COLUMN] = ""
 
@@ -69,7 +69,7 @@ def assign_pool_id(assets: pd.DataFrame) -> pd.DataFrame:
     if unresolved:
         details = "; ".join(unresolved)
         raise ValueError(
-            "Brak mapowania pool_id dla kont typ=ror "
+            "Brak mapowania pool_id dla kont typ=cash_pool.ror "
             f"(oczekiwane KIND mbank.*/revolut.* + waluta PLN/EUR): {details}"
         )
 

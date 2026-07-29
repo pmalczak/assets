@@ -28,7 +28,7 @@ class EvaluateDepositsTests(unittest.TestCase):
         self.assertEqual(res[0][AssetsDef.VALUE], 100.0)
         self.assertEqual(res[0][AssetsDef.EVALUATION_DATE], "2025-01-10")
         self.assertEqual(res[0][AssetsDef.GROUP], '2 depozyty')
-        self.assertEqual(res[0][AssetsDef.TYPE], "depozyt")
+        self.assertEqual(res[0][AssetsDef.TYPE], "investment.depozyt")
         self.assertIn("otwarcie", res[0][AssetsDef.DESCR])
 
         self.assertEqual(res[1][AssetsDef.VALUE], 50.0)

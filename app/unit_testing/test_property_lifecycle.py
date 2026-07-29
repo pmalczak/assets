@@ -7,8 +7,9 @@ from analyse_assets.config_model import (
     AnalyseAssetsCatalog,
     AnalyseAssetsManual,
 )
-from importers.assets.data_model import OperationDomain, PropertyValuations
+from importers.assets.data_model import AssetsFile, OperationDomain, PropertyValuations
 from importers.assets.property_lifecycle import (
+    cash_owned_asset_ids,
     is_property_closed,
     latest_valuation_on_date,
     load_property_close_dates,
@@ -124,6 +125,43 @@ class PropertyLifecycleTests(unittest.TestCase):
         close_dates = load_property_close_dates(_manual_closing(), _catalog())
         scope = property_ids_in_scope(valuations, close_dates)
         self.assertIn("rumiankowa", scope)
+
+    def test_property_ids_in_scope_excludes_cash_owned(self):
+        valuations = _valuations_frame()
+        valuations = pd.concat(
+            [
+                valuations,
+                pd.DataFrame(
+                    [
+                        {
+                            PropertyValuations.ID: "cash",
+                            PropertyValuations.DATE: "2025-01-01",
+                            PropertyValuations.VALUE: 100000.0,
+                            PropertyValuations.CURRENCY: "EUR",
+                            PropertyValuations.SIZE: 1,
+                            PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                            PropertyValuations.UNIT_PRICE: 100000.0,
+                        }
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        )
+        catalog = pd.DataFrame(
+            [
+                {
+                    AssetsFile.ID: "cash",
+                    AssetsFile.KIND: "assets.cash",
+                }
+            ]
+        )
+        scope = property_ids_in_scope(
+            valuations,
+            {},
+            exclude_ids=cash_owned_asset_ids(catalog),
+        )
+        self.assertIn("garaz", scope)
+        self.assertNotIn("cash", scope)
 
 
 if __name__ == "__main__":

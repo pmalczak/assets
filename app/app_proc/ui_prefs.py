@@ -11,6 +11,7 @@ TAB_LABELS = [
     "Raporty",
     "Wykres portfela",
     "ROI",
+    "FX",
     "Import wyciągów",
     "Wyszukiwanie transakcji",
     "Waliduj",
@@ -23,6 +24,7 @@ SLUG_TO_LABEL = {
     "raporty": "Raporty",
     "szukaj": "Wyszukiwanie transakcji",
     "roi": "ROI",
+    "fx": "FX",
     "import": "Import wyciągów",
     "waliduj": "Waliduj",
 }

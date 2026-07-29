@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Migracja arkusza properties -> properties-wyceny w assets_1.xlsx.
+Migracja arkusza properties -> asset-evaluation w assets_1.xlsx.
 
 Uzycie:
   cd app
@@ -22,10 +22,10 @@ if str(APP_ROOT) not in sys.path:
 
 from app_proc.data_root import get_online_data_root
 from importers.assets.data_model import (
+    ASSET_EVALUATION_SHEET,
     AssetsFile,
     LEGACY_PROPERTIES_SHEET,
     OperationDomain,
-    PROPERTIES_VALUATIONS_SHEET,
     Properties,
     PropertyValuations,
 )
@@ -50,8 +50,8 @@ def migrate_assets_file(target: Path, *, dry_run: bool = False) -> list[str]:
     open_rows = legacy[legacy[Properties.OPERATION] != OperationDomain.SOLD].copy()
     sold_rows = legacy[legacy[Properties.OPERATION] == OperationDomain.SOLD].copy()
 
-    if PROPERTIES_VALUATIONS_SHEET in sheets:
-        wyceny = sheets[PROPERTIES_VALUATIONS_SHEET]
+    if ASSET_EVALUATION_SHEET in sheets:
+        wyceny = sheets[ASSET_EVALUATION_SHEET]
         PropertyValuations.check_structure(wyceny, file=target)
         wyceny = pd.concat([wyceny, open_rows], ignore_index=True)
         wyceny = wyceny.drop_duplicates(
@@ -62,9 +62,9 @@ def migrate_assets_file(target: Path, *, dry_run: bool = False) -> list[str]:
         wyceny = open_rows.copy()
 
     wyceny = wyceny.sort_values([Properties.ID, Properties.DATE]).reset_index(drop=True)
-    sheets[PROPERTIES_VALUATIONS_SHEET] = wyceny
+    sheets[ASSET_EVALUATION_SHEET] = wyceny
     messages.append(
-        f"Arkusz {PROPERTIES_VALUATIONS_SHEET!r}: {len(wyceny)} wierszy "
+        f"Arkusz {ASSET_EVALUATION_SHEET!r}: {len(wyceny)} wierszy "
         f"(bez operacja=sprzedane)."
     )
 
@@ -108,7 +108,7 @@ def migrate_assets_file(target: Path, *, dry_run: bool = False) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migracja properties -> properties-wyceny")
+    parser = argparse.ArgumentParser(description="Migracja properties -> asset-evaluation")
     parser.add_argument(
         "target",
         nargs="?",

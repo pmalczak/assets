@@ -6,14 +6,17 @@ from pathlib import Path
 import pandas as pd
 
 from importers.assets.data_model import (
+    ASSET_EVALUATION_SHEET,
     AssetsFile,
-    GOLD_COIN_INVENTORY_SHEET,
-    GOLD_COIN_UNIT_PRICES_SHEET,
-    GoldCoinInventory,
-    GoldCoinUnitPrices,
+    INVENTORY_SHEET,
+    Inventory,
+    LEGACY_ASSET_EVALUATION_SHEET,
+    LEGACY_INVENTORY_SHEET,
     LEGACY_PROPERTIES_SHEET,
-    PROPERTIES_VALUATIONS_SHEET,
+    LEGACY_UNIT_PRICE_EVALUATION_SHEET,
     PropertyValuations,
+    UNIT_PRICE_EVALUATION_SHEET,
+    UnitPriceEvaluation,
 )
 from importers.assets.pool_id import (
     MBANK_EUR,
@@ -47,11 +50,11 @@ __all__ = [
     "read_assets",
     "read_asset_sheet",
     "read_asset_sheet_optional",
-    "GOLD_COIN_INVENTORY_SHEET",
-    "GOLD_COIN_UNIT_PRICES_SHEET",
-    "read_gold_coin_inventory",
-    "read_gold_coin_purchase_rules",
-    "read_gold_coin_unit_prices",
+    "INVENTORY_SHEET",
+    "UNIT_PRICE_EVALUATION_SHEET",
+    "ASSET_EVALUATION_SHEET",
+    "read_inventory",
+    "read_unit_price_evaluation",
     "read_property_valuations",
 ]
 
@@ -94,49 +97,69 @@ def read_asset_sheet_optional(sheet_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def read_gold_coin_inventory() -> pd.DataFrame:
-    """Inventory zakupów (Data, moneta, waga, sztuki). Brak zakładki → pusta ramka."""
+def _first_existing_sheet(source_file: Path, candidates: tuple[str, ...]) -> str | None:
+    sheet_names = set(pd.ExcelFile(source_file).sheet_names)
+    for name in candidates:
+        if name in sheet_names:
+            return name
+    return None
+
+
+def read_inventory() -> pd.DataFrame:
+    """Inventory zakupow (Data, instrument, waga, sztuki). Brak zakladki → pusta ramka."""
     source_file = get_assets_file()
-    inventory = read_asset_sheet_optional(GOLD_COIN_INVENTORY_SHEET)
+    sheet = _first_existing_sheet(
+        source_file, (INVENTORY_SHEET, LEGACY_INVENTORY_SHEET)
+    )
+    if sheet is None:
+        return pd.DataFrame()
+    inventory = pd.read_excel(source_file, sheet_name=sheet)
+    if sheet == LEGACY_INVENTORY_SHEET and "moneta" in inventory.columns and Inventory.INSTRUMENT not in inventory.columns:
+        inventory = inventory.rename(columns={"moneta": Inventory.INSTRUMENT})
     if not inventory.empty:
-        GoldCoinInventory.check_structure(inventory, file=source_file)
+        Inventory.check_structure(inventory, file=source_file)
     return inventory
 
 
-def read_gold_coin_purchase_rules() -> pd.DataFrame:
-    """Alias kompatybilności — to samo co read_gold_coin_inventory()."""
-    return read_gold_coin_inventory()
-
-
-def read_gold_coin_unit_prices() -> pd.DataFrame:
-    """Ceny jednostkowe monet (ROI / MTM). Brak zakładki → pusta ramka."""
+def read_unit_price_evaluation() -> pd.DataFrame:
+    """Ceny jednostkowe instrumentow (ROI / MTM). Brak zakladki → pusta ramka."""
     source_file = get_assets_file()
-    prices = read_asset_sheet_optional(GOLD_COIN_UNIT_PRICES_SHEET)
+    sheet = _first_existing_sheet(
+        source_file, (UNIT_PRICE_EVALUATION_SHEET, LEGACY_UNIT_PRICE_EVALUATION_SHEET)
+    )
+    if sheet is None:
+        return pd.DataFrame()
+    prices = pd.read_excel(source_file, sheet_name=sheet)
+    if sheet == LEGACY_UNIT_PRICE_EVALUATION_SHEET and "moneta" in prices.columns and UnitPriceEvaluation.INSTRUMENT not in prices.columns:
+        prices = prices.rename(columns={"moneta": UnitPriceEvaluation.INSTRUMENT})
     if not prices.empty:
-        GoldCoinUnitPrices.check_structure(prices, file=source_file)
+        UnitPriceEvaluation.check_structure(prices, file=source_file)
     return prices
 
 
 def read_property_valuations() -> pd.DataFrame:
     source_file = get_assets_file()
-    sheet_name = _property_valuations_sheet_name(source_file)
+    sheet_name = _asset_evaluation_sheet_name(source_file)
     valuations = pd.read_excel(source_file, sheet_name=sheet_name)
     PropertyValuations.check_structure(valuations, file=source_file)
     return valuations
 
 
-def _property_valuations_sheet_name(source_file: Path) -> str:
-    sheet_names = pd.ExcelFile(source_file).sheet_names
-    if PROPERTIES_VALUATIONS_SHEET in sheet_names:
-        return PROPERTIES_VALUATIONS_SHEET
-    if LEGACY_PROPERTIES_SHEET in sheet_names:
-        return LEGACY_PROPERTIES_SHEET
-    raise ValueError(
-        f"Brak arkusza {PROPERTIES_VALUATIONS_SHEET!r} ani {LEGACY_PROPERTIES_SHEET!r} w {source_file}"
+def _asset_evaluation_sheet_name(source_file: Path) -> str:
+    sheet = _first_existing_sheet(
+        source_file,
+        (ASSET_EVALUATION_SHEET, LEGACY_ASSET_EVALUATION_SHEET, LEGACY_PROPERTIES_SHEET),
     )
+    if sheet is None:
+        raise ValueError(
+            f"Brak arkusza {ASSET_EVALUATION_SHEET!r} "
+            f"(ani legacy {LEGACY_ASSET_EVALUATION_SHEET!r}/{LEGACY_PROPERTIES_SHEET!r}) "
+            f"w {source_file}"
+        )
+    return sheet
 
 
-def _read_assets(source_file = None) -> pd.DataFrame:
+def _read_assets(source_file=None) -> pd.DataFrame:
     assert source_file.is_file()
     assets = pd.read_excel(source_file, sheet_name='assets')
     # pool_id jest wyliczany w read_assets(); ignoruj jeśli ktoś dopisał do Excela.

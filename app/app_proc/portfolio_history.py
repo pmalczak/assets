@@ -7,10 +7,12 @@ import pandas as pd
 from app_proc.data_root import get_online_data_root
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Properties
 from importers.assets.property_lifecycle import (
+    cash_owned_asset_ids,
     load_property_close_dates,
+    property_ids_in_scope,
     property_valuation_history,
 )
-from importers.assets.read_assets import get_assets_file, read_property_valuations
+from importers.assets.read_assets import get_assets_file, read_assets, read_property_valuations
 from roi.config import read_analyse_config
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
@@ -233,7 +235,7 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
     sheet_name = kind.split(".", 1)[1]
     sheet = pd.read_excel(get_assets_file(), sheet_name=sheet_name)
 
-    if kind.startswith("assets.IKE-") or kind == "assets.rocky-iv":
+    if kind.startswith("assets.IKE-"):
         return _single_series_history(
             sheet=sheet,
             asset_key=str(asset_row[AssetsDef.ID]),
@@ -245,8 +247,15 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
         valuations = read_property_valuations()
         config = read_analyse_config()
         close_dates = load_property_close_dates(config["manual"], config["catalog"])
+        property_ids = sorted(
+            property_ids_in_scope(
+                valuations,
+                close_dates,
+                exclude_ids=cash_owned_asset_ids(read_assets()),
+            )
+        )
         result = []
-        for property_id in sorted(valuations[Properties.ID].astype(str).unique()):
+        for property_id in property_ids:
             history = property_valuation_history(valuations, property_id, close_dates)
             if history.empty:
                 continue

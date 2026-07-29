@@ -60,6 +60,26 @@ class EmptySelectorDiagnosticsTests(unittest.TestCase):
         self.assertIn("asset_id='zloto-monety'", msg)
         self.assertIn("field='TITLE' value='MENNICA'", msg)
 
+    def test_sepa_outgoing_maps_as_initial_investment(self):
+        df = pd.DataFrame(
+            [
+                {
+                    AssetRw.OPERATION_TYPE: MbankOperationType.PRZELEW_SEPA_WYCHODZACY,
+                    AssetRw.AMOUNT: -50000.0,
+                    AssetRw.TITLE: "ROCKY",
+                }
+            ]
+        )
+        remaining, selected = select_asset(
+            df,
+            pd.Series([True], index=df.index),
+            AssetRw.initial_investment_mapping,
+            asset_id="rocky-iv",
+        )
+        self.assertTrue(remaining.empty)
+        self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INVESTMENT)
+        self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), -50000.0)
+
 
 if __name__ == "__main__":
     unittest.main()

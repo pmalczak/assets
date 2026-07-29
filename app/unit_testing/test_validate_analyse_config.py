@@ -14,7 +14,7 @@ from analyse_assets.config_model import (
     AnalyseAssetsManual,
     AnalyseAssetsRules,
 )
-from analyse_assets.validate_config import validate_analyse_config
+from analyse_assets.validate_config import _is_plausible_account_number, validate_analyse_config
 from importers.mbank.data_model import MbankOperationType
 
 
@@ -229,6 +229,28 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
         report = validate_analyse_config(path, pool=pool, check_pool=True)
         codes = {i.code for i in report.errors}
         self.assertIn("selector_runtime", codes)
+
+    def test_iban_account_number_is_accepted(self):
+        self.assertTrue(_is_plausible_account_number("LU916990103060091920"))
+        self.assertTrue(_is_plausible_account_number("LU91 6990 1030 6009 1920"))
+        self.assertTrue(_is_plausible_account_number("87114020040000330286652080"))
+        self.assertFalse(_is_plausible_account_number("LU91"))
+        self.assertFalse(_is_plausible_account_number("not-an-account"))
+
+        path = self._write_config(
+            self._minimal_catalog(),
+            self._minimal_rule(
+                **{
+                    AnalyseAssetsRules.FIELD: "ACCOUNT_NUMBER",
+                    AnalyseAssetsRules.OPERATOR: "equals",
+                    AnalyseAssetsRules.VALUE: "LU916990103060091920",
+                }
+            ),
+            self._empty_manual(),
+        )
+        report = validate_analyse_config(path)
+        account_warnings = [i for i in report.warnings if i.code == "account_format"]
+        self.assertEqual(account_warnings, [])
 
 
 if __name__ == "__main__":

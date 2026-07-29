@@ -8,7 +8,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
-from importers.assets.data_model import AssetsDef
+from importers.assets.data_model import AssetsDef, TypeDomain
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.import_bonds import import_bonds
 
@@ -35,7 +35,7 @@ def evaluate_obligacjeskarbowe(
         assets_row1 = AssetsDef.as_assets_row(assets_file_row)
         assets_row1[AssetsDef.VALUE] = row[PkoBpBonds.AMOUNT]
         assets_row1[AssetsDef.EVALUATION_DATE] = row[PkoBpBonds.DATE]
-        assets_row1[AssetsDef.TYPE] = 'obligacje'
+        assets_row1[AssetsDef.TYPE] = TypeDomain.BONDS
         assets_row1[AssetsDef.DESCR] = row[PkoBpBonds.CODE]
         data += [assets_row1]
 

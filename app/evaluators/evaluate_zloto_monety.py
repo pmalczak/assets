@@ -7,12 +7,12 @@ import pandas as pd
 
 from importers.assets.data_model import (
     AssetsDef,
-    GoldCoinInventory,
     GroupDomain,
+    Inventory,
     TypeDomain,
 )
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.read_assets import read_gold_coin_inventory
+from importers.assets.read_assets import read_inventory
 from roi.gold_terminal import holdings_from_inventory, resolve_gold_terminal_unrealized
 
 
@@ -20,13 +20,13 @@ def evaluate_zloto_monety(
     assets_file_row: pd.Series,
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
-    inventory = read_gold_coin_inventory()
+    inventory = read_inventory()
     warnings: list[str] = []
 
     if inventory.empty:
-        warnings.append("Brak inventory w zakładce zloto-monety-zakupy.")
+        warnings.append("Brak inventory w zakładce inventory.")
     else:
-        GoldCoinInventory.check_structure(inventory)
+        Inventory.check_structure(inventory)
 
     value_pln, evaluation_date = _resolve_portfolio_value(
         inventory,
@@ -51,7 +51,7 @@ def _resolve_portfolio_value(
     valuation_date: date,
     warnings: list[str],
 ) -> tuple[float, str | None]:
-    """Σ qty×cena z inventory + zloto-monety-ceny; brak inventory → 0."""
+    """Σ qty×cena z inventory + unit-price-evaluation; brak inventory → 0."""
     holdings = holdings_from_inventory(inventory, valuation_date)
     mtm_value, mtm_warnings = resolve_gold_terminal_unrealized(
         valuation_date,
@@ -68,5 +68,5 @@ def _resolve_portfolio_value(
 def _build_description(inventory: pd.DataFrame, valuation_date: date) -> str:
     if inventory.empty:
         return "inventory: 0"
-    filtered = filter_excel_rows_on_or_before(inventory, GoldCoinInventory.DATE, valuation_date)
+    filtered = filter_excel_rows_on_or_before(inventory, Inventory.DATE, valuation_date)
     return f"inventory wiersze: {len(filtered)}"

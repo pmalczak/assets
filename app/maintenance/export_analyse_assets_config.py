@@ -44,9 +44,11 @@ def _catalog() -> pd.DataFrame:
             {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
             {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
             {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "pool_id": MBANK_EUR},
-            # zloto-monety: terminal qty×cena (nie lookup w properties-wyceny).
-            # CAPEX: rules. Inventory: zloto-monety-zakupy. Ceny: zloto-monety-ceny.
+            # zloto-monety: terminal qty×cena (nie lookup w asset-evaluation).
+            # CAPEX: rules. Inventory: inventory. Ceny: unit-price-evaluation.
             {"asset_id": "zloto-monety", "output_file": "mbank_zloto_monety.xlsx", "order": 12, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
+            # rocky-iv: terminal z asset-evaluation (jak cash); CAPEX z rules (mbank_eur).
+            {"asset_id": "rocky-iv", "output_file": "a_rocky-iv.xlsx", "order": 13, "enabled": 1, "pool_id": MBANK_EUR},
         ]
     )
 
@@ -213,6 +215,9 @@ def _rules() -> pd.DataFrame:
     add("cash", "r0", 0, "initial_investment", 3, "ACCOUNT_ID", "equals", "g_m_56_3217_eur")
     add("cash", "r0", 0, "initial_investment", 3, "OPERATION_TYPE", "equals", "PRZELEW WALUTOWY PRZYCHODZĄCY")
     add("cash", "r0", 0, "initial_investment", 3, "AMOUNT", "gte", 1000)
+
+    # rocky-iv (fundusz EUR) — CAPEX po numerze rachunku funduszu
+    add("rocky-iv", "r0", 0, "initial_investment", 1, "ACCOUNT_NUMBER", "equals", "LU916990103060091920")
 
     return pd.DataFrame(rows)
 

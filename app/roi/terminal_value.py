@@ -79,7 +79,7 @@ def _latest_property_value(
     warnings: list[str],
 ) -> float:
     if valuations is None or valuations.empty:
-        warnings.append(f"Brak arkusza properties-wyceny dla {asset_id!r}.")
+        warnings.append(f"Brak arkusza asset-evaluation dla {asset_id!r}.")
         return 0.0
 
     config = read_analyse_config()
@@ -88,7 +88,7 @@ def _latest_property_value(
     if latest is None:
         if is_property_closed(asset_id, valuation_date, close_dates):
             return 0.0
-        warnings.append(f"Brak wyceny properties-wyceny dla {asset_id!r} na date {valuation_date}.")
+        warnings.append(f"Brak wyceny asset-evaluation dla {asset_id!r} na date {valuation_date}.")
         return 0.0
 
     value, _evaluation_date = latest

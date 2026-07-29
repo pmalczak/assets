@@ -25,7 +25,7 @@ class FinalizeAssetsSnapshotTests(unittest.TestCase):
                 {
                     AssetsFile.ID: "a1",
                     AssetsFile.GROUP: "1 test",
-                    AssetsFile.TYPE: "cash",
+                    AssetsFile.TYPE: "investment.cash",
                     AssetsFile.DESCR: "x",
                     AssetsFile.KIND: "assets.cash",
                     AssetsFile.CURRENCY: "PLN",

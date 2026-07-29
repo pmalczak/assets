@@ -19,6 +19,7 @@ from app_proc.data_root import get_online_data_root
 from app_proc.data_steps_root import get_data_steps_root
 from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
 from app_streamlit.render_diagnostics import render_diagnostics
+from app_streamlit.render_fx import render_fx
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
 from app_streamlit.render_roi import render_roi
@@ -171,7 +172,7 @@ def main():
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    tab_reports, tab_chart, tab_roi, tab_import, tab_search, tab_validate = st.tabs(
+    tab_reports, tab_chart, tab_roi, tab_fx, tab_import, tab_search, tab_validate = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
@@ -192,6 +193,9 @@ def main():
     with tab_roi:
         render_roi(data["latest_snapshot_date"])
 
+    with tab_fx:
+        render_fx()
+
     with tab_import:
         render_import_wyciagow()
 
@@ -200,7 +204,6 @@ def main():
 
     with tab_validate:
         render_validate()
-
 
 if __name__ == "__main__":
     pd.options.future.infer_string = True

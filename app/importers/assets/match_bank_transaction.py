@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from importers.assets.data_model import GoldCoinPurchaseRules, TitleMatchDomain
+from importers.assets.data_model import PurchaseRules, TitleMatchDomain
 from importers.mbank.data_model import MBankFile
 from importers.revolut.account_data_model import RevolutAccountFile
 
@@ -56,12 +56,12 @@ def match_purchase_rules(
     rules: pd.DataFrame,
     transactions: pd.DataFrame,
 ) -> list[RuleMatchOutcome]:
-    GoldCoinPurchaseRules.check_structure(rules)
+    PurchaseRules.check_structure(rules)
     normalized = transactions.copy()
     outcomes: list[RuleMatchOutcome] = []
 
     for _, rule in rules.iterrows():
-        rule_id = str(rule[GoldCoinPurchaseRules.RULE_ID])
+        rule_id = str(rule[PurchaseRules.RULE_ID])
         matched = _apply_rule(rule, normalized)
         count = len(matched)
 
@@ -104,43 +104,43 @@ def _apply_rule(rule: pd.Series, transactions: pd.DataFrame) -> pd.DataFrame:
     if matched.empty:
         return matched
 
-    exact_date = rule.get(GoldCoinPurchaseRules.DATE)
+    exact_date = rule.get(PurchaseRules.DATE)
     if pd.notna(exact_date):
         target = pd.Timestamp(exact_date).normalize()
         matched = matched[matched["date"].dt.normalize() == target]
 
-    date_from = rule.get(GoldCoinPurchaseRules.DATE_FROM)
+    date_from = rule.get(PurchaseRules.DATE_FROM)
     if pd.notna(date_from):
         matched = matched[matched["date"] >= pd.Timestamp(date_from).normalize()]
 
-    date_to = rule.get(GoldCoinPurchaseRules.DATE_TO)
+    date_to = rule.get(PurchaseRules.DATE_TO)
     if pd.notna(date_to):
         matched = matched[matched["date"] <= pd.Timestamp(date_to).normalize()]
 
-    title = rule.get(GoldCoinPurchaseRules.TITLE)
+    title = rule.get(PurchaseRules.TITLE)
     if pd.notna(title) and str(title).strip():
         matched = matched[_match_title(matched["title"], str(title), rule)]
 
-    counterparty = rule.get(GoldCoinPurchaseRules.COUNTERPARTY)
+    counterparty = rule.get(PurchaseRules.COUNTERPARTY)
     if pd.notna(counterparty) and str(counterparty).strip():
         needle = str(counterparty).casefold()
         matched = matched[matched["counterparty"].str.casefold().str.contains(needle, regex=False, na=False)]
 
-    counterparty_account = rule.get(GoldCoinPurchaseRules.COUNTERPARTY_IBAN)
+    counterparty_account = rule.get(PurchaseRules.COUNTERPARTY_IBAN)
     if pd.notna(counterparty_account) and str(counterparty_account).strip():
         expected = _normalize_account(str(counterparty_account))
         matched = matched[
             matched["counterparty_account"].map(_normalize_account) == expected
         ]
 
-    amount = rule.get(GoldCoinPurchaseRules.AMOUNT)
+    amount = rule.get(PurchaseRules.AMOUNT)
     if pd.notna(amount):
-        tolerance = rule.get(GoldCoinPurchaseRules.AMOUNT_TOLERANCE)
+        tolerance = rule.get(PurchaseRules.AMOUNT_TOLERANCE)
         tolerance = 0.0 if pd.isna(tolerance) else float(tolerance)
         expected = float(amount)
         matched = matched[(matched["amount"] - expected).abs() <= tolerance]
 
-    operation_description = rule.get(GoldCoinPurchaseRules.OPERATION_DESCRIPTION)
+    operation_description = rule.get(PurchaseRules.OPERATION_DESCRIPTION)
     if pd.notna(operation_description) and str(operation_description).strip():
         expected = str(operation_description).casefold()
         matched = matched[matched["operation_description"].str.casefold() == expected]
@@ -149,7 +149,7 @@ def _apply_rule(rule: pd.Series, transactions: pd.DataFrame) -> pd.DataFrame:
 
 
 def _match_title(series: pd.Series, expected: str, rule: pd.Series) -> pd.Series:
-    mode = rule.get(GoldCoinPurchaseRules.TITLE_MATCH)
+    mode = rule.get(PurchaseRules.TITLE_MATCH)
     if pd.isna(mode) or not str(mode).strip():
         mode = TitleMatchDomain.CONTAINS
     mode = str(mode).strip().lower()

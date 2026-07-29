@@ -7,8 +7,8 @@ from datetime import date
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import GoldCoinInventory, GoldCoinUnitPrices
-from importers.assets.read_assets import read_gold_coin_inventory, read_gold_coin_unit_prices
+from importers.assets.data_model import Inventory, UnitPriceEvaluation
+from importers.assets.read_assets import read_inventory, read_unit_price_evaluation
 from roi.categories import INVESTMENT
 from roi.data_model import CashFlowEvent
 
@@ -16,7 +16,7 @@ GOLD_COINS_ROI_ASSET_ID = "zloto-monety"
 
 
 class GoldInventoryJoinError(ValueError):
-    """CAPEX złota bez jednoznacznego wiersza inventory (zloto-monety-zakupy)."""
+    """CAPEX złota bez jednoznacznego wiersza inventory."""
 
 
 def is_gold_roi_asset(asset_id: str | None) -> bool:
@@ -43,19 +43,19 @@ def holdings_from_inventory(
     inventory: pd.DataFrame,
     valuation_date: date,
 ) -> dict[str, float]:
-    """Suma sztuk per moneta z inventory z Data ≤ valuation_date (snapshot bez CAPEX)."""
+    """Suma sztuk per instrument z inventory z Data ≤ valuation_date (snapshot bez CAPEX)."""
     if inventory is None or inventory.empty:
         return {}
-    filtered = filter_excel_rows_on_or_before(inventory, GoldCoinInventory.DATE, valuation_date)
+    filtered = filter_excel_rows_on_or_before(inventory, Inventory.DATE, valuation_date)
     if filtered.empty:
         return {}
     holdings: dict[str, float] = {}
     for _, row in filtered.iterrows():
-        coin = str(row[GoldCoinInventory.COIN]).strip()
-        qty = pd.to_numeric(row[GoldCoinInventory.QUANTITY], errors="coerce")
-        if not coin or pd.isna(qty):
+        instrument = str(row[Inventory.INSTRUMENT]).strip()
+        qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
+        if not instrument or pd.isna(qty):
             continue
-        holdings[coin] = holdings.get(coin, 0.0) + float(qty)
+        holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
     return holdings
 
 
@@ -66,7 +66,7 @@ def holdings_from_capex_and_inventory(
 ) -> tuple[dict[str, float], list[str]]:
     """
     Join INVESTMENT CAPEX ↔ inventory po dacie.
-    Udany join → sztuki/moneta.
+    Udany join → sztuki/instrument.
     Brak / niejednoznaczne / niekompletne inventory → GoldInventoryJoinError.
     """
     holdings: dict[str, float] = {}
@@ -85,7 +85,7 @@ def holdings_from_capex_and_inventory(
     inv_by_date: dict[pd.Timestamp, pd.DataFrame] = {}
     if inventory is not None and not inventory.empty:
         inv = inventory.copy()
-        inv["_day"] = pd.to_datetime(inv[GoldCoinInventory.DATE], errors="coerce").dt.normalize()
+        inv["_day"] = pd.to_datetime(inv[Inventory.DATE], errors="coerce").dt.normalize()
         inv = inv.dropna(subset=["_day"])
         for day, group in inv.groupby("_day", sort=False):
             inv_by_date[pd.Timestamp(day)] = group
@@ -96,53 +96,55 @@ def holdings_from_capex_and_inventory(
 
         if day is None:
             raise GoldInventoryJoinError(
-                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} (powod=invalid_capex_date)."
+                f"Brak inventory dla CAPEX {ctx} (powod=invalid_capex_date)."
             )
 
         group = inv_by_date.get(day)
         if group is None or group.empty:
             raise GoldInventoryJoinError(
-                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} (powod=no_inventory_row)."
+                f"Brak inventory dla CAPEX {ctx} (powod=no_inventory_row)."
             )
         if len(group) > 1:
             raise GoldInventoryJoinError(
-                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} "
+                f"Brak inventory dla CAPEX {ctx} "
                 f"(powod=ambiguous_inventory_date, rows={len(group)})."
             )
 
         row = group.iloc[0]
-        coin = str(row[GoldCoinInventory.COIN]).strip()
-        qty = pd.to_numeric(row[GoldCoinInventory.QUANTITY], errors="coerce")
-        if not coin or pd.isna(qty):
+        instrument = str(row[Inventory.INSTRUMENT]).strip()
+        qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
+        if not instrument or pd.isna(qty):
             raise GoldInventoryJoinError(
-                f"Brak inventory zloto-monety-zakupy dla CAPEX {ctx} "
+                f"Brak inventory dla CAPEX {ctx} "
                 f"(powod=incomplete_inventory_row)."
             )
-        holdings[coin] = holdings.get(coin, 0.0) + float(qty)
+        holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
 
     return holdings, []
 
 
 def latest_unit_price(
     unit_prices: pd.DataFrame,
-    coin: str,
+    instrument: str,
     valuation_date: date,
 ) -> float | None:
     if unit_prices is None or unit_prices.empty:
         return None
 
-    filtered = filter_excel_rows_on_or_before(unit_prices, GoldCoinUnitPrices.DATE, valuation_date)
+    filtered = filter_excel_rows_on_or_before(
+        unit_prices, UnitPriceEvaluation.DATE, valuation_date
+    )
     if filtered.empty:
         return None
 
-    coin_rows = filtered[
-        filtered[GoldCoinUnitPrices.COIN].astype("string").str.strip() == coin
+    instrument_rows = filtered[
+        filtered[UnitPriceEvaluation.INSTRUMENT].astype("string").str.strip() == instrument
     ]
-    if coin_rows.empty:
+    if instrument_rows.empty:
         return None
 
-    latest = coin_rows.sort_values(GoldCoinUnitPrices.DATE, ascending=False).iloc[0]
-    price = pd.to_numeric(latest[GoldCoinUnitPrices.UNIT_PRICE], errors="coerce")
+    latest = instrument_rows.sort_values(UnitPriceEvaluation.DATE, ascending=False).iloc[0]
+    price = pd.to_numeric(latest[UnitPriceEvaluation.UNIT_PRICE], errors="coerce")
     if pd.isna(price):
         return None
     return float(price)
@@ -153,17 +155,18 @@ def mark_to_market(
     unit_prices: pd.DataFrame,
     valuation_date: date,
 ) -> tuple[float, list[str]]:
-    """Σ qty × cena; brak ceny → warning i 0 dla tej monety."""
+    """Σ qty × cena; brak ceny → warning i 0 dla tego instrumentu."""
     warnings: list[str] = []
     if not holdings:
         return 0.0, warnings
 
     total = 0.0
-    for coin, qty in holdings.items():
-        price = latest_unit_price(unit_prices, coin, valuation_date)
+    for instrument, qty in holdings.items():
+        price = latest_unit_price(unit_prices, instrument, valuation_date)
         if price is None:
             warnings.append(
-                f"Brak ceny jednostkowej dla monety {coin!r} na date {valuation_date}."
+                f"Brak ceny jednostkowej dla instrumentu {instrument!r} "
+                f"na date {valuation_date}."
             )
             continue
         total += qty * price
@@ -181,14 +184,14 @@ def resolve_gold_terminal_unrealized(
     """
     Terminal unrealized dla złoto-monety.
 
-    Produkcja: CAPEX cashflows + inventory (join po dacie) + zloto-monety-ceny.
+    Produkcja: CAPEX cashflows + inventory (join po dacie) + unit-price-evaluation.
     Testy mogą podać `holdings` / `unit_prices` bezpośrednio.
     """
     warnings: list[str] = []
 
     if holdings is None:
         if inventory is None:
-            inventory = read_gold_coin_inventory()
+            inventory = read_inventory()
         if cashflows is None:
             warnings.append(
                 "Brak cashflow CAPEX dla zloto-monety — terminal qty×cena = 0."
@@ -201,15 +204,15 @@ def resolve_gold_terminal_unrealized(
             warnings.extend(join_warnings)
 
     if unit_prices is None:
-        unit_prices = read_gold_coin_unit_prices()
+        unit_prices = read_unit_price_evaluation()
         if unit_prices.empty:
             warnings.append(
-                "Brak arkusza zloto-monety-ceny (ceny jednostkowe) — terminal = 0."
+                "Brak arkusza unit-price-evaluation (ceny jednostkowe) — terminal = 0."
             )
             return 0.0, warnings
 
     if not unit_prices.empty:
-        GoldCoinUnitPrices.check_structure(unit_prices)
+        UnitPriceEvaluation.check_structure(unit_prices)
 
     value, mtm_warnings = mark_to_market(holdings, unit_prices, valuation_date)
     warnings.extend(mtm_warnings)

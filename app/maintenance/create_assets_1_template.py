@@ -3,7 +3,7 @@
 Tworzy plik assets_1.xlsx w katalogu get_online_data_root().
 
 Opcjonalnie kopiuje istniejace zakladki z podanego pliku zrodlowego
-(np. dawnego assets.xlsx) i dodaje zakladki zloto-monety-zakupy oraz zloto-monety-ceny.
+(np. dawnego assets.xlsx) i dodaje zakladki inventory oraz unit-price-evaluation.
 
 Uzycie:
   cd app
@@ -21,10 +21,12 @@ import pandas as pd
 
 from importers.assets.data_model import (
     AssetsFile,
-    GoldCoinInventory,
-    GoldCoinUnitPrices,
-    GOLD_COIN_INVENTORY_SHEET,
-    GOLD_COIN_UNIT_PRICES_SHEET,
+    INVENTORY_SHEET,
+    Inventory,
+    LEGACY_INVENTORY_SHEET,
+    LEGACY_UNIT_PRICE_EVALUATION_SHEET,
+    UNIT_PRICE_EVALUATION_SHEET,
+    UnitPriceEvaluation,
     GroupDomain,
     KindDomain,
     TypeDomain,
@@ -32,10 +34,8 @@ from importers.assets.data_model import (
 from importers.assets.read_assets import ASSETS_FILE_NAME
 from app_proc.data_root import get_online_data_root
 
-_LEGACY_GOLD_VALUATIONS_SHEET = "zloto-monety-wyceny"
 
-
-def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
+def build_inventory_sheets() -> dict[str, pd.DataFrame]:
     assets_row = pd.DataFrame(
         [
             {
@@ -45,7 +45,7 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
                 AssetsFile.DESCR: "Złote monety bulionowe",
                 AssetsFile.KIND: f"{KindDomain.ASSETS}.zloto-monety",
                 AssetsFile.CURRENCY: "PLN",
-                AssetsFile.NOTES: "MTM: inventory (zakupy) × ceny (zloto-monety-ceny)",
+                AssetsFile.NOTES: "MTM: inventory × ceny (unit-price-evaluation)",
             }
         ]
     )
@@ -53,18 +53,18 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
     inventory = pd.DataFrame(
         [
             {
-                GoldCoinInventory.DATE: "2024-03-15",
-                GoldCoinInventory.COIN: "Krugerrand 1oz",
-                GoldCoinInventory.WEIGHT: "1oz",
-                GoldCoinInventory.QUANTITY: 1,
-                GoldCoinInventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
+                Inventory.DATE: "2024-03-15",
+                Inventory.INSTRUMENT: "Krugerrand 1oz",
+                Inventory.WEIGHT: "1oz",
+                Inventory.QUANTITY: 1,
+                Inventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
             },
             {
-                GoldCoinInventory.DATE: "2024-05-10",
-                GoldCoinInventory.COIN: "Maple Leaf 1oz",
-                GoldCoinInventory.WEIGHT: "1oz",
-                GoldCoinInventory.QUANTITY: 1,
-                GoldCoinInventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
+                Inventory.DATE: "2024-05-10",
+                Inventory.INSTRUMENT: "Maple Leaf 1oz",
+                Inventory.WEIGHT: "1oz",
+                Inventory.QUANTITY: 1,
+                Inventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
             },
         ]
     )
@@ -72,46 +72,47 @@ def build_gold_coin_sheets() -> dict[str, pd.DataFrame]:
     unit_prices = pd.DataFrame(
         [
             {
-                GoldCoinUnitPrices.DATE: "2026-07-01",
-                GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
-                GoldCoinUnitPrices.UNIT_PRICE: 0,
-                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
+                UnitPriceEvaluation.DATE: "2026-07-01",
+                UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
+                UnitPriceEvaluation.UNIT_PRICE: 0,
+                UnitPriceEvaluation.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
             },
             {
-                GoldCoinUnitPrices.DATE: "2026-07-01",
-                GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
-                GoldCoinUnitPrices.UNIT_PRICE: 0,
-                GoldCoinUnitPrices.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
+                UnitPriceEvaluation.DATE: "2026-07-01",
+                UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
+                UnitPriceEvaluation.UNIT_PRICE: 0,
+                UnitPriceEvaluation.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
             },
         ]
     )
 
     return {
         "assets": assets_row,
-        GOLD_COIN_INVENTORY_SHEET: inventory,
-        GOLD_COIN_UNIT_PRICES_SHEET: unit_prices,
+        INVENTORY_SHEET: inventory,
+        UNIT_PRICE_EVALUATION_SHEET: unit_prices,
     }
 
 
 def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
-    gold_sheets = build_gold_coin_sheets()
+    template_sheets = build_inventory_sheets()
 
     if source_file is None or not source_file.is_file():
-        return gold_sheets
+        return template_sheets
 
     existing = pd.read_excel(source_file, sheet_name=None)
     sheets = dict(existing)
-    sheets.pop(_LEGACY_GOLD_VALUATIONS_SHEET, None)
+    sheets.pop(LEGACY_INVENTORY_SHEET, None)
+    sheets.pop(LEGACY_UNIT_PRICE_EVALUATION_SHEET, None)
 
     assets = sheets.get("assets")
     if assets is None:
-        sheets["assets"] = gold_sheets["assets"]
+        sheets["assets"] = template_sheets["assets"]
     elif "zloto-monety" not in assets[AssetsFile.ID].astype(str).tolist():
-        sheets["assets"] = pd.concat([assets, gold_sheets["assets"]], ignore_index=True)
+        sheets["assets"] = pd.concat([assets, template_sheets["assets"]], ignore_index=True)
 
-    sheets[GOLD_COIN_INVENTORY_SHEET] = gold_sheets[GOLD_COIN_INVENTORY_SHEET]
-    if GOLD_COIN_UNIT_PRICES_SHEET not in sheets:
-        sheets[GOLD_COIN_UNIT_PRICES_SHEET] = gold_sheets[GOLD_COIN_UNIT_PRICES_SHEET]
+    sheets[INVENTORY_SHEET] = template_sheets[INVENTORY_SHEET]
+    if UNIT_PRICE_EVALUATION_SHEET not in sheets:
+        sheets[UNIT_PRICE_EVALUATION_SHEET] = template_sheets[UNIT_PRICE_EVALUATION_SHEET]
     return sheets
 
 

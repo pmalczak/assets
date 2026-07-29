@@ -19,9 +19,9 @@ def render_diagnostics(data: dict[str, object]):
     if summaries.empty:
         st.info("Brak plikow parquet w katalogu snapshotow.")
 
-    st.markdown("**Ostatni snapshot per grupa**")
+    st.markdown("**Ostatni snapshot per typ**")
     st.dataframe(
-        data["snapshot_by_group"].sort_values("group"),
+        data["snapshot_by_type"].sort_values("type"),
         width='stretch',
         hide_index=True,
     )

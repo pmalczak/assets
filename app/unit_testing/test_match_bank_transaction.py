@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from importers.assets.data_model import GoldCoinPurchaseRules, TitleMatchDomain
+from importers.assets.data_model import PurchaseRules, TitleMatchDomain
 from importers.assets.match_bank_transaction import match_purchase_rules
 
 
@@ -31,22 +31,22 @@ class MatchBankTransactionTests(unittest.TestCase):
 
     def _rule(self, **overrides) -> pd.DataFrame:
         row = {
-            GoldCoinPurchaseRules.RULE_ID: "km-2024-03",
-            GoldCoinPurchaseRules.SOURCE_ACCOUNT: "p_m_34_9142",
-            GoldCoinPurchaseRules.DATE: pd.Timestamp("2024-03-15"),
-            GoldCoinPurchaseRules.DATE_FROM: pd.NA,
-            GoldCoinPurchaseRules.DATE_TO: pd.NA,
-            GoldCoinPurchaseRules.TITLE: "MENNICA",
-            GoldCoinPurchaseRules.TITLE_MATCH: TitleMatchDomain.CONTAINS,
-            GoldCoinPurchaseRules.COUNTERPARTY: "MENNICA",
-            GoldCoinPurchaseRules.COUNTERPARTY_IBAN: "PL61102010260000042270201111",
-            GoldCoinPurchaseRules.AMOUNT: -15000.0,
-            GoldCoinPurchaseRules.AMOUNT_TOLERANCE: 0.01,
-            GoldCoinPurchaseRules.OPERATION_DESCRIPTION: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
-            GoldCoinPurchaseRules.COIN: "Krugerrand 1oz",
-            GoldCoinPurchaseRules.QUANTITY: 1,
-            GoldCoinPurchaseRules.WEIGHT: "1oz",
-            GoldCoinPurchaseRules.NOTES: "",
+            PurchaseRules.RULE_ID: "km-2024-03",
+            PurchaseRules.SOURCE_ACCOUNT: "p_m_34_9142",
+            PurchaseRules.DATE: pd.Timestamp("2024-03-15"),
+            PurchaseRules.DATE_FROM: pd.NA,
+            PurchaseRules.DATE_TO: pd.NA,
+            PurchaseRules.TITLE: "MENNICA",
+            PurchaseRules.TITLE_MATCH: TitleMatchDomain.CONTAINS,
+            PurchaseRules.COUNTERPARTY: "MENNICA",
+            PurchaseRules.COUNTERPARTY_IBAN: "PL61102010260000042270201111",
+            PurchaseRules.AMOUNT: -15000.0,
+            PurchaseRules.AMOUNT_TOLERANCE: 0.01,
+            PurchaseRules.OPERATION_DESCRIPTION: "PRZELEW ZEWNĘTRZNY WYCHODZĄCY",
+            PurchaseRules.INSTRUMENT: "Krugerrand 1oz",
+            PurchaseRules.QUANTITY: 1,
+            PurchaseRules.WEIGHT: "1oz",
+            PurchaseRules.NOTES: "",
         }
         row.update(overrides)
         return pd.DataFrame([row])
@@ -58,7 +58,7 @@ class MatchBankTransactionTests(unittest.TestCase):
 
     def test_no_match_is_reported(self):
         outcomes = match_purchase_rules(
-            self._rule(**{GoldCoinPurchaseRules.TITLE: "INNY TYTUL"}),
+            self._rule(**{PurchaseRules.TITLE: "INNY TYTUL"}),
             self._transactions().iloc[[0]],
         )
         self.assertEqual(outcomes[0].status, "no_match")

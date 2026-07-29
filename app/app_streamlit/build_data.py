@@ -17,7 +17,11 @@ HISTORY_COLUMNS = [AssetsDef.GROUP, AssetsDef.VALUE_PLN]
 
 
 def build_data(days: int = 365) -> dict[str, object]:
-    data = build_portfolio_history_from_snapshots(days=days, end_date_iso=date.today().isoformat())
+    data = build_portfolio_history_from_snapshots(
+        days=days,
+        end_date_iso=date.today().isoformat(),
+        _schema=2,
+    )
     data["timeline_events"] = _read_timeline_events_cached()
 
     latest_snapshot = data["latest_snapshot"]
@@ -38,7 +42,9 @@ def _read_timeline_events_cached() -> pd.DataFrame:
 def build_portfolio_history_from_snapshots(
     days: int = 365,
     end_date_iso: str | None = None,
+    _schema: int = 2,
 ) -> dict[str, object]:
+    del _schema  # tylko do uniewazniania cache przy zmianie ksztaltu wyniku
     end = date.fromisoformat(end_date_iso) if end_date_iso else date.today()
     return _build_portfolio_history_from_snapshots(days=days, end_date=end)
 
@@ -111,10 +117,10 @@ def _build_portfolio_history_from_snapshots(
     if not history.empty:
         history = history.sort_values(["date", "group"]).reset_index(drop=True)
 
-    snapshot_by_group = pd.DataFrame(columns=["group", "value_pln"])
+    snapshot_by_type = pd.DataFrame(columns=["type", "value_pln"])
     snapshot_total_pln = 0.0
     if not latest_snapshot.empty:
-        snapshot_by_group = (
+        snapshot_by_type = (
             latest_snapshot.assign(
                 **{
                     AssetsDef.VALUE_PLN: pd.to_numeric(
@@ -123,18 +129,18 @@ def _build_portfolio_history_from_snapshots(
                     ).fillna(0)
                 }
             )
-            .groupby(AssetsDef.GROUP, as_index=False)[AssetsDef.VALUE_PLN]
+            .groupby(AssetsDef.TYPE, as_index=False)[AssetsDef.VALUE_PLN]
             .sum()
-            .rename(columns={AssetsDef.GROUP: "group", AssetsDef.VALUE_PLN: "value_pln"})
+            .rename(columns={AssetsDef.TYPE: "type", AssetsDef.VALUE_PLN: "value_pln"})
         )
-        snapshot_total_pln = float(snapshot_by_group["value_pln"].sum())
+        snapshot_total_pln = float(snapshot_by_type["value_pln"].sum())
 
     return {
         "history": history,
         "snapshot_summaries": pd.DataFrame(snapshot_summaries),
         "latest_snapshot": latest_snapshot,
         "latest_snapshot_date": latest_date,
-        "snapshot_by_group": snapshot_by_group,
+        "snapshot_by_type": snapshot_by_type,
         "snapshot_total_pln": snapshot_total_pln,
         "snapshots_dir": snapshots_dir,
         "start_date": start,

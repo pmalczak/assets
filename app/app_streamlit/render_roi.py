@@ -38,7 +38,7 @@ ROI_FLOW_DISPLAY_COLUMNS = {
 
 
 def render_roi(default_valuation_date: date | None) -> None:
-    st.subheader("ROI (nieruchomosci + cash)")
+    st.subheader("ROI (nieruchomosci + cash + rocky-iv + zloto)")
 
     valuation_date = st.date_input(
         "Data wyceny ROI",
@@ -63,7 +63,7 @@ def render_roi(default_valuation_date: date | None) -> None:
         return
 
     st.caption(
-        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza properties-wyceny dla otwartych inwestycji. "
+        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza asset-evaluation dla otwartych inwestycji. "
         "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
         "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
         f"Zamkniecie: CLOSING w {CONFIG_FILE_NAME}."

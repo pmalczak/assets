@@ -85,6 +85,19 @@ OPERATORS_BY_FIELD: dict[str, frozenset[str]] = {
 _NEGATIVE_MANUAL_CATEGORIES = frozenset({"INVESTMENT", "OUTFLOW"})
 _POSITIVE_MANUAL_CATEGORIES = frozenset({"INFLOW", "CLOSING"})
 
+# Cyfry NRB / IBAN: CC + 2 cyfry kontrolne + BBAN (alfanumeryczny).
+_IBAN_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$")
+
+
+def _is_plausible_account_number(value: str) -> bool:
+    """Akceptuje lokalny numer (same cyfry) albo IBAN z kodem kraju."""
+    text = str(value).strip().replace(".0", "").replace(" ", "").upper()
+    if not text:
+        return False
+    if text.isdigit():
+        return True
+    return bool(_IBAN_RE.fullmatch(text))
+
 
 @dataclass(frozen=True)
 class ValidationIssue:
@@ -352,13 +365,14 @@ def _validate_rule_value(field_name: str, operator: str, value, report: Validati
 
     if field_name == "ACCOUNT_NUMBER" and not is_blank_rule_value(value):
         text = str(value).strip().replace(".0", "")
-        if " " in text or not text.isdigit():
+        if not _is_plausible_account_number(text):
             report.add(
                 "warning",
                 RULES_SHEET,
                 loc,
                 "account_format",
-                f"Numer konta zwykle to same cyfry bez spacji, jest {value!r}",
+                f"Numer konta powinien byc cyframi (NRB) albo IBAN "
+                f"(2 litery kraju + cyfry/litery), jest {value!r}",
             )
 
     if field_name == "POOL_ID" and not is_blank_rule_value(value):
@@ -805,7 +819,7 @@ def _validate_catalog_vs_valuations(
     manual: pd.DataFrame,
     report: ValidationReport,
 ) -> None:
-    """asset_id w katalogu musi być tożsame z id w properties-wyceny (poza złotem)."""
+    """asset_id w katalogu musi być tożsame z id w asset-evaluation (poza złotem)."""
     from importers.assets.data_model import Properties
     from importers.assets.read_assets import read_property_valuations
     from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
@@ -815,10 +829,10 @@ def _validate_catalog_vs_valuations(
     except Exception as exc:  # noqa: BLE001
         report.add(
             "warning",
-            "properties-wyceny",
+            "asset-evaluation",
             "-",
             "valuations_unread",
-            f"Nie udało się odczytać properties-wyceny (pominięto kontrolę id): {exc}",
+            f"Nie udało się odczytać asset-evaluation (pominięto kontrolę id): {exc}",
         )
         return
 
@@ -858,7 +872,7 @@ def _validate_catalog_vs_valuations(
             CATALOG_SHEET,
             _loc_asset(asset_id),
             "missing_valuation_asset_id",
-            f"Brak id {asset_id!r} w properties-wyceny — "
+            f"Brak id {asset_id!r} w asset-evaluation — "
             f"asset_id musi być tożsame z kolumną id wycen",
         )
 

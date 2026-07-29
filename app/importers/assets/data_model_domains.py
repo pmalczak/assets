@@ -29,13 +29,13 @@ class CurrencyDomainCls(DomainCheckerGeneric):
 
 
 class TypeDomainCls(DomainCheckerGeneric):
-    CASH = 'cash'
-    CURRENT_ACCOUNT = 'ror'
-    DEPOSIT = 'depozyt'
-    GOLD_COINS = 'złoto-monety'
-    EQUITIES = 'udziały'
-    BONDS = 'obligacje'
-    PROPERTY = 'property'
+    CASH = 'investment.cash'
+    CURRENT_ACCOUNT = 'cash_pool.ror'
+    DEPOSIT = 'investment.depozyt'
+    GOLD_COINS = 'investment.złoto-monety'
+    EQUITIES = 'investment.udziały'
+    BONDS = 'investment.obligacje'
+    PROPERTY = 'investment.property'
 
     def domain(self) -> set:
         return {
@@ -67,7 +67,6 @@ class KindDomainCls(DomainCheckerGeneric):
             self.ASSETS + '.IKE-PM',
             self.ASSETS + '.properties',
             self.ASSETS + '.properties-wyceny',
-            self.ASSETS + '.rocky-iv',
             self.ASSETS + '.cash',
             self.ASSETS + '.zloto-monety',
             self.BONDS,

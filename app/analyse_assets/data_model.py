@@ -42,8 +42,10 @@ class AssetRWCls:
         self.inflow_outflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
+            MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY: self.CAT_OUTFLOW,
+            MbankOperationType.PRZELEW_SEPA_WYCHODZACY: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESS_ELIXIR_PRZYCH: self.CAT_OUTFLOW,
             MbankOperationType.PRZELEW_EXPRESSOWY_PRZELEW_PRZYCH: self.CAT_OUTFLOW,
@@ -54,11 +56,13 @@ class AssetRWCls:
         self.inflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
+            MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INFLOW,
         }
         self.initial_investment_mapping = {
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_SORBNET_WYCHODZACY: self.CAT_INVESTMENT,
+            MbankOperationType.PRZELEW_SEPA_WYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.PRZELEW_WALUTOWY_PRZYCHODZACY: self.CAT_INVESTMENT,
             MbankOperationType.WYPLATA: self.CAT_INVESTMENT,

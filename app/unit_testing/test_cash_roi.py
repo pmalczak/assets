@@ -323,6 +323,97 @@ class CashRoiAllocationTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 100000.0)
         self.assertEqual(str(result.iloc[0][AssetsDef.CURRENCY]).upper(), "EUR")
 
+    def test_properties_wyceny_excludes_cash_owned_ids(self):
+        from evaluators.evaluate_assets_file import evaluate_assets_file
+
+        props = pd.DataFrame(
+            [
+                {
+                    PropertyValuations.ID: "cash",
+                    PropertyValuations.DATE: "2025-11-15",
+                    PropertyValuations.VALUE: 100000.0,
+                    PropertyValuations.CURRENCY: "EUR",
+                    PropertyValuations.SIZE: 1,
+                    PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                    PropertyValuations.UNIT_PRICE: 100000.0,
+                },
+                {
+                    PropertyValuations.ID: "rocky-iv",
+                    PropertyValuations.DATE: "2025-11-15",
+                    PropertyValuations.VALUE: 50000.0,
+                    PropertyValuations.CURRENCY: "EUR",
+                    PropertyValuations.SIZE: 1,
+                    PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                    PropertyValuations.UNIT_PRICE: 50000.0,
+                },
+                {
+                    PropertyValuations.ID: "garaz",
+                    PropertyValuations.DATE: "2025-01-01",
+                    PropertyValuations.VALUE: 35000.0,
+                    PropertyValuations.CURRENCY: "PLN",
+                    PropertyValuations.SIZE: 18.9,
+                    PropertyValuations.OPERATION: OperationDomain.EVALUATION,
+                    PropertyValuations.UNIT_PRICE: 1851.85,
+                },
+            ]
+        )
+        assets_catalog = pd.DataFrame(
+            [
+                {
+                    AssetsFile.ID: "cash",
+                    AssetsFile.TYPE: TypeDomain.CASH,
+                    AssetsFile.GROUP: GroupDomain.CASH,
+                    AssetsFile.DESCR: "cash",
+                    AssetsFile.KIND: f"{KindDomain.ASSETS}.cash",
+                    AssetsFile.CURRENCY: "EUR",
+                    AssetsFile.NOTES: "",
+                },
+                {
+                    AssetsFile.ID: "rocky-iv",
+                    AssetsFile.TYPE: TypeDomain.EQUITIES,
+                    AssetsFile.GROUP: GroupDomain.INVESTMENT,
+                    AssetsFile.DESCR: "rocky",
+                    AssetsFile.KIND: f"{KindDomain.ASSETS}.cash",
+                    AssetsFile.CURRENCY: "EUR",
+                    AssetsFile.NOTES: "",
+                },
+                {
+                    AssetsFile.ID: "nieruchomosci",
+                    AssetsFile.TYPE: TypeDomain.PROPERTY,
+                    AssetsFile.GROUP: GroupDomain.PROPERTY,
+                    AssetsFile.DESCR: "props",
+                    AssetsFile.KIND: f"{KindDomain.ASSETS}.properties-wyceny",
+                    AssetsFile.CURRENCY: "PLN",
+                    AssetsFile.NOTES: "",
+                },
+            ]
+        )
+        assets_row = assets_catalog.iloc[2]
+        with patch(
+            "evaluators.evaluate_assets_file.read_property_valuations",
+            return_value=props,
+        ), patch(
+            "evaluators.evaluate_assets_file.read_assets",
+            return_value=assets_catalog,
+        ), patch(
+            "evaluators.evaluate_assets_file.read_analyse_config",
+            return_value={
+                "manual": pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns())),
+                "catalog": pd.DataFrame(columns=list(AnalyseAssetsCatalog.expected_columns())),
+            },
+        ):
+            result = evaluate_assets_file(
+                "assets.properties-wyceny",
+                assets_row,
+                date(2026, 7, 22),
+            )
+
+        self.assertIsNotNone(result)
+        ids = set(result[AssetsDef.ID].astype(str))
+        self.assertEqual(ids, {"garaz"})
+        self.assertNotIn("cash", ids)
+        self.assertNotIn("rocky-iv", ids)
+
 
 class CashConfigValidationTests(unittest.TestCase):
     def test_mbank_eur_source_is_supported(self):

@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from fx.data_model import LastFx
-from importers.assets.data_model import AssetsDef, KindDomain
+from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
 from evaluators.evaluate_assets_file import evaluate_assets_file
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
@@ -93,7 +93,7 @@ def evaluate_assets(
     result_fx = pd.merge(result, last_fx, on=AssetsDef.CURRENCY)
     assert len(result) == len(result_fx)
 
-    mask = result_fx[AssetsDef.TYPE] == "cash"
+    mask = result_fx[AssetsDef.TYPE] == TypeDomain.CASH
     result_fx.loc[mask, AssetsDef.EVALUATION_DATE] = result_fx.loc[mask, AssetsDef.VALUE_DATE]
 
     result_fx[AssetsDef.VALUE_PLN] = result_fx[AssetsDef.VALUE] * result_fx[LastFx.FX]

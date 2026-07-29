@@ -13,7 +13,7 @@ from analyse_assets.config_model import (
     AnalyseAssetsRules,
 )
 from analyse_assets.data_model import AssetRw
-from importers.assets.data_model import GoldCoinInventory, GoldCoinUnitPrices
+from importers.assets.data_model import Inventory, UnitPriceEvaluation
 from importers.assets.pool_id import REVOLUT_PLN
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from importers.revolut.account_data_model import RevolutOperationType
@@ -79,16 +79,16 @@ def _capex_event(
 def _inventory_row(
     *,
     tx_date: str,
-    coin: str,
+    instrument: str,
     quantity: float = 1.0,
     weight: str = "1oz",
 ) -> dict:
     return {
-        GoldCoinInventory.DATE: tx_date,
-        GoldCoinInventory.COIN: coin,
-        GoldCoinInventory.WEIGHT: weight,
-        GoldCoinInventory.QUANTITY: quantity,
-        GoldCoinInventory.NOTES: "",
+        Inventory.DATE: tx_date,
+        Inventory.INSTRUMENT: instrument,
+        Inventory.WEIGHT: weight,
+        Inventory.QUANTITY: quantity,
+        Inventory.NOTES: "",
     }
 
 
@@ -98,22 +98,22 @@ class GoldTerminalMtmTests(unittest.TestCase):
         prices = pd.DataFrame(
             [
                 {
-                    GoldCoinUnitPrices.DATE: "2025-06-01",
-                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 10000.0,
-                    GoldCoinUnitPrices.NOTES: "",
+                    UnitPriceEvaluation.DATE: "2025-06-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 10000.0,
+                    UnitPriceEvaluation.NOTES: "",
                 },
                 {
-                    GoldCoinUnitPrices.DATE: "2025-06-01",
-                    GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 9500.0,
-                    GoldCoinUnitPrices.NOTES: "",
+                    UnitPriceEvaluation.DATE: "2025-06-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 9500.0,
+                    UnitPriceEvaluation.NOTES: "",
                 },
                 {
-                    GoldCoinUnitPrices.DATE: "2026-01-01",
-                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 11000.0,
-                    GoldCoinUnitPrices.NOTES: "nowsza",
+                    UnitPriceEvaluation.DATE: "2026-01-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 11000.0,
+                    UnitPriceEvaluation.NOTES: "nowsza",
                 },
             ]
         )
@@ -126,10 +126,10 @@ class GoldTerminalMtmTests(unittest.TestCase):
         prices = pd.DataFrame(
             [
                 {
-                    GoldCoinUnitPrices.DATE: "2026-01-01",
-                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 10000.0,
-                    GoldCoinUnitPrices.NOTES: "",
+                    UnitPriceEvaluation.DATE: "2026-01-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 10000.0,
+                    UnitPriceEvaluation.NOTES: "",
                 },
             ]
         )
@@ -147,8 +147,8 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
         inventory = pd.DataFrame(
             [
-                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=2),
-                _inventory_row(tx_date="2024-05-10", coin="Maple Leaf 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz", quantity=2),
+                _inventory_row(tx_date="2024-05-10", instrument="Maple Leaf 1oz", quantity=1),
             ]
         )
         holdings, warnings = holdings_from_capex_and_inventory(
@@ -168,7 +168,7 @@ class GoldTerminalMtmTests(unittest.TestCase):
                 ),
             ]
         )
-        inventory = pd.DataFrame(columns=list(GoldCoinInventory.expected_columns()))
+        inventory = pd.DataFrame(columns=list(Inventory.expected_columns()))
         with self.assertRaises(GoldInventoryJoinError) as ctx:
             holdings_from_capex_and_inventory(cashflows, inventory, date(2026, 7, 1))
         msg = str(ctx.exception)
@@ -182,8 +182,8 @@ class GoldTerminalMtmTests(unittest.TestCase):
         cashflows = pd.DataFrame([_capex_event(tx_date="2024-03-15")])
         inventory = pd.DataFrame(
             [
-                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=1),
-                _inventory_row(tx_date="2024-03-15", coin="Maple Leaf 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", instrument="Maple Leaf 1oz", quantity=1),
             ]
         )
         with self.assertRaises(GoldInventoryJoinError) as ctx:
@@ -201,23 +201,23 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
         inventory = pd.DataFrame(
             [
-                _inventory_row(tx_date="2024-03-15", coin="Krugerrand 1oz", quantity=2),
-                _inventory_row(tx_date="2024-05-10", coin="Maple Leaf 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz", quantity=2),
+                _inventory_row(tx_date="2024-05-10", instrument="Maple Leaf 1oz", quantity=1),
             ]
         )
         prices = pd.DataFrame(
             [
                 {
-                    GoldCoinUnitPrices.DATE: "2026-01-01",
-                    GoldCoinUnitPrices.COIN: "Krugerrand 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 12000.0,
-                    GoldCoinUnitPrices.NOTES: "",
+                    UnitPriceEvaluation.DATE: "2026-01-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 12000.0,
+                    UnitPriceEvaluation.NOTES: "",
                 },
                 {
-                    GoldCoinUnitPrices.DATE: "2026-01-01",
-                    GoldCoinUnitPrices.COIN: "Maple Leaf 1oz",
-                    GoldCoinUnitPrices.UNIT_PRICE: 11000.0,
-                    GoldCoinUnitPrices.NOTES: "",
+                    UnitPriceEvaluation.DATE: "2026-01-01",
+                    UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
+                    UnitPriceEvaluation.UNIT_PRICE: 11000.0,
+                    UnitPriceEvaluation.NOTES: "",
                 },
             ]
         )

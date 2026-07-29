@@ -7,9 +7,20 @@ import pandas as pd
 
 from analyse_assets.config_model import AnalyseAssetsManual
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import OperationDomain, Properties
+from importers.assets.data_model import AssetsFile, OperationDomain, Properties
 
 CLOSING_CATEGORY = "CLOSING"
+CASH_KIND = "assets.cash"
+
+
+def cash_owned_asset_ids(assets_catalog: pd.DataFrame) -> set[str]:
+    """Id z katalogu assets o RODZAJ*=assets.cash (np. cash, rocky-iv)."""
+    if assets_catalog is None or assets_catalog.empty:
+        return set()
+    if AssetsFile.KIND not in assets_catalog.columns or AssetsFile.ID not in assets_catalog.columns:
+        return set()
+    mask = assets_catalog[AssetsFile.KIND].astype(str) == CASH_KIND
+    return set(assets_catalog.loc[mask, AssetsFile.ID].astype(str))
 
 
 def load_property_close_dates(
@@ -39,12 +50,19 @@ def load_property_close_dates(
 def property_ids_in_scope(
     valuations: pd.DataFrame,
     close_dates: dict[str, date],
+    exclude_ids: set[str] | None = None,
 ) -> set[str]:
-    """Id nieruchomosci z wycen lub z datami zamkniecia w ROI."""
+    """Id nieruchomosci z wycen lub z datami zamkniecia w ROI.
+
+    ``exclude_ids`` — np. id z wierszy ``assets.cash`` (cash, rocky-iv), ktore
+    maja wlasna sciezke ewaluacji i nie powinny byc rozwijane przez properties.
+    """
     ids: set[str] = set()
     if not valuations.empty:
         ids |= set(valuations[Properties.ID].astype(str).unique())
     ids |= {str(key) for key in close_dates}
+    if exclude_ids:
+        ids -= {str(asset_id) for asset_id in exclude_ids}
     return ids
 
 

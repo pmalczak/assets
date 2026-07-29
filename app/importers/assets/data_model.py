@@ -112,7 +112,7 @@ OperationDomain = OperationDomainCls(Properties.OPERATION)
 
 
 class PropertyValuationsCls(PropertiesCls):
-    """Arkusz properties-wyceny — te same kolumny co Properties (id, Data, wartosc, metraz, operacja)."""
+    """Arkusz asset-evaluation — te same kolumny co Properties (id, Data, wartosc, metraz, operacja)."""
 
     pass
 
@@ -120,11 +120,11 @@ class PropertyValuationsCls(PropertiesCls):
 PropertyValuations = PropertyValuationsCls()
 
 
-class GoldCoinInventoryCls(GenericStructureClass):
-    """Inventory zakupów: data + moneta + waga + sztuki (bez matchu bankowego)."""
+class InventoryCls(GenericStructureClass):
+    """Inventory zakupow: data + instrument + waga + sztuki (bez matchu bankowego)."""
 
     DATE = 'Data'
-    COIN = 'moneta'
+    INSTRUMENT = 'instrument'
     WEIGHT = 'waga'
     QUANTITY = 'sztuki'
     NOTES = 'notatki'
@@ -132,20 +132,20 @@ class GoldCoinInventoryCls(GenericStructureClass):
     def expected_columns(self) -> set:
         return {
             self.DATE,
-            self.COIN,
+            self.INSTRUMENT,
             self.WEIGHT,
             self.QUANTITY,
         }
 
     def check_structure(self, df: pd.DataFrame, file=None):
-        """Wymaga Data/moneta/waga/sztuki; notatki i inne kolumny opcjonalne."""
+        """Wymaga Data/instrument/waga/sztuki; notatki i inne kolumny opcjonalne."""
         del file
         missing = self.expected_columns() - set(df.columns)
         if missing:
             raise ValueError(missing)
 
 
-class GoldCoinPurchaseRulesCls(GenericStructureClass):
+class PurchaseRulesCls(GenericStructureClass):
     """Legacy schema — tylko testy / match_bank_transaction (nie arkusz assets_1)."""
 
     RULE_ID = 'rule_id'
@@ -160,10 +160,10 @@ class GoldCoinPurchaseRulesCls(GenericStructureClass):
     AMOUNT = 'kwota'
     AMOUNT_TOLERANCE = 'tolerancja_kwoty'
     OPERATION_DESCRIPTION = 'opis_operacji'
-    COIN = GoldCoinInventoryCls.COIN
-    QUANTITY = GoldCoinInventoryCls.QUANTITY
-    WEIGHT = GoldCoinInventoryCls.WEIGHT
-    NOTES = GoldCoinInventoryCls.NOTES
+    INSTRUMENT = InventoryCls.INSTRUMENT
+    QUANTITY = InventoryCls.QUANTITY
+    WEIGHT = InventoryCls.WEIGHT
+    NOTES = InventoryCls.NOTES
 
     def expected_columns(self) -> set:
         return {
@@ -179,7 +179,7 @@ class GoldCoinPurchaseRulesCls(GenericStructureClass):
             self.AMOUNT,
             self.AMOUNT_TOLERANCE,
             self.OPERATION_DESCRIPTION,
-            self.COIN,
+            self.INSTRUMENT,
             self.QUANTITY,
             self.WEIGHT,
             self.NOTES,
@@ -195,30 +195,32 @@ class GoldCoinPurchaseRulesCls(GenericStructureClass):
         )
 
 
-class GoldCoinUnitPricesCls(GenericStructureClass):
-    """Arkusz cen jednostkowych monet (mark-to-market ROI / snapshot)."""
+class UnitPriceEvaluationCls(GenericStructureClass):
+    """Arkusz cen jednostkowych instrumentow (mark-to-market ROI / snapshot)."""
 
     DATE = 'Data'
-    COIN = GoldCoinInventoryCls.COIN
+    INSTRUMENT = InventoryCls.INSTRUMENT
     UNIT_PRICE = 'cena_jednostkowa'
     NOTES = 'notatki'
 
     def expected_columns(self) -> set:
         return {
             self.DATE,
-            self.COIN,
+            self.INSTRUMENT,
             self.UNIT_PRICE,
             self.NOTES,
         }
 
 
-GoldCoinInventory = GoldCoinInventoryCls()
-GoldCoinPurchaseRules = GoldCoinPurchaseRulesCls()
-GoldCoinUnitPrices = GoldCoinUnitPricesCls()
-TitleMatchDomain = TitleMatchDomainCls(GoldCoinPurchaseRules.TITLE_MATCH)
+Inventory = InventoryCls()
+PurchaseRules = PurchaseRulesCls()
+UnitPriceEvaluation = UnitPriceEvaluationCls()
+TitleMatchDomain = TitleMatchDomainCls(PurchaseRules.TITLE_MATCH)
 
-GOLD_COIN_PURCHASES_SHEET = 'zloto-monety-zakupy'
-GOLD_COIN_INVENTORY_SHEET = GOLD_COIN_PURCHASES_SHEET
-GOLD_COIN_UNIT_PRICES_SHEET = 'zloto-monety-ceny'
-PROPERTIES_VALUATIONS_SHEET = 'properties-wyceny'
+INVENTORY_SHEET = 'inventory'
+UNIT_PRICE_EVALUATION_SHEET = 'unit-price-evaluation'
+ASSET_EVALUATION_SHEET = 'asset-evaluation'
+LEGACY_INVENTORY_SHEET = 'zloto-monety-zakupy'
+LEGACY_UNIT_PRICE_EVALUATION_SHEET = 'zloto-monety-wyceny'
+LEGACY_ASSET_EVALUATION_SHEET = 'properties-wyceny'
 LEGACY_PROPERTIES_SHEET = 'properties'
