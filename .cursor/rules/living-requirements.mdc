@@ -1,0 +1,20 @@
+---
+description: Always use and update Cursor_rules.md (domain context and assumptions)
+alwaysApply: true
+---
+
+# Living requirements (`Cursor_rules.md`)
+
+Project root file [`Cursor_rules.md`](Cursor_rules.md) holds domain context, assumptions, and non-goals that are not obvious from code.
+
+## Required behavior
+
+1. **Read** `Cursor_rules.md` before implementing domain changes (ROI, assets catalog, pools, valuations, typ/grupa, Streamlit reports).
+2. **Follow** its assumptions unless the user explicitly overrides them in the current chat.
+3. **Update** `Cursor_rules.md` in the same change when you introduce or alter:
+   - a domain assumption,
+   - vocabulary (`typ`, `grupa`, cash pool vs investment),
+   - a business rule (e.g. what counts as sold),
+   - a canonical sheet/column/type name.
+4. Keep updates short: decisions and context only — not algorithm walkthroughs.
+5. If code and `Cursor_rules.md` disagree, stop and reconcile (prefer asking the user when the intent is unclear).
