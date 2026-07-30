@@ -9,7 +9,7 @@ from analyse_assets.account_tx import (
     revolut_statement_to_account_tx,
 )
 from analyse_assets.consolidate_and_drop_internal_transfers import consolidate_account_tx_drop_internal_transfers
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsFile
 from importers.assets.pool_id import POOL_ID_COLUMN, POOL_IDS
 from importers.assets.read_assets import read_assets
@@ -27,13 +27,13 @@ def load_accounts_pool(pool_id: str) -> pd.DataFrame:
     if assets.empty:
         return empty_account_tx()
 
-    data_root = get_online_data_root()
     statements: list[pd.DataFrame] = []
 
     if pool_id.startswith("mbank"):
         for _, asset_row in assets.iterrows():
             asset_id = str(asset_row[AssetsFile.ID])
-            raw = read_m_transactions(data_root, asset_id)
+            asset_dir = resolve_asset_dir(asset_id, asset_row[AssetsFile.TYPE])
+            raw = read_m_transactions(asset_dir, asset_id)
             statements.append(
                 mbank_statement_to_account_tx(raw, account_id=asset_id, pool_id=pool_id)
             )
@@ -41,7 +41,8 @@ def load_accounts_pool(pool_id: str) -> pd.DataFrame:
     elif pool_id.startswith("revolut"):
         for _, asset_row in assets.iterrows():
             asset_id = str(asset_row[AssetsFile.ID])
-            raw = read_revolut_account_transactions(data_root / asset_id, asset_id)
+            asset_dir = resolve_asset_dir(asset_id, asset_row[AssetsFile.TYPE])
+            raw = read_revolut_account_transactions(asset_dir, asset_id)
             statements.append(
                 revolut_statement_to_account_tx(raw, account_id=asset_id, pool_id=pool_id)
             )

@@ -4,15 +4,33 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 from pathlib import Path
 
+from .data_step_dependencies import Dependencies
 from .data_step_primitives import DataStepPrimitives
 from .data_step_frame import DataStepFrame
-from .metadata_class import DIGEST
+from .metadata_class import DIGEST, Metadata
 from .data_strep_data_types import REFRESHED
 
 
 class DataStep(DataStepPrimitives):  # interface class
     def __init__(self, data_steps: str = 'data_steps', meta_parameters: str = ''):
         super(DataStep, self).__init__(data_steps, meta_parameters)
+
+    def init_steps(self, root: Path = None):
+        assert root is not None
+
+        data_steps_root = self.find_data_step_root(start=root)
+        if self._initialised and self._data_steps_root == data_steps_root:
+            # Streamlit / przerwany run: ten sam root, ale stos mógł zostać brudny.
+            self._reset_dependency_stack()
+            self._dependencies = Dependencies()
+            return
+
+        self._data_steps_root = data_steps_root
+        self.metadata = Metadata(data_steps_root)
+        self._reset_dependency_stack()
+        self._dependencies = Dependencies()
+        self._cache = {}
+        self._initialised = True
 
     def force_read_data(self) -> None:
         self.is_initialised()

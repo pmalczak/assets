@@ -8,6 +8,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, TypeDomain
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.import_bonds import import_bonds
@@ -21,7 +22,7 @@ def evaluate_obligacjeskarbowe(
 ) -> pd.DataFrame:
     assert isinstance(asset_id, str)
 
-    p = data_root / asset_id
+    p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
     if not p.is_dir():
         raise ValueError(p)
 

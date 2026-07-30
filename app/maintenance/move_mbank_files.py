@@ -13,18 +13,18 @@ def get_downloaded(download) -> list:
     return lst
 
 
-def move_mbank_files(data_root, download) -> list[MoveResult]:
-    target_dirs = get_target_dirs(data_root)
+def move_mbank_files(cash_pool_root, download) -> list[MoveResult]:
+    target_dirs = get_target_dirs(cash_pool_root)
     lst = get_downloaded(download)
 
     results: list[MoveResult] = []
     for f in lst:
-        results.append(move_file(f, data_root, target_dirs))
+        results.append(move_file(f, cash_pool_root, target_dirs))
     return results
 
 
-def get_target_dirs(data_root: Path) -> dict:
-    result = data_root.glob('*')
+def get_target_dirs(cash_pool_root: Path) -> dict:
+    result = cash_pool_root.glob('*')
     result = filter(lambda x: x.is_dir(), result)
     result = map(lambda x: x.name, result)
     result = map(lambda x: x.split('_'), result)
@@ -35,7 +35,7 @@ def get_target_dirs(data_root: Path) -> dict:
     return result
 
 
-def move_file(f: Path, data_root, target_dirs: dict) -> MoveResult:
+def move_file(f: Path, cash_pool_root, target_dirs: dict) -> MoveResult:
     segments = f.stem.split('_')
     if len(segments) != 3:
         raise ValueError(f)
@@ -43,7 +43,7 @@ def move_file(f: Path, data_root, target_dirs: dict) -> MoveResult:
     key = f.stem.split('_')[0]
     assert len(key) == 8
     key = key[4:]
-    target_dir = data_root / target_dirs[key]
+    target_dir = cash_pool_root / target_dirs[key]
     dst = target_dir / f.name
     f.replace(dst)
     return MoveResult(source=f, destination=dst, action=ACTION_MOVED, kind=KIND_MBANK)

@@ -8,6 +8,7 @@ import pandas as pd
 
 from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
@@ -21,7 +22,7 @@ def evaluate_revolut(
     assets_file_row: pd.Series = None,
     valuation_date: date = None,
 ):
-    p = data_root / asset_id
+    p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
     if not p.is_dir():
         raise ValueError(p)
 

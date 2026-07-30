@@ -19,7 +19,7 @@ download_dir = {'p_re': 'Dropbox/INWESTYCJE/download/pm',
                 'g_re': 'Dropbox/INWESTYCJE/download/gm'}
 
 
-def move_revolut_files(dropbox_assets, file_owner: str) -> list[MoveResult]:
+def move_revolut_files(dropbox_cash_pool, file_owner: str) -> list[MoveResult]:
     assert file_owner in ('p_re', 'g_re')
 
     download_assets = Path().home() / download_dir[file_owner]
@@ -30,7 +30,7 @@ def move_revolut_files(dropbox_assets, file_owner: str) -> list[MoveResult]:
     for file in files:
         fname = file.stem.split('_')
         if fname[0] == 'account-statement':
-            results.append(_move_file(file, file_owner, dropbox_assets, 'account'))
+            results.append(_move_file(file, file_owner, dropbox_cash_pool, 'account'))
 
         elif fname[0] == 'trading-account-statement':
             results.append(
@@ -43,7 +43,7 @@ def move_revolut_files(dropbox_assets, file_owner: str) -> list[MoveResult]:
             )
 
         elif len(fname) == 1:
-            results.append(_move_file(file, file_owner, dropbox_assets, 'deposit'))
+            results.append(_move_file(file, file_owner, dropbox_cash_pool, 'deposit'))
 
         else:
             results.append(
@@ -57,7 +57,7 @@ def move_revolut_files(dropbox_assets, file_owner: str) -> list[MoveResult]:
     return results
 
 
-def _move_file(file: Path, file_owner: str, dropbox_assets: Path, type: str) -> MoveResult:
+def _move_file(file: Path, file_owner: str, dropbox_cash_pool: Path, type: str) -> MoveResult:
     df = pd.read_csv(file)
     if type == 'deposit':
         df = RevolutDepositFile.normalize_dtypes(df)
@@ -79,7 +79,7 @@ def _move_file(file: Path, file_owner: str, dropbox_assets: Path, type: str) -> 
         )
 
     currency = get_account_currency(df)
-    target = dropbox_assets / f'{file_owner}_{currency}' / file.name
+    target = dropbox_cash_pool / f'{file_owner}_{currency}' / file.name
     file.rename(target)
     return MoveResult(
         source=file,

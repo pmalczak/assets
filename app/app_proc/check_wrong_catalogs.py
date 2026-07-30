@@ -5,23 +5,28 @@ from pathlib import Path
 
 import pandas as pd
 
+from app_proc.data_root import get_cash_pool_root
 from importers.assets.read_assets import ASSETS_FILE_NAME
 
+
 def check_wrong_catalogs(data_root: Path, assets: pd.DataFrame):
-    dir = data_root.glob('*')
-    dir = filter(lambda x: x.is_dir(), dir)
-    dir = map(lambda x: x.name, dir)
-    dir = list(dir)
-    dir = pd.DataFrame(data={
-        'id': dir,
-        # 'x': 1,
-    })
+    """Raportuje katalogi w assets/ i cash_pool/ nieobecne w assets_1.xlsx."""
+    roots = [data_root]
+    cash_pool = get_cash_pool_root()
+    if cash_pool.is_dir() and cash_pool.resolve() != Path(data_root).resolve():
+        roots.append(cash_pool)
+
+    dir_names: list[str] = []
+    for root in roots:
+        dir_names.extend(p.name for p in root.glob("*") if p.is_dir())
+
+    dirs = pd.DataFrame({"id": dir_names})
     _assets = assets.copy()
-    _assets['x'] = 1
-    result = dir.merge(_assets, on='id', how='left')
-    result = result[result['x'].isnull()]
-    result = result[['id']].rename(
-        columns={'id': f'nadmiarowe katalogi nieujawnione w "{ASSETS_FILE_NAME}"'}
+    _assets["x"] = 1
+    result = dirs.merge(_assets, on="id", how="left")
+    result = result[result["x"].isnull()]
+    result = result[["id"]].rename(
+        columns={"id": f'nadmiarowe katalogi nieujawnione w "{ASSETS_FILE_NAME}"'}
     )
     if not result.empty:
         print(result)

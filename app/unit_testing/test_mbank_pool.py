@@ -15,9 +15,13 @@ class LoadAccountsPoolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_accounts_pool("not_a_pool")
 
+    @patch("analyse_assets.accounts_pools.resolve_asset_dir")
     @patch("analyse_assets.accounts_pools.read_m_transactions")
     @patch("analyse_assets.accounts_pools.read_assets")
-    def test_load_mbank_eur_returns_account_tx(self, mock_assets, mock_read):
+    def test_load_mbank_eur_returns_account_tx(self, mock_assets, mock_read, mock_resolve):
+        from pathlib import Path
+
+        mock_resolve.return_value = Path("/cash_pool/g_m_56_3217_eur")
         mock_assets.return_value = pd.DataFrame(
             [
                 {
@@ -49,12 +53,15 @@ class LoadAccountsPoolTests(unittest.TestCase):
         self.assertEqual(df.iloc[0][AccountTx.ACCOUNT_ID], "g_m_56_3217_eur")
         self.assertNotIn(MBankFile.MBANK_DESCRIPTION, df.columns)
 
+    @patch("analyse_assets.accounts_pools.resolve_asset_dir")
     @patch("analyse_assets.accounts_pools.read_revolut_account_transactions")
     @patch("analyse_assets.accounts_pools.read_assets")
-    def test_load_revolut_pln_returns_account_tx(self, mock_assets, mock_read):
+    def test_load_revolut_pln_returns_account_tx(self, mock_assets, mock_read, mock_resolve):
+        from pathlib import Path
         from importers.revolut.account_data_model import RevolutAccountFile
         from importers.assets.pool_id import REVOLUT_PLN
 
+        mock_resolve.return_value = Path("/cash_pool/p_re_pln")
         mock_assets.return_value = pd.DataFrame(
             [
                 {

@@ -48,6 +48,11 @@ Agent Cursor: czytaj ten plik na początku pracy domenowej; po istotnej decyzji 
    - **Brak / niejednoznaczne / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
 8. **ROI cash a FX** — XIRR / ROI nominalny dla `cash` liczony w **walucie wyceny (EUR)**; bez przeliczania CAPEX/terminal FX w ROI. Przeliczenie na PLN jest w snapshocie portfela (`09 assets`), nie w warstwie ROI cash.
 9. **Snapshoty** — raporty UI z `09 assets/*.parquet`; po zmianie logiki wyceny użytkownik regeneruje snapshot (przycisk w Raportach). Nie migrujemy historycznych parquetów bez prośby. Nowe snapshoty dla gotówki mają `id=cash` (nie `id=EUR`).
+10. **Layout Dropbox `INWESTYCJE/`**:
+    - `assets/` — `assets_1.xlsx`, `analyse_assets_config`, katalogi aktywów `investment.*`
+    - `cash_pool/` — katalogi aktywów `cash_pool.*` (wyciągi ROR mBank/Revolut)
+    - `download/pm|gm/` — źródło importu Revolut
+    - Import wyciągów trafia do `cash_pool/`, nie do `assets/`
 
 ---
 
@@ -69,7 +74,7 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 
 ## Import wyciągów (Revolut)
 
-Źródła: `Dropbox/INWESTYCJE/download/pm` (`p_re`), `…/gm` (`g_re`). Przenoszenie do katalogów kont w Dropbox `assets` (`p_re_*` / `g_re_*`).
+Źródła: `Dropbox/INWESTYCJE/download/pm` (`p_re`), `…/gm` (`g_re`). Przenoszenie do katalogów kont w Dropbox `cash_pool` (`p_re_*` / `g_re_*`).
 
 | Prefiks nazwy pliku | Zachowanie |
 |---------------------|------------|
@@ -79,7 +84,7 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 | `trading-account-statement_*` | Pomijany (nie importujemy trading) |
 | `consolidated-statement-v2_*`, `savings-statement_*` i inne nieznane | Pomijane — **nie** przerywają importu |
 
-mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz z katalogu `assets` → katalogi kont po kluczu numeru rachunku.
+mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
 
 ---
 
@@ -91,7 +96,7 @@ mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz z katalogu `asse
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
 - Zakładka **Waliduj**: walidacja `analyse_assets_config` + ewaluacja `assets_1` (dry-run, bez zapisu snapshotu).
-- **DATA_STEP** — jedyna warstwa cache i łańcucha zależności (`obtain` / `obtain_dependent`). Nie resetować ręcznie `_dependencies_stack` i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
+- **DATA_STEP** — jedyna warstwa cache i łańcucha zależności. Korzystamy **tylko z API wysokopoziomowego** — w praktyce wyłącznie z metod klasy `DataStep` (np. `init_steps`, `obtain`, `obtain_dependent`, `force_read_data`). Nie wywoływać prywatnych pól/metod (`_dependencies_stack`, `_dependencies`, …) i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
 - Komunikacja z użytkownikiem: zwięźle, po polsku jeśli pyta po polsku.
 
 ---

@@ -11,13 +11,13 @@ from importers.mbank.local_extract_csv_table import ForbiddenSign
 from importers.mbank.local_read_csv_file import read_mbank_csv_file
 
 
-def read_m_transactions(data_root: Path, asset_id: str) -> pd.DataFrame:
-    input_path = data_root / asset_id
-    if not input_path.is_dir():
-        raise ValueError(input_path)
+def read_m_transactions(asset_dir: Path, asset_id: str) -> pd.DataFrame:
+    """Czyta wyciągi mBank z katalogu aktywa (już rozwiązana ścieżka)."""
+    if not asset_dir.is_dir():
+        raise ValueError(asset_dir)
 
     resource = f'01 source/{asset_id}.parquet'
-    r = DATA_STEP.obtain_dependent(resource, _read_m_transactions, input_path)
+    r = DATA_STEP.obtain_dependent(resource, _read_m_transactions, asset_dir)
     result = r.data_frame()
     return result
 

@@ -107,7 +107,7 @@ class MetadataPrimitives:
             token = token[1]
             result = token.replace(HOME_PATH, self._home)
             result = Path(result)
-            assert result.is_dir()
+            # Brak katalogu (np. po migracji assets→cash_pool) obsługuje is_updated → MetadataUpdateError.
 
         elif token.startswith(HOME_PATH):
             result = token.replace(HOME_PATH, self._home)

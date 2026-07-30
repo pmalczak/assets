@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, KindDomain
 from importers.assets.read_assets import read_assets
 from importers.mbank.data_model import MBankFile
@@ -53,8 +53,7 @@ def load_all_transactions(
     data_root: Path | None = None,
     assets: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    if data_root is None:
-        data_root = get_online_data_root()
+    del data_root  # ścieżki kont z resolve_asset_dir; parametr zachowany dla kompatybilności API
     if assets is None:
         assets = read_assets()
 
@@ -67,17 +66,17 @@ def load_all_transactions(
         asset_id = str(asset_row[AssetsDef.ID])
         asset_opis = "" if pd.isna(asset_row.get(AssetsDef.DESCR)) else str(asset_row[AssetsDef.DESCR])
         kind = str(kind)
+        asset_dir = resolve_asset_dir(asset_id, asset_row[AssetsDef.TYPE])
 
         if kind.startswith(KindDomain.MBANK):
-            raw = read_m_transactions(data_root, asset_id)
+            raw = read_m_transactions(asset_dir, asset_id)
             if not raw.empty:
                 frames.append(_normalize_mbank(raw, asset_id, asset_opis))
         elif kind.startswith(KindDomain.REVOLUT):
-            input_path = data_root / asset_id
-            account = read_revolut_account_transactions(input_path, asset_id)
+            account = read_revolut_account_transactions(asset_dir, asset_id)
             if not account.empty:
                 frames.append(_normalize_revolut_account(account, asset_id, asset_opis))
-            deposits = read_revolut_deposit_transactions(input_path, asset_id)
+            deposits = read_revolut_deposit_transactions(asset_dir, asset_id)
             if not deposits.empty:
                 frames.append(_normalize_revolut_deposit(deposits, asset_id, asset_opis))
 

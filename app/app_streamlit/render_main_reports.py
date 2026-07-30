@@ -12,6 +12,7 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import recalculate_today_snapshot
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
+from importers.assets.data_model import AssetsDef
 
 
 @st.cache_data(show_spinner=False)
@@ -101,8 +102,15 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
 
     st.caption(f"Zrodlo: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`")
 
-    st.markdown("**Pelna lista aktywow**")
-    st.dataframe(assets, width='stretch', hide_index=True, height=360)
+    typ = assets[AssetsDef.TYPE].astype(str)
+    cash_pool = assets[typ.str.startswith("cash_pool.")]
+    investments = assets[typ.str.startswith("investment.")]
+
+    st.markdown("**Cash pool**")
+    st.dataframe(cash_pool, width="stretch", hide_index=True, height=360)
+
+    st.markdown("**Inwestycje**")
+    st.dataframe(investments, width="stretch", hide_index=True, height=360)
 
     st.markdown("**RAP 2**")
     rap2_buffer = io.StringIO()

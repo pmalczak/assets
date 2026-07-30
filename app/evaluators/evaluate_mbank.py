@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
@@ -20,7 +21,8 @@ def evaluate_mbank(
 ) -> pd.DataFrame:
     assert isinstance(asset_id, str)
 
-    df = read_m_transactions(data_root, asset_id)
+    asset_dir = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
+    df = read_m_transactions(asset_dir, asset_id)
     df = filter_on_or_before(df, MBankFile.MBANK_TRANSACTION_DATE, valuation_date)
     if df.empty:
         return pd.DataFrame(columns=list(AssetsDef.expected_columns()))

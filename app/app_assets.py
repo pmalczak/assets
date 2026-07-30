@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import get_cash_pool_root, get_online_data_root
 from app_proc.data_steps_root import get_data_steps_root
 from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
 from app_streamlit.render_diagnostics import render_diagnostics
@@ -63,9 +63,10 @@ def render_import_wyciagow() -> None:
     home = Path.home()
     st.caption(
         "Przenosi pobrane wyciągi do katalogów w Dropbox:\n"
-        f"- mBank: `{home / 'Downloads'}` oraz pliki w `{get_online_data_root()}`\n"
-        f"- Revolut pm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'pm'}`\n"
-        f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}`"
+        f"- mBank: `{home / 'Downloads'}` oraz luźne CSV w `{get_online_data_root()}` "
+        f"→ `{get_cash_pool_root()}`\n"
+        f"- Revolut pm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'pm'}` → `{get_cash_pool_root()}`\n"
+        f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}` → `{get_cash_pool_root()}`"
     )
 
     if st.button("Przenieś pliki do ich katalogów", key="move_downloaded_button"):

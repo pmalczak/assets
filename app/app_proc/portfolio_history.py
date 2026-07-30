@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Properties
 from importers.assets.property_lifecycle import (
     cash_owned_asset_ids,
@@ -37,7 +35,6 @@ def build_portfolio_history(
         end_date = pd.Timestamp(end_date).normalize()
 
     start_date = end_date - pd.Timedelta(days=days - 1)
-    data_root = get_online_data_root()
 
     history_points: list[pd.DataFrame] = []
     supported_assets: list[str] = []
@@ -52,7 +49,7 @@ def build_portfolio_history(
             continue
 
         try:
-            series = _build_asset_history(data_root, asset_row)
+            series = _build_asset_history(asset_row)
         except Exception as exc:
             skipped_assets.append(f"{asset_id}: {kind} ({exc})")
             continue
@@ -97,25 +94,26 @@ def build_portfolio_history(
     }
 
 
-def _build_asset_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
+def _build_asset_history(asset_row: pd.Series) -> pd.DataFrame:
     kind = str(asset_row[AssetsDef.KIND])
 
     if kind.startswith(KindDomain.MBANK):
-        return _mbank_history(data_root, asset_row)
+        return _mbank_history(asset_row)
     if kind.startswith(KindDomain.REVOLUT):
-        return _revolut_history(data_root, asset_row)
+        return _revolut_history(asset_row)
     if kind == KindDomain.BONDS:
-        return _bonds_history(data_root, asset_row)
+        return _bonds_history(asset_row)
     if kind.startswith(f"{KindDomain.ASSETS}."):
         return _assets_sheet_history(asset_row)
     return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
 
-def _mbank_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
+def _mbank_history(asset_row: pd.Series) -> pd.DataFrame:
     asset_id = str(asset_row[AssetsDef.ID])
     currency = str(asset_row[AssetsDef.CURRENCY]).upper()
+    asset_dir = resolve_asset_dir(asset_id, asset_row[AssetsDef.TYPE])
 
-    df = read_m_transactions(data_root, asset_id)
+    df = read_m_transactions(asset_dir, asset_id)
     if df.empty:
         return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
@@ -139,9 +137,9 @@ def _mbank_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
     return history[["asset_key", "group", "date", "value", "currency"]]
 
 
-def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
+def _revolut_history(asset_row: pd.Series) -> pd.DataFrame:
     asset_id = str(asset_row[AssetsDef.ID])
-    input_path = data_root / asset_id
+    input_path = resolve_asset_dir(asset_id, asset_row[AssetsDef.TYPE])
     currency = str(asset_row[AssetsDef.CURRENCY]).upper()
 
     series_parts: list[pd.DataFrame] = []
@@ -191,10 +189,10 @@ def _revolut_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
     return pd.concat(series_parts, ignore_index=True)
 
 
-def _bonds_history(data_root: Path, asset_row: pd.Series) -> pd.DataFrame:
+def _bonds_history(asset_row: pd.Series) -> pd.DataFrame:
     asset_id = str(asset_row[AssetsDef.ID])
     currency = str(asset_row[AssetsDef.CURRENCY]).upper()
-    input_path = data_root / asset_id
+    input_path = resolve_asset_dir(asset_id, asset_row[AssetsDef.TYPE])
 
     df = read_obligacje(input_path, asset_id)
     if df.empty:

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_step.data_step_dependencies import Dependencies
 from data_step.data_step_frame import DataStepFrame
 from data_step.data_strep_data_types import REFRESHED, CACHED
 from data_step.metadata_class import Metadata, MetadataUpdateError, MTIME, DIGEST
@@ -47,24 +46,6 @@ class DataStepPrimitives:
                  f'local_data_steps_root = Path(__file__).parent.parent\n'
                  f'DATA_STEP.init_steps(root=local_data_steps_root)')
             raise ReferenceError(s)
-
-    def init_steps(self, root: Path = None):
-        assert root is not None
-
-        data_steps_root = self.find_data_step_root(start=root)
-        if self._initialised and self._data_steps_root == data_steps_root:
-            # Streamlit / przerwany run: ten sam root, ale stos mógł zostać brudny.
-            self._reset_dependency_stack()
-            self._dependencies = Dependencies()
-            return
-
-        self._data_steps_root = data_steps_root
-        # metadata_params = self.data_steps + self._meta_parameters
-        self.metadata = Metadata(data_steps_root)
-        self._reset_dependency_stack()
-        self._dependencies = Dependencies()
-        self._cache = {}
-        self._initialised = True
 
     def _reset_dependency_stack(self) -> None:
         """Sentinel 'top' musi zawsze zostać — inaczej kolejny obtain → IndexError."""
