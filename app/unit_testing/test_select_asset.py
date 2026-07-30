@@ -7,6 +7,7 @@ from analyse_assets.config_model import AnalyseAssetsRules
 from analyse_assets.data_model import AssetRw
 from analyse_assets.select_asset import format_empty_selector_error, select_asset
 from importers.mbank.data_model import MbankOperationType
+from importers.revolut.account_data_model import RevolutOperationType
 
 
 class EmptySelectorDiagnosticsTests(unittest.TestCase):
@@ -79,6 +80,46 @@ class EmptySelectorDiagnosticsTests(unittest.TestCase):
         self.assertTrue(remaining.empty)
         self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INVESTMENT)
         self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), -50000.0)
+
+    def test_revolut_przelew_maps_as_initial_investment(self):
+        df = pd.DataFrame(
+            [
+                {
+                    AssetRw.OPERATION_TYPE: RevolutOperationType.PRZELEW,
+                    AssetRw.AMOUNT: -500.0,
+                    AssetRw.TITLE: "To Robo portfolio",
+                }
+            ]
+        )
+        remaining, selected = select_asset(
+            df,
+            pd.Series([True], index=df.index),
+            AssetRw.initial_investment_mapping,
+            asset_id="p_re_robo",
+        )
+        self.assertTrue(remaining.empty)
+        self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INVESTMENT)
+        self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), -500.0)
+
+    def test_revolut_transfer_maps_as_inflow(self):
+        df = pd.DataFrame(
+            [
+                {
+                    AssetRw.OPERATION_TYPE: RevolutOperationType.TRANSFER,
+                    AssetRw.AMOUNT: 200.0,
+                    AssetRw.TITLE: "From Robo portfolio",
+                }
+            ]
+        )
+        remaining, selected = select_asset(
+            df,
+            pd.Series([True], index=df.index),
+            AssetRw.inflow_mapping,
+            asset_id="p_re_robo",
+        )
+        self.assertTrue(remaining.empty)
+        self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INFLOW)
+        self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), 200.0)
 
 
 if __name__ == "__main__":

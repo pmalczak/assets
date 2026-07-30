@@ -57,6 +57,9 @@ class AssetRWCls:
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,
             MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY: self.CAT_INFLOW,
+            # Revolut: zwrot z Robo / trading (From Robo portfolio) — Rodzaj Przelew|Transfer.
+            RevolutOperationType.PRZELEW: self.CAT_INFLOW,
+            RevolutOperationType.TRANSFER: self.CAT_INFLOW,
         }
         self.initial_investment_mapping = {
             MbankOperationType.PRZELEW_ZEWNETRZNY_WYCHODZACY: self.CAT_INVESTMENT,
@@ -69,6 +72,9 @@ class AssetRWCls:
             # Zakupy złota kartą (mBank / Revolut).
             MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_INVESTMENT,
             RevolutOperationType.CARD_PAYMENT: self.CAT_INVESTMENT,
+            # Revolut: CAPEX do Robo / trading (To Robo portfolio).
+            RevolutOperationType.PRZELEW: self.CAT_INVESTMENT,
+            RevolutOperationType.TRANSFER: self.CAT_INVESTMENT,
         }
         self.investment_refund_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INVESTMENT,
@@ -76,6 +82,8 @@ class AssetRWCls:
         self.closing_investment_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_CLOSING,
             MbankOperationType.PRZELEW_ZEWNETRZNY_PRZYCHODZACY: self.CAT_CLOSING,
+            RevolutOperationType.PRZELEW: self.CAT_CLOSING,
+            RevolutOperationType.TRANSFER: self.CAT_CLOSING,
         }
 
     def add_ymd_columns(self, df):

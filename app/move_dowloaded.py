@@ -25,8 +25,8 @@ def run_move_downloaded(
     assert download.is_dir()
 
     results: list[MoveResult] = []
-    results.extend(move_revolut_files(cash_pool_root, 'p_re'))
-    results.extend(move_revolut_files(cash_pool_root, 'g_re'))
+    results.extend(move_revolut_files(cash_pool_root, 'p_re', assets_root=assets_root))
+    results.extend(move_revolut_files(cash_pool_root, 'g_re', assets_root=assets_root))
     results.extend(move_mbank_files(cash_pool_root, download))
     # Luźne CSV mBank czasem lądują w assets/ — destynacja i tak to cash_pool.
     results.extend(move_mbank_files(cash_pool_root, assets_root))

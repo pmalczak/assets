@@ -4,14 +4,27 @@ __author__ = "pmalczak@gmail.com"
 import pandas as pd
 
 
+def _parse_sort_dates(series: pd.Series) -> pd.Series:
+    """
+    Parsuj daty do sortowania / overlap.
+    format=ISO8601 obsługuje mieszankę z/bez ułamka sekundy (np. Revolut trading).
+    """
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return pd.to_datetime(series, utc=True)
+    try:
+        return pd.to_datetime(series, format="ISO8601", utc=True)
+    except (ValueError, TypeError, OSError):
+        return pd.to_datetime(series, utc=True)
+
+
 def deduplicate_records(df1, df2, date_src_col, key_cols):
     date_col = '_data_'
 
     # --- przygotowanie ---
     df1 = df1.copy()
     df2 = df2.copy()
-    df1[date_col] = pd.to_datetime(df1[date_src_col])
-    df2[date_col] = pd.to_datetime(df2[date_src_col])
+    df1[date_col] = _parse_sort_dates(df1[date_src_col])
+    df2[date_col] = _parse_sort_dates(df2[date_src_col])
     # df1 = df1.fi
 
     # zakresy dat
@@ -47,10 +60,11 @@ def deduplicate_overlapped_records(df1, df2, date_col, key_cols, overlap_start, 
     overlap_combined = pd.concat([df1_overlap, df2_overlap], ignore_index=True)
 
     removed_mask = overlap_combined.duplicated(subset=key_cols, keep='last')
-    try:
-        dup_keys = overlap_combined.loc[:, key_cols].astype(str).agg('|'.join, axis=1)
-    except TypeError:
-        raise
+    # NaN (Ticker/Quantity przy fee/cash) — astype(str) nie zawsze daje czyste str pod join.
+    key_frame = overlap_combined.loc[:, key_cols].copy()
+    for col in key_frame.columns:
+        key_frame[col] = key_frame[col].map(lambda v: "" if pd.isna(v) else str(v))
+    dup_keys = key_frame.agg("|".join, axis=1)
     duplicates_report = overlap_combined.loc[removed_mask].copy()
     duplicates_report.loc[:, 'duplicate_key'] = dup_keys.loc[removed_mask]
 

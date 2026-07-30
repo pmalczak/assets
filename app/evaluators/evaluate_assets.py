@@ -9,6 +9,7 @@ import pandas as pd
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
 from evaluators.evaluate_assets_file import evaluate_assets_file
+from evaluators.evaluate_broker_revolut import evaluate_broker_revolut
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
 from evaluators.evaluate_revolut import evaluate_revolut
@@ -56,6 +57,18 @@ def evaluate_assets(
         elif rodzaj_importu == 'assets.zloto-monety':
             r, gold_warnings = evaluate_zloto_monety(assets_file_row, valuation_date)
             for warning in gold_warnings:
+                msg = f"[{asset_id}] {warning}"
+                warnings.append(msg)
+                print(f"OSTRZEZENIE {msg}")
+            if not r.empty:
+                AssetsDef.check_structure(r)
+                result += [r]
+
+        elif rodzaj_importu == KindDomain.BROKER or rodzaj_importu.startswith(KindDomain.BROKER + '.'):
+            r, broker_warnings = evaluate_broker_revolut(
+                data_root, asset_id, assets_file_row, valuation_date
+            )
+            for warning in broker_warnings:
                 msg = f"[{asset_id}] {warning}"
                 warnings.append(msg)
                 print(f"OSTRZEZENIE {msg}")

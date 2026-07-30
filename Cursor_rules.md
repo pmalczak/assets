@@ -81,10 +81,22 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 | `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`) |
 | stem bez `_` (UUID) | Depozyt → katalog waluty |
 | pusty plik account/deposit | Usuwany; w raporcie importu: „usunięty (pusty)” |
-| `trading-account-statement_*` | Pomijany (nie importujemy trading) |
+| `trading-account-statement_*` | Wyciąg brokerski Revolut (robo/trading) — osobna ścieżka (nie cash_pool) |
+| `trading-pnl-statement_*` | Rachunek zysków i strat brokerskich (zrealizowane sprzedaże, dywidendy) |
 | `consolidated-statement-v2_*`, `savings-statement_*` i inne nieznane | Pomijane — **nie** przerywają importu |
 
 mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
+
+---
+
+## Rachunek brokerski (revolut-robo; wzorzec na XTB / Trade Republic / Degiro)
+
+- To **nie** jest `cash_pool` ani pojedyncza inwestycja-lump z przelewu ROR — kontener pozycji instrumentów (+ gotówka robocza brokera).
+- Źródła: `trading-account-statement_*` (blotter: BUY/SELL/DIVIDEND/fee/top-up) + `trading-pnl-statement_*` (zrealizowany PnL, ISIN).
+- Merge wielu plików: usuwać duplikaty; luki w okresach nazw → ostrzeżenie o możliwej utracie danych.
+- Po wczytaniu blottera: SELL → `Quantity` ujemne; BUY → `Total Amount` ujemne; `Price per share` / `Total Amount` → float (bez symbolu waluty); `FX Rate` → `1/fx` (4 miejsca).
+- **Wycena otwartych pozycji (interim):** koszt nabycia (cena zakupu / FIFO cost basis) — świadome uproszczenie bez MTM online. Zrealizowane sprzedaże: cena/PnL z wyciągu / P&L. Lepsze MTM (API) — osobna decyzja później.
+- Przelewy ROR → broker nie powinny dublować starego FIFO „robo portfolio” z opisu konta Revolut.
 
 ---
 
@@ -109,6 +121,7 @@ mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `as
 - Osobna wycena całego holdingu złota (dawne `zloto-monety-wyceny`).
 - Auto-migracja starego Excela inventory → nowy schemat bez prośby.
 - FX w XIRR cash (osobna decyzja, jeśli kiedyś wspólny mianownik PLN z nieruchomościami).
+- MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; interim = koszt nabycia.
 
 ---
 

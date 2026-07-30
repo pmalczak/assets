@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from evaluators.eveluate_revolut_deposits import evaluate_revolut_deposits
 from evaluators.valuation_date import filter_on_or_before, format_date_columns
 from app_proc.data_root import resolve_asset_dir
-from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
+from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
@@ -58,16 +57,7 @@ def evaluate_revolut(
                 data += [deposit_row]
                 break
 
-    if assets_file_row[AssetsDef.KIND].startswith(KindDomain.REVOLUT):
-        r = evaluate_revolut_deposits(
-            df_accounts,
-            assets_file_row,
-            product='robo portfolio',
-            depositing_selector='To Robo portfolio',
-            withdrowing_selector='From Robo portfolio',
-        )
-        if r:
-            data += r
+    # Robo / rachunek brokerski: pozycje z trading-* (RODZAJ*=BROKER), nie FIFO przelewów ROR.
 
     result = pd.DataFrame(data=data)
     AssetsDef.check_structure(result)

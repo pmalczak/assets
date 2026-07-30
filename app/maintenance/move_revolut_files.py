@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app_proc.data_root import get_online_data_root
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.deposit_data_model import RevolutDepositFile
 from maintenance.move_downloaded_results import (
@@ -18,12 +19,23 @@ from maintenance.move_downloaded_results import (
 download_dir = {'p_re': 'Dropbox/INWESTYCJE/download/pm',
                 'g_re': 'Dropbox/INWESTYCJE/download/gm'}
 
+_TRADING_PREFIXES = ('trading-account-statement', 'trading-pnl-statement')
 
-def move_revolut_files(dropbox_cash_pool, file_owner: str) -> list[MoveResult]:
+
+def broker_asset_id(file_owner: str) -> str:
+    return f'{file_owner}_robo'
+
+
+def move_revolut_files(
+    dropbox_cash_pool,
+    file_owner: str,
+    assets_root: Path | None = None,
+) -> list[MoveResult]:
     assert file_owner in ('p_re', 'g_re')
 
     download_assets = Path().home() / download_dir[file_owner]
     assert download_assets.is_dir()
+    assets_root = assets_root or get_online_data_root()
 
     results: list[MoveResult] = []
     files = download_assets.glob('*.csv')
@@ -32,15 +44,8 @@ def move_revolut_files(dropbox_cash_pool, file_owner: str) -> list[MoveResult]:
         if fname[0] == 'account-statement':
             results.append(_move_file(file, file_owner, dropbox_cash_pool, 'account'))
 
-        elif fname[0] == 'trading-account-statement':
-            results.append(
-                MoveResult(
-                    source=file,
-                    destination=None,
-                    action=ACTION_SKIPPED,
-                    kind=KIND_REVOLUT,
-                )
-            )
+        elif fname[0] in _TRADING_PREFIXES:
+            results.append(_move_trading_file(file, file_owner, assets_root))
 
         elif len(fname) == 1:
             results.append(_move_file(file, file_owner, dropbox_cash_pool, 'deposit'))
@@ -55,6 +60,38 @@ def move_revolut_files(dropbox_cash_pool, file_owner: str) -> list[MoveResult]:
                 )
             )
     return results
+
+
+def _move_trading_file(file: Path, file_owner: str, assets_root: Path) -> MoveResult:
+    if _is_trading_file_empty(file):
+        file.unlink()
+        return MoveResult(
+            source=file,
+            destination=None,
+            action=ACTION_DELETED_EMPTY,
+            kind=KIND_REVOLUT,
+        )
+
+    target_dir = assets_root / broker_asset_id(file_owner)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / file.name
+    file.rename(target)
+    return MoveResult(
+        source=file,
+        destination=target,
+        action=ACTION_MOVED,
+        kind=KIND_REVOLUT,
+    )
+
+
+def _is_trading_file_empty(file: Path) -> bool:
+    prefix = file.stem.split('_')[0]
+    if prefix == 'trading-account-statement':
+        df = pd.read_csv(file)
+        return df.empty
+    # PnL: sekcje + nagłówki bez wierszy danych (linia zaczynająca się od cyfry = data)
+    text = file.read_text(encoding='utf-8-sig')
+    return not any(line and line[0].isdigit() for line in text.splitlines())
 
 
 def _move_file(file: Path, file_owner: str, dropbox_cash_pool: Path, type: str) -> MoveResult:

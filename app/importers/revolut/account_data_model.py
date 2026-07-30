@@ -60,6 +60,8 @@ class RevolutOperationTypeClass:
     """Wartości kolumny Rodzaj (AccountTx.operation_type) z wyciągów Revolut."""
 
     CARD_PAYMENT = "Płatność kartą"
+    TRANSFER = "Transfer"
+    PRZELEW = "Przelew"
 
 
 RevolutOperationType = RevolutOperationTypeClass()
