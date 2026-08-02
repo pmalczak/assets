@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Dopisuje aktywo cash + reguly zakupu do analyse_assets_config.xlsx
+Dopisuje aktywo cash + reguły zakupu do a_config.xlsx (arkusze roi_def / roi_rules)
 z zachowaniem Excel Table.
 
-Uzycie:
+Użycie:
   cd app
   uv run python maintenance/add_cash_to_analyse_assets_config.py
-  uv run python maintenance/add_cash_to_analyse_assets_config.py C:/sciezka/analyse_assets_config.xlsx
+  uv run python maintenance/add_cash_to_analyse_assets_config.py C:/sciezka/a_config.xlsx
 """
 from __future__ import annotations
 

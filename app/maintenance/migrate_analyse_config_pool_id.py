@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Migracja analyse_assets_config.xlsx: kolumna source → pool_id (catalog + rules).
+Historyczna migracja: kolumna source → pool_id (roi_def + roi_rules).
+
+Uwaga: nadpisuje tylko 3 arkusze ROI — nie uruchamiaj na pełnym a_config
+bez świadomości utraty innych arkuszy. Preferuj osobny plik ROI-only.
 
 Użycie:
   cd app
-  uv run python maintenance/migrate_analyse_config_pool_id.py
-  uv run python maintenance/migrate_analyse_config_pool_id.py C:/sciezka/analyse_assets_config.xlsx
+  uv run python maintenance/migrate_analyse_config_pool_id.py C:/sciezka/roi_only.xlsx
 """
 from __future__ import annotations
 

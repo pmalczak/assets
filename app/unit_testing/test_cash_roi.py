@@ -451,7 +451,7 @@ class CashConfigValidationTests(unittest.TestCase):
             ]
         )
         manual = pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns()))
-        path = Path(tempfile.mkdtemp()) / "analyse_assets_config.xlsx"
+        path = Path(tempfile.mkdtemp()) / "a_config.xlsx"
         with pd.ExcelWriter(path, engine="openpyxl") as writer:
             catalog.to_excel(writer, sheet_name=CATALOG_SHEET, index=False)
             rules.to_excel(writer, sheet_name=RULES_SHEET, index=False)

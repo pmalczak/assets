@@ -13,6 +13,7 @@ from app_proc.export_product_excel import (
 )
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
+from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
 
 ROI_DISPLAY_COLUMNS = {
     "asset_id": "Aktywo",
@@ -56,25 +57,95 @@ def render_roi(default_valuation_date: date | None) -> None:
     except Exception as exc:
         st.error("Nie udalo sie policzyc ROI.")
         st.exception(exc)
-        return
+        summary = pd.DataFrame()
+        events_by_asset = {}
 
     if summary.empty:
         st.info("Brak danych ROI w katalogu analyse_assets.")
+    else:
+        st.caption(
+            "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza asset-evaluation dla otwartych inwestycji. "
+            "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
+            "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
+            f"Zamkniecie: CLOSING w {CONFIG_FILE_NAME}."
+        )
+
+        total_roi = int(summary["roi_nominal"].sum())
+        sold_count = int(summary["is_sold"].sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Liczba aktywow", len(summary))
+        c2.metric("Sprzedane", sold_count)
+        c3.metric("Suma ROI nominal", f"{total_roi:,}".replace(",", " "))
+
+        display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
+        for col in ROI_DISPLAY_COLUMNS.values():
+            if col in ("Sprzedane", "XIRR"):
+                continue
+            if col in display.columns:
+                display[col] = display[col].map(
+                    lambda v: f"{v:,}".replace(",", " ") if isinstance(v, (int, float)) else v
+                )
+        if "XIRR" in display.columns:
+            display["XIRR"] = summary["xirr"].map(
+                lambda v: f"{v * 100:.1f}%" if v is not None and pd.notna(v) else "—"
+            )
+
+        st.dataframe(display, width='stretch', hide_index=True)
+
+        csv = summary.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label="Pobierz ROI (CSV)",
+            data=csv,
+            file_name=f"roi_{valuation_date:%Y-%m-%d}.csv",
+            mime="text/csv",
+            key="roi_csv_download",
+        )
+
+        _render_product_excel_downloads(valuation_date)
+
+        warned = summary[summary["warnings"].astype(str).str.len() > 0]
+        if not warned.empty:
+            st.markdown("**Ostrzezenia**")
+            st.dataframe(warned[["asset_id", "warnings"]], width='stretch', hide_index=True)
+
+        st.markdown("**Szczegoly przeplywow**")
+        asset_ids = sorted(summary["asset_id"].astype(str).tolist())
+        selected_asset = st.selectbox("Aktywo", options=asset_ids, key="roi_selected_asset")
+        events = events_by_asset.get(selected_asset, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
+        if events.empty:
+            st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
+        else:
+            events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
+            flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
+            flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
+            st.dataframe(flow_display, width='stretch', hide_index=True, height=280)
+
+    _render_robo_ticker_roi(valuation_date)
+
+
+def _render_robo_ticker_roi(valuation_date: date) -> None:
+    st.markdown("---")
+    st.subheader("ROI Revolut robo (per ticker)")
+    st.caption(
+        "Analityka z blottera `p_re_robo-trading` — osobno od syntetycznego wiersza "
+        "`p_re_robo` w Raporty → Inwestycje. Terminal otwartych = last price × qty; "
+        "sprzedane gdy qty=0. SELL/DIV = INFLOW (nie CLOSING)."
+    )
+    try:
+        with st.spinner("Liczenie ROI robo ticker..."):
+            summary, events_by_asset, warnings = compute_revolut_robo_ticker_roi(valuation_date)
+    except Exception as exc:
+        st.warning("Nie udało się policzyć ROI robo ticker.")
+        st.exception(exc)
         return
 
-    st.caption(
-        "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza asset-evaluation dla otwartych inwestycji. "
-        "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
-        "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
-        f"Zamkniecie: CLOSING w {CONFIG_FILE_NAME}."
-    )
+    if warnings:
+        for msg in warnings:
+            st.warning(msg)
 
-    total_roi = int(summary["roi_nominal"].sum())
-    sold_count = int(summary["is_sold"].sum())
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Liczba aktywow", len(summary))
-    c2.metric("Sprzedane", sold_count)
-    c3.metric("Suma ROI nominal", f"{total_roi:,}".replace(",", " "))
+    if summary.empty:
+        st.info("Brak transakcji trading dla p_re_robo.")
+        return
 
     display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
     for col in ROI_DISPLAY_COLUMNS.values():
@@ -88,36 +159,18 @@ def render_roi(default_valuation_date: date | None) -> None:
         display["XIRR"] = summary["xirr"].map(
             lambda v: f"{v * 100:.1f}%" if v is not None and pd.notna(v) else "—"
         )
+    st.dataframe(display, width="stretch", hide_index=True)
 
-    st.dataframe(display, width='stretch', hide_index=True)
-
-    csv = summary.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="Pobierz ROI (CSV)",
-        data=csv,
-        file_name=f"roi_{valuation_date:%Y-%m-%d}.csv",
-        mime="text/csv",
-        key="roi_csv_download",
-    )
-
-    _render_product_excel_downloads(valuation_date)
-
-    warned = summary[summary["warnings"].astype(str).str.len() > 0]
-    if not warned.empty:
-        st.markdown("**Ostrzezenia**")
-        st.dataframe(warned[["asset_id", "warnings"]], width='stretch', hide_index=True)
-
-    st.markdown("**Szczegoly przeplywow**")
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected_asset = st.selectbox("Aktywo", options=asset_ids, key="roi_selected_asset")
-    events = events_by_asset.get(selected_asset, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
+    selected = st.selectbox("Ticker (robo)", options=asset_ids, key="roi_robo_selected_ticker")
+    events = events_by_asset.get(selected, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
     if events.empty:
-        st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
+        st.info("Brak przepływów dla tickera.")
     else:
         events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
         flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
         flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
-        st.dataframe(flow_display, width='stretch', hide_index=True, height=280)
+        st.dataframe(flow_display, width="stretch", hide_index=True, height=220)
 
 
 def _render_product_excel_downloads(valuation_date: date) -> None:

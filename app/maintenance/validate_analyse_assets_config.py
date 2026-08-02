@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Waliduje analyse_assets_config.xlsx względem schematu i procedur.
+Waliduje arkusze ROI w a_config.xlsx względem schematu i procedur.
 
 Akceptuje wyłącznie nową strukturę (AccountTx / pool_id).
 Aliasy wsteczne (MBANK_*, SOURCE, kolumna source) są błędami.
 
-Uzycie:
+Użycie:
   cd app
   uv run python maintenance/validate_analyse_assets_config.py
-  uv run python maintenance/validate_analyse_assets_config.py C:/sciezka/analyse_assets_config.xlsx
+  uv run python maintenance/validate_analyse_assets_config.py C:/sciezka/a_config.xlsx
   uv run python maintenance/validate_analyse_assets_config.py --with-pool
 """
 from __future__ import annotations
@@ -26,14 +26,14 @@ from analyse_assets.validate_config import print_report, validate_analyse_config
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Walidacja analyse_assets_config.xlsx",
+        description="Walidacja arkuszy ROI w a_config.xlsx",
     )
     parser.add_argument(
         "config_path",
         nargs="?",
         type=Path,
         default=None,
-        help="Ścieżka do xlsx (domyślnie Dropbox/INWESTYCJE/assets/analyse_assets_config.xlsx)",
+        help="Ścieżka do xlsx (domyślnie Dropbox/INWESTYCJE/assets/a_config.xlsx)",
     )
     parser.add_argument(
         "--with-pool",

@@ -39,6 +39,13 @@ def _capex_inventory_context(event: pd.Series) -> str:
     return f"date={date_s} source={source!r} title={title!r} counterparty={counterparty!r}"
 
 
+def _missing_inventory_message(ctx: str, reason: str) -> str:
+    return (
+        f"Dla transakcji {ctx} Brak jest wpisu w tabeli 'inventory' dla CAPEX  "
+        f"(powod={reason})."
+    )
+
+
 def holdings_from_inventory(
     inventory: pd.DataFrame,
     valuation_date: date,
@@ -96,18 +103,19 @@ def holdings_from_capex_and_inventory(
 
         if day is None:
             raise GoldInventoryJoinError(
-                f"Brak inventory dla CAPEX {ctx} (powod=invalid_capex_date)."
+                _missing_inventory_message(ctx, "invalid_capex_date")
             )
 
         group = inv_by_date.get(day)
         if group is None or group.empty:
             raise GoldInventoryJoinError(
-                f"Brak inventory dla CAPEX {ctx} (powod=no_inventory_row)."
+                _missing_inventory_message(ctx, "no_inventory_row")
             )
         if len(group) > 1:
             raise GoldInventoryJoinError(
-                f"Brak inventory dla CAPEX {ctx} "
-                f"(powod=ambiguous_inventory_date, rows={len(group)})."
+                _missing_inventory_message(
+                    ctx, f"ambiguous_inventory_date, rows={len(group)}"
+                )
             )
 
         row = group.iloc[0]
@@ -115,8 +123,7 @@ def holdings_from_capex_and_inventory(
         qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
         if not instrument or pd.isna(qty):
             raise GoldInventoryJoinError(
-                f"Brak inventory dla CAPEX {ctx} "
-                f"(powod=incomplete_inventory_row)."
+                _missing_inventory_message(ctx, "incomplete_inventory_row")
             )
         holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -20,10 +21,19 @@ download_dir = {'p_re': 'Dropbox/INWESTYCJE/download/pm',
                 'g_re': 'Dropbox/INWESTYCJE/download/gm'}
 
 _TRADING_PREFIXES = ('trading-account-statement', 'trading-pnl-statement')
+# Stem pliku depozytu Revolut = UUID (bez `_`); inne nazwy bez `_` (np. Eksport transakcji) → skip.
+_DEPOSIT_UUID_STEM = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 def broker_asset_id(file_owner: str) -> str:
     return f'{file_owner}_robo'
+
+
+def is_revolut_deposit_filename(stem: str) -> bool:
+    return bool(_DEPOSIT_UUID_STEM.fullmatch(stem))
 
 
 def move_revolut_files(
@@ -47,7 +57,7 @@ def move_revolut_files(
         elif fname[0] in _TRADING_PREFIXES:
             results.append(_move_trading_file(file, file_owner, assets_root))
 
-        elif len(fname) == 1:
+        elif is_revolut_deposit_filename(file.stem):
             results.append(_move_file(file, file_owner, dropbox_cash_pool, 'deposit'))
 
         else:

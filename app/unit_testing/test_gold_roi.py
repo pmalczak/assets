@@ -172,10 +172,14 @@ class GoldTerminalMtmTests(unittest.TestCase):
         with self.assertRaises(GoldInventoryJoinError) as ctx:
             holdings_from_capex_and_inventory(cashflows, inventory, date(2026, 7, 1))
         msg = str(ctx.exception)
-        self.assertIn("date=2026-05-06", msg)
-        self.assertIn("source='mbank_pln'", msg)
-        self.assertIn("title='GRUPA GOLDENMARK...'", msg)
-        self.assertIn("counterparty='GOLDENMARK'", msg)
+        self.assertTrue(
+            msg.startswith(
+                "Dla transakcji date=2026-05-06 source='mbank_pln' "
+                "title='GRUPA GOLDENMARK...' counterparty='GOLDENMARK' "
+                "Brak jest wpisu w tabeli 'inventory' dla CAPEX"
+            ),
+            msg,
+        )
         self.assertIn("no_inventory_row", msg)
 
     def test_holdings_ambiguous_inventory_date_raises(self):

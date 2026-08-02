@@ -17,7 +17,7 @@ from importers.revolut.read_r_trading import (
     period_gap_warnings,
 )
 from importers.revolut.trading_data_model import RevolutTradingFile, RevolutTradingPnlFile
-from maintenance.move_downloaded_results import ACTION_MOVED
+from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED
 from maintenance.move_revolut_files import broker_asset_id, move_revolut_files
 
 
@@ -275,6 +275,58 @@ class OpenHoldingsCostTests(unittest.TestCase):
         self.assertEqual(open_holdings_at_cost(df), {})
 
 
+class MoveRevolutDepositFilesTests(unittest.TestCase):
+    def test_skips_non_uuid_export_as_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            download = home / "Dropbox" / "INWESTYCJE" / "download" / "pm"
+            cash_pool = home / "Dropbox" / "INWESTYCJE" / "cash_pool"
+            download.mkdir(parents=True)
+            cash_pool.mkdir(parents=True)
+
+            src = download / "Eksport transakcji.csv"
+            src.write_text(
+                '"datetime","date","type","amount","currency"\n'
+                '"2026-07-22T15:01:38Z","2026-07-22","CUSTOMER_INPAYMENT","400","PLN"\n',
+                encoding="utf-8",
+            )
+
+            with patch("pathlib.Path.home", return_value=home):
+                results = move_revolut_files(cash_pool, "p_re", assets_root=home / "assets")
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].action, ACTION_SKIPPED)
+            self.assertTrue(src.is_file())
+
+    def test_moves_uuid_deposit_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            download = home / "Dropbox" / "INWESTYCJE" / "download" / "pm"
+            cash_pool = home / "Dropbox" / "INWESTYCJE" / "cash_pool" / "p_re_eur"
+            download.mkdir(parents=True)
+            cash_pool.mkdir(parents=True)
+
+            stem = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            src = download / f"{stem}.csv"
+            src.write_text(
+                "Completed Date,Product name,Description,Money out,Money in,Balance\n"
+                "01 Jan 2026,Flexible Cash Funds EUR,Money carried forward,,,€100.00\n",
+                encoding="utf-8",
+            )
+
+            with patch("pathlib.Path.home", return_value=home):
+                results = move_revolut_files(
+                    home / "Dropbox" / "INWESTYCJE" / "cash_pool",
+                    "p_re",
+                    assets_root=home / "assets",
+                )
+
+            moved = [r for r in results if r.action == ACTION_MOVED]
+            self.assertEqual(len(moved), 1)
+            self.assertFalse(src.exists())
+            self.assertTrue((cash_pool / f"{stem}.csv").is_file())
+
+
 class MoveTradingFilesTests(unittest.TestCase):
     def test_moves_trading_to_assets_robo(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -321,7 +373,7 @@ class MoveTradingFilesTests(unittest.TestCase):
 
 
 class EvaluateBrokerTests(unittest.TestCase):
-    def test_evaluate_rows_at_cost_with_isin(self):
+    def test_evaluate_synthetic_single_row_sum_of_costs(self):
         trading = pd.DataFrame(
             [
                 {
@@ -336,32 +388,20 @@ class EvaluateBrokerTests(unittest.TestCase):
                     RevolutTradingFile.FILE_DATE: "2026-01-31",
                     RevolutTradingFile.PERIOD_START: "2026-01-01",
                     RevolutTradingFile.PERIOD_END: "2026-01-31",
-                }
-            ]
-        )
-        pnl = pd.DataFrame(
-            [
+                },
                 {
-                    RevolutTradingPnlFile.SECTION: RevolutTradingPnlFile.SECTION_OTHER,
-                    RevolutTradingPnlFile.DATE_ACQUIRED: "",
-                    RevolutTradingPnlFile.DATE_SOLD: "",
-                    RevolutTradingPnlFile.DATE: "2026-01-10",
-                    RevolutTradingPnlFile.SYMBOL: "AAA",
-                    RevolutTradingPnlFile.SECURITY_NAME: "Alpha",
-                    RevolutTradingPnlFile.ISIN: "IE00B4L5Y983",
-                    RevolutTradingPnlFile.COUNTRY: "IE",
-                    RevolutTradingPnlFile.QUANTITY: "",
-                    RevolutTradingPnlFile.COST_BASIS: "",
-                    RevolutTradingPnlFile.GROSS_PROCEEDS: "",
-                    RevolutTradingPnlFile.GROSS_PNL: "",
-                    RevolutTradingPnlFile.GROSS_AMOUNT: "1",
-                    RevolutTradingPnlFile.WITHHOLDING_TAX: "0",
-                    RevolutTradingPnlFile.NET_AMOUNT: "1",
-                    RevolutTradingPnlFile.CURRENCY: "EUR",
-                    RevolutTradingPnlFile.FILE_DATE: "2026-01-31",
-                    RevolutTradingPnlFile.PERIOD_START: "2026-01-01",
-                    RevolutTradingPnlFile.PERIOD_END: "2026-01-31",
-                }
+                    RevolutTradingFile.DATE: "2026-01-02T00:00:00Z",
+                    RevolutTradingFile.TICKER: "BBB",
+                    RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                    RevolutTradingFile.QUANTITY: 1.0,
+                    RevolutTradingFile.PRICE_PER_SHARE: "30",
+                    RevolutTradingFile.TOTAL_AMOUNT: "30",
+                    RevolutTradingFile.CURRENCY: "EUR",
+                    RevolutTradingFile.FX_RATE: 1.0,
+                    RevolutTradingFile.FILE_DATE: "2026-01-31",
+                    RevolutTradingFile.PERIOD_START: "2026-01-01",
+                    RevolutTradingFile.PERIOD_END: "2026-01-31",
+                },
             ]
         )
         catalog = pd.Series(
@@ -385,7 +425,7 @@ class EvaluateBrokerTests(unittest.TestCase):
                 ),
                 patch(
                     "evaluators.evaluate_broker_revolut.read_revolut_trading_pnl",
-                    return_value=(pnl, ["luka test"]),
+                    return_value=(pd.DataFrame(), ["luka test"]),
                 ),
                 patch(
                     "evaluators.evaluate_broker_revolut.resolve_asset_dir",
@@ -397,9 +437,11 @@ class EvaluateBrokerTests(unittest.TestCase):
                 )
 
         self.assertEqual(len(result), 1)
-        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 21.0)
+        self.assertEqual(result.iloc[0][AssetsDef.ID], "p_re_robo")
+        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 51.0)
         self.assertEqual(result.iloc[0][AssetsDef.TYPE], TypeDomain.EQUITIES)
-        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "AAA IE00B4L5Y983")
+        self.assertEqual(result.iloc[0][AssetsDef.GROUP], GroupDomain.INVESTMENT)
+        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (2 poz.)")
         self.assertEqual(warnings, ["luka test"])
 
 

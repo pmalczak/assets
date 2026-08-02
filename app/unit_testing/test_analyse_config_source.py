@@ -18,7 +18,7 @@ from roi.config import read_analyse_config
 
 class AnalyseConfigPoolIdTests(unittest.TestCase):
     def _write_config(self, catalog: pd.DataFrame, rules: pd.DataFrame, manual: pd.DataFrame) -> Path:
-        path = Path(tempfile.mkdtemp()) / "analyse_assets_config.xlsx"
+        path = Path(tempfile.mkdtemp()) / "a_config.xlsx"
         with pd.ExcelWriter(path, engine="openpyxl") as writer:
             catalog.to_excel(writer, sheet_name=CATALOG_SHEET, index=False)
             rules.to_excel(writer, sheet_name=RULES_SHEET, index=False)

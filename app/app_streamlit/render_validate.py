@@ -6,11 +6,11 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from analyse_assets.config_model import CONFIG_FILE_NAME
 from analyse_assets.validate_config import ValidationReport, validate_analyse_config
 from app_proc.calculate_assets import evaluate_assets_file_for_ui
+from app_proc.data_root import A_CONFIG_FILE_NAME
 from importers.assets.data_model import AssetsDef
-from importers.assets.read_assets import ASSETS_FILE_NAME, get_assets_file
+from importers.assets.read_assets import get_assets_file
 from roi.config import get_config_file
 
 _ASSETS_EVAL_DISPLAY = [
@@ -35,17 +35,17 @@ def render_validate() -> None:
 
 
 def _render_analyse_config_section() -> None:
-    st.markdown("#### analyse_assets_config")
+    st.markdown(f"#### ROI w `{A_CONFIG_FILE_NAME}` (roi_def / roi_rules / roi_manual)")
     config_path = get_config_file()
-    st.caption(f"Plik: `{config_path}` ({CONFIG_FILE_NAME})")
+    st.caption(f"Plik: `{config_path}`")
 
-    if st.button("Waliduj analyse_assets_config", key="validate_analyse_config_button"):
+    if st.button("Waliduj konfigurację ROI", key="validate_analyse_config_button"):
         try:
-            with st.spinner("Walidacja analyse_assets_config..."):
+            with st.spinner("Walidacja arkuszy ROI..."):
                 report = validate_analyse_config(config_path)
             st.session_state["validate_analyse_config_report"] = report
         except Exception as exc:
-            st.error("Nie udało się zwalidować analyse_assets_config.")
+            st.error("Nie udało się zwalidować konfiguracji ROI.")
             st.exception(exc)
             return
 
@@ -58,7 +58,7 @@ def _render_analyse_config_section() -> None:
 
 
 def _render_assets_evaluation_section() -> None:
-    st.markdown(f"#### Ewaluacja `{ASSETS_FILE_NAME}`")
+    st.markdown(f"#### Ewaluacja katalogu `{A_CONFIG_FILE_NAME}` (arkusz assets)")
     try:
         assets_path = get_assets_file()
         st.caption(f"Plik: `{assets_path}`")
@@ -72,9 +72,9 @@ def _render_assets_evaluation_section() -> None:
         key="validate_assets_valuation_date",
     )
 
-    if st.button("Ewaluuj assets_1", key="validate_assets_evaluate_button"):
+    if st.button("Ewaluuj assets", key="validate_assets_evaluate_button"):
         try:
-            with st.spinner(f"Ewaluacja assets_1 na {valuation_date:%Y-%m-%d}..."):
+            with st.spinner(f"Ewaluacja assets na {valuation_date:%Y-%m-%d}..."):
                 evaluated, warnings = evaluate_assets_file_for_ui(valuation_date)
             st.session_state["validate_assets_evaluation"] = {
                 "valuation_date": valuation_date.isoformat(),

@@ -112,8 +112,8 @@ def main() -> None:
     parser.add_argument(
         "target",
         nargs="?",
-        default=str(get_online_data_root() / "assets_1.xlsx"),
-        help="Sciezka do assets_1.xlsx",
+        default=str(get_online_data_root() / "a_config.xlsx"),
+        help="Ścieżka do a_config.xlsx",
     )
     parser.add_argument("--dry-run", action="store_true", help="Tylko raport, bez zapisu")
     args = parser.parse_args()

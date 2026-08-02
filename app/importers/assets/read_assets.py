@@ -27,10 +27,10 @@ from importers.assets.pool_id import (
     REVOLUT_PLN,
     assign_pool_id,
 )
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import A_CONFIG_FILE_NAME, get_a_config_file
 from data_step.data_step import DATA_STEP
 
-ASSETS_FILE_NAME = "assets_1.xlsx"
+ASSETS_FILE_NAME = A_CONFIG_FILE_NAME
 ASSETS_PARQUET = "assets.parquet"
 
 # Kolumny runtime — nie należą do schematu Excela / parquet źródłowego.
@@ -74,11 +74,8 @@ def read_assets() -> pd.DataFrame:
 
 
 def get_assets_file() -> Path:
-    """Zwraca sciezke pliku konfiguracji aktywow w katalogu get_online_data_root()."""
-    data_root = get_online_data_root()
-    assets_file = data_root / ASSETS_FILE_NAME
-    assert assets_file.is_file(), f"Brak pliku {ASSETS_FILE_NAME} w {data_root}"
-    return assets_file
+    """Ścieżka a_config.xlsx (katalog portfela + ROI) w get_online_data_root()."""
+    return get_a_config_file()
 
 
 def read_asset_sheet(sheet_name: str) -> pd.DataFrame:

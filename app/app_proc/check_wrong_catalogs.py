@@ -10,7 +10,7 @@ from importers.assets.read_assets import ASSETS_FILE_NAME
 
 
 def check_wrong_catalogs(data_root: Path, assets: pd.DataFrame):
-    """Raportuje katalogi w assets/ i cash_pool/ nieobecne w assets_1.xlsx."""
+    """Raportuje katalogi w assets/ i cash_pool/ nieobecne w a_config.xlsx (arkusz assets)."""
     roots = [data_root]
     cash_pool = get_cash_pool_root()
     if cash_pool.is_dir() and cash_pool.resolve() != Path(data_root).resolve():

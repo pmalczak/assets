@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Eksportuje biezaca parametryzacje analyse_assets do pliku Excel.
+Eksportuje bieżącą parametryzację ROI (roi_def / roi_rules / roi_manual) do xlsx.
 
-Uzycie:
+Uwaga: zapisuje TYLKO arkusze ROI. Domyślny cel a_config.xlsx jest blokowany,
+jeśli plik już zawiera inne arkusze (portfel) — podaj osobną ścieżkę.
+
+Użycie:
   cd app
-  uv run python maintenance/export_analyse_assets_config.py
-  uv run python maintenance/export_analyse_assets_config.py C:/sciezka/analyse_assets_config.xlsx
+  uv run python maintenance/export_analyse_assets_config.py C:/tmp/roi_only.xlsx
 """
 
 from __future__ import annotations
@@ -249,6 +251,17 @@ def _manual() -> pd.DataFrame:
 
 def main() -> None:
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / CONFIG_FILE_NAME
+    roi_sheets = {CATALOG_SHEET, RULES_SHEET, MANUAL_SHEET, "rules-non-active"}
+    if target.is_file():
+        from openpyxl import load_workbook
+
+        existing = set(load_workbook(target, read_only=True).sheetnames)
+        extras = existing - roi_sheets
+        if extras:
+            raise SystemExit(
+                f"Odmowa nadpisania {target}: zawiera też arkusze {sorted(extras)}. "
+                f"Podaj osobną ścieżkę (eksport zapisuje tylko ROI)."
+            )
     sheets = {
         CATALOG_SHEET: _catalog(),
         RULES_SHEET: _rules(),

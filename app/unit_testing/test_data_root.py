@@ -2,7 +2,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app_proc.data_root import resolve_asset_dir
+from analyse_assets.config_model import CONFIG_FILE_NAME
+from app_proc.data_root import A_CONFIG_FILE_NAME, resolve_asset_dir
+from importers.assets.read_assets import ASSETS_FILE_NAME
+
+
+class AConfigFileNameTests(unittest.TestCase):
+    def test_assets_and_config_share_a_config_name(self):
+        self.assertEqual(A_CONFIG_FILE_NAME, "a_config.xlsx")
+        self.assertEqual(ASSETS_FILE_NAME, A_CONFIG_FILE_NAME)
+        self.assertEqual(CONFIG_FILE_NAME, A_CONFIG_FILE_NAME)
 
 
 class ResolveAssetDirTests(unittest.TestCase):

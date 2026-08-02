@@ -38,7 +38,7 @@ class LoadCatalogEventsTests(unittest.TestCase):
         catalog = pd.DataFrame([{"asset_id": "kiemliczow_1", "enabled": True, "order": 1}])
         config = {"catalog": catalog, "rules": pd.DataFrame(), "manual": pd.DataFrame()}
         read_config_mock.return_value = config
-        get_config_file_mock.return_value = Path("analyse_assets_config.xlsx")
+        get_config_file_mock.return_value = Path("a_config.xlsx")
 
         all_events = pd.DataFrame(
             [
@@ -65,7 +65,7 @@ class LoadCatalogEventsTests(unittest.TestCase):
         data_step_mock.init_steps.assert_not_called()
         args, kwargs = data_step_mock.obtain_dependent.call_args
         self.assertEqual(args[0], roi_catalog_resource(assets_date))
-        self.assertEqual(args[2], Path("analyse_assets_config.xlsx"))
+        self.assertEqual(args[2], Path("a_config.xlsx"))
         self.assertEqual(kwargs["assets_date"], assets_date)
         self.assertIn("kiemliczow_1", result)
         self.assertEqual(len(result["kiemliczow_1"]), 1)
@@ -91,7 +91,7 @@ class LoadRoiSummaryTests(unittest.TestCase):
         catalog = pd.DataFrame([{"asset_id": "kiemliczow_1", "enabled": True, "order": 1}])
         config = {"catalog": catalog, "rules": pd.DataFrame(), "manual": pd.DataFrame()}
         read_config_mock.return_value = config
-        get_config_file_mock.return_value = Path("analyse_assets_config.xlsx")
+        get_config_file_mock.return_value = Path("a_config.xlsx")
 
         summary = pd.DataFrame(
             [{"asset_id": "kiemliczow_1", "roi_nominal": 100, "xirr": 0.1, "is_sold": False}]

@@ -13,7 +13,6 @@ from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import format_date_columns
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.revolut.read_r_trading import (
-    isin_by_symbol,
     read_revolut_trading_pnl,
     read_revolut_trading_transactions,
 )
@@ -27,7 +26,7 @@ def evaluate_broker_revolut(
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
     """
-    Wycena otwartych pozycji brokerskich Revolut kosztem nabycia (FIFO).
+    Syntetyczna wycena rachunku brokerskiego: jeden wiersz = Σ koszt nabycia otwartych pozycji (FIFO).
     """
     p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
     if not p.is_dir():
@@ -36,7 +35,7 @@ def evaluate_broker_revolut(
     warnings: list[str] = []
     trading_df, trading_warnings = read_revolut_trading_transactions(p, asset_id)
     warnings.extend(trading_warnings)
-    pnl_df, pnl_warnings = read_revolut_trading_pnl(p, asset_id)
+    _pnl_df, pnl_warnings = read_revolut_trading_pnl(p, asset_id)
     warnings.extend(pnl_warnings)
 
     RevolutTradingFile.check_structure(trading_df)
@@ -44,25 +43,26 @@ def evaluate_broker_revolut(
     if trading_df.empty:
         return pd.DataFrame(columns=list(AssetsDef.expected_columns())), warnings
 
-    isin_map = isin_by_symbol(pnl_df)
     holdings = open_holdings_at_cost(trading_df)
     if not holdings:
         return pd.DataFrame(columns=list(AssetsDef.expected_columns())), warnings
 
-    data = []
-    for ticker, info in sorted(holdings.items()):
-        row = AssetsDef.as_assets_row(assets_file_row)
-        row[AssetsDef.VALUE] = info["cost"]
-        row[AssetsDef.EVALUATION_DATE] = info["eval_date"]
-        row[AssetsDef.TYPE] = TypeDomain.EQUITIES
-        row[AssetsDef.GROUP] = GroupDomain.INVESTMENT
-        isin = isin_map.get(ticker)
-        row[AssetsDef.DESCR] = f"{ticker} {isin}" if isin else ticker
-        if AssetsDef.CURRENCY in row.index and info.get("currency"):
-            row[AssetsDef.CURRENCY] = info["currency"]
-        data.append(row)
+    total_cost = sum(info["cost"] for info in holdings.values())
+    eval_dates = [info["eval_date"] for info in holdings.values() if info.get("eval_date")]
+    currencies = {info.get("currency") for info in holdings.values() if info.get("currency")}
+    n_pos = len(holdings)
 
-    result = pd.DataFrame(data=data)
+    row = AssetsDef.as_assets_row(assets_file_row)
+    row[AssetsDef.VALUE] = float(total_cost)
+    row[AssetsDef.EVALUATION_DATE] = max(eval_dates) if eval_dates else valuation_date.isoformat()
+    row[AssetsDef.TYPE] = TypeDomain.EQUITIES
+    row[AssetsDef.GROUP] = GroupDomain.INVESTMENT
+    base_descr = str(assets_file_row.get(AssetsDef.DESCR) or asset_id).strip() or asset_id
+    row[AssetsDef.DESCR] = f"{base_descr} ({n_pos} poz.)"
+    if len(currencies) == 1:
+        row[AssetsDef.CURRENCY] = next(iter(currencies))
+
+    result = pd.DataFrame([row])
     AssetsDef.check_structure(result)
     return format_date_columns(result, AssetsDef.EVALUATION_DATE), warnings
 
@@ -132,7 +132,11 @@ def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
             continue
         cost = sum(lot["qty"] * lot["price"] for lot in open_lots)
         last_dt = max(lot["date"] for lot in open_lots)
-        eval_date = last_dt.tz_convert(None).date().isoformat() if last_dt.tzinfo else last_dt.date().isoformat()
+        eval_date = (
+            last_dt.tz_convert(None).date().isoformat()
+            if last_dt.tzinfo
+            else last_dt.date().isoformat()
+        )
         result[ticker] = {
             "qty": qty,
             "cost": float(cost),

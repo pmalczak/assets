@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Walidacja analyse_assets_config.xlsx względem schematu i rzeczywistych procedur.
+Walidacja arkuszy ROI w a_config.xlsx względem schematu i rzeczywistych procedur.
 
 Akceptuje wyłącznie nową strukturę (AccountTx / pool_id).
 Aliasy wsteczne (MBANK_*, SOURCE, kolumna ``source``) są błędami.
@@ -884,7 +884,7 @@ def validate_analyse_config(
     check_pool: bool = False,
 ) -> ValidationReport:
     """
-    Waliduje analyse_assets_config.xlsx (tylko nowa struktura).
+    Waliduje arkusze ROI w a_config.xlsx (roi_def / roi_rules / roi_manual).
 
     Stare kody pól (MBANK_*, SOURCE) i kolumna ``source`` są błędami.
 

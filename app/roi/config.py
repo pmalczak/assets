@@ -5,7 +5,6 @@ import pandas as pd
 
 from analyse_assets.build_selector import is_blank_rule_value
 from analyse_assets.config_model import (
-    CONFIG_FILE_NAME,
     CATALOG_SHEET,
     DEFAULT_POOL_ID,
     MANUAL_SHEET,
@@ -14,7 +13,7 @@ from analyse_assets.config_model import (
     AnalyseAssetsManual,
     AnalyseAssetsRules,
 )
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import get_a_config_file
 
 
 def _drop_incomplete_rules(rules: pd.DataFrame) -> pd.DataFrame:
@@ -59,7 +58,7 @@ def _normalize_catalog_pool_id(catalog: pd.DataFrame) -> pd.DataFrame:
 def get_config_file(config_path: Path | None = None) -> Path:
     if config_path is not None:
         return config_path
-    return get_online_data_root() / CONFIG_FILE_NAME
+    return get_a_config_file()
 
 
 def read_analyse_config(config_path: Path | None = None) -> dict[str, pd.DataFrame]:

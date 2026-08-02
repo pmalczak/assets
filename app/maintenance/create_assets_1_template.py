@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Tworzy plik assets_1.xlsx w katalogu get_online_data_root().
+Tworzy minimalny szablon arkuszy portfela (assets / inventory / unit-price-evaluation).
 
-Opcjonalnie kopiuje istniejace zakladki z podanego pliku zrodlowego
-(np. dawnego assets.xlsx) i dodaje zakladki inventory oraz unit-price-evaluation.
+Uwaga: zapisuje tylko arkusze portfela. Nie używaj na pełnym a_config.xlsx
+z arkuszami ROI — podaj osobną ścieżkę lub użyj migrate_to_a_config.
 
-Uzycie:
+Użycie:
   cd app
-  uv run python maintenance/create_assets_1_template.py
-  uv run python maintenance/create_assets_1_template.py C:/sciezka/assets_1.xlsx
-  uv run python maintenance/create_assets_1_template.py C:/sciezka/assets_1.xlsx C:/sciezka/assets.xlsx
+  uv run python maintenance/create_assets_1_template.py C:/tmp/portfolio_template.xlsx
 """
 
 from __future__ import annotations
@@ -57,14 +55,14 @@ def build_inventory_sheets() -> dict[str, pd.DataFrame]:
                 Inventory.INSTRUMENT: "Krugerrand 1oz",
                 Inventory.WEIGHT: "1oz",
                 Inventory.QUANTITY: 1,
-                Inventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
+                Inventory.NOTES: "join CAPEX po dacie (a_config / roi_rules)",
             },
             {
                 Inventory.DATE: "2024-05-10",
                 Inventory.INSTRUMENT: "Maple Leaf 1oz",
                 Inventory.WEIGHT: "1oz",
                 Inventory.QUANTITY: 1,
-                Inventory.NOTES: "join CAPEX po dacie (analyse_assets_config)",
+                Inventory.NOTES: "join CAPEX po dacie (a_config / roi_rules)",
             },
         ]
     )

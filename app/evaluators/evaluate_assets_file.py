@@ -23,7 +23,7 @@ def evaluate_assets_file(rodzaj_importu, assets_file_row, valuation_date: date):
         import warnings
 
         warnings.warn(
-            "assets.properties jest przestarzale; ustaw RODZAJ*=assets.properties-wyceny w assets_1.xlsx",
+            "assets.properties jest przestarzale; ustaw RODZAJ*=assets.properties-wyceny w a_config.xlsx",
             DeprecationWarning,
             stacklevel=2,
         )
