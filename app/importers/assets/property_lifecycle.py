@@ -9,7 +9,6 @@ from analyse_assets.config_model import AnalyseAssetsManual
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsFile, OperationDomain, Properties
 
-CLOSING_CATEGORY = "CLOSING"
 CASH_KIND = "assets.cash"
 
 
@@ -27,11 +26,14 @@ def load_property_close_dates(
     manual: pd.DataFrame,
     _catalog: pd.DataFrame | None = None,
 ) -> dict[str, date]:
-    """Daty zamkniecia z ROI manual (CLOSING), indeksowane po asset_id."""
+    """Daty zamkniecia z ROI manual (DIVESTMENT; alias CLOSING), indeksowane po asset_id."""
+    from roi.categories import DIVESTMENT, normalize_roi_category
+
     if manual.empty:
         return {}
 
-    closing = manual[manual[AnalyseAssetsManual.CATEGORY] == CLOSING_CATEGORY].copy()
+    cats = manual[AnalyseAssetsManual.CATEGORY].astype(str).map(normalize_roi_category)
+    closing = manual[cats == DIVESTMENT].copy()
     if closing.empty:
         return {}
 

@@ -265,7 +265,9 @@ def allocate_catalog(
 def _build_manual_part(step_rows: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for _, row in step_rows.iterrows():
-        category = CATEGORY_MAP[str(row[AnalyseAssetsManual.CATEGORY])]
+        from roi.categories import normalize_roi_category
+
+        category = CATEGORY_MAP[normalize_roi_category(str(row[AnalyseAssetsManual.CATEGORY]))]
         rows.append(
             (
                 pd.Timestamp(row[AnalyseAssetsManual.DATE]).strftime("%Y-%m-%d"),

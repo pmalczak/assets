@@ -76,15 +76,15 @@ def migrate_assets_file(target: Path, *, dry_run: bool = False) -> list[str]:
         close_date = close_dates.get(properties_id)
         if close_date is None:
             messages.append(
-                f"OSTRZEZENIE: {properties_id!r} sprzedane {sold_date} — brak CLOSING w ROI manual."
+                f"OSTRZEZENIE: {properties_id!r} sprzedane {sold_date} — brak DIVESTMENT w ROI manual."
             )
         elif close_date != sold_date:
             messages.append(
                 f"OSTRZEZENIE: {properties_id!r} sprzedane {sold_date}, "
-                f"CLOSING w ROI manual {close_date}."
+                f"DIVESTMENT w ROI manual {close_date}."
             )
         else:
-            messages.append(f"OK: {properties_id!r} CLOSING zgodny z data sprzedazy {sold_date}.")
+            messages.append(f"OK: {properties_id!r} DIVESTMENT zgodny z data sprzedazy {sold_date}.")
 
     assets = sheets.get("assets")
     if assets is not None:

@@ -12,6 +12,7 @@ ACTION_SKIPPED = "pominięty"
 
 KIND_MBANK = "mBank"
 KIND_REVOLUT = "Revolut"
+KIND_OBLIGACJE = "obligacje skarbowe"
 
 NO_DESTINATION = "—"
 

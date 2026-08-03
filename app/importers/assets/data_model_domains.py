@@ -53,7 +53,6 @@ class KindDomainCls(DomainCheckerGeneric):
     MBANK = 'mbank'
     REVOLUT = 'revolut'
     ASSETS = 'assets'
-    BONDS = 'obligacje_skarbowe_import'
     BROKER = 'BROKER'
     # REGNOLOGY = 'reg_import'
 
@@ -69,7 +68,6 @@ class KindDomainCls(DomainCheckerGeneric):
             self.ASSETS + '.properties-wyceny',
             self.ASSETS + '.cash',
             self.ASSETS + '.zloto-monety',
-            self.BONDS,
             self.BROKER,
             # self.REGNOLOGY,
 

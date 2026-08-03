@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from roi.categories import INFLOW, INVESTMENT, OUTFLOW
+from roi.categories import CAPEX, OPEX, REVENUES
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
@@ -44,9 +44,9 @@ def compute_roi(
 ) -> RoiSummary:
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
 
-    capex = _aggregate_category(filtered, INVESTMENT)
-    opex = _aggregate_category(filtered, OUTFLOW)
-    revenue = _aggregate_category(filtered, INFLOW)
+    capex = _aggregate_category(filtered, CAPEX)
+    opex = _aggregate_category(filtered, OPEX)
+    revenue = _aggregate_category(filtered, REVENUES)
     terminal_realized, terminal_unrealized, warnings = resolve_terminal_value(
         asset_id,
         cashflows,

@@ -82,8 +82,8 @@ OPERATORS_BY_FIELD: dict[str, frozenset[str]] = {
     "YEAR": frozenset({"equals", "gte", "gt", "lte", "lt"}),
 }
 
-_NEGATIVE_MANUAL_CATEGORIES = frozenset({"INVESTMENT", "OUTFLOW"})
-_POSITIVE_MANUAL_CATEGORIES = frozenset({"INFLOW", "CLOSING"})
+_NEGATIVE_MANUAL_CATEGORIES = frozenset({"CAPEX", "OPEX", "INVESTMENT", "OUTFLOW"})
+_POSITIVE_MANUAL_CATEGORIES = frozenset({"REVENUES", "DIVESTMENT", "INFLOW", "CLOSING"})
 
 # Cyfry NRB / IBAN: CC + 2 cyfry kontrolne + BBAN (alfanumeryczny).
 _IBAN_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$")
@@ -843,7 +843,10 @@ def _validate_catalog_vs_valuations(
     }
     closing_ids: set[str] = set()
     if not manual.empty and AnalyseAssetsManual.CATEGORY in manual.columns:
-        closing = manual[manual[AnalyseAssetsManual.CATEGORY].astype(str) == "CLOSING"]
+        from roi.categories import DIVESTMENT, normalize_roi_category
+
+        cats = manual[AnalyseAssetsManual.CATEGORY].astype(str).map(normalize_roi_category)
+        closing = manual[cats == DIVESTMENT]
         if not closing.empty:
             closing_ids = {
                 str(value).strip()

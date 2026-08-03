@@ -21,7 +21,7 @@ from importers.assets.pool_id import REVOLUT_EUR
 from importers.assets.read_assets import read_assets
 from importers.revolut.read_r_trading import read_revolut_trading_transactions
 from importers.revolut.trading_data_model import RevolutTradingFile
-from roi.categories import INFLOW, INVESTMENT
+from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
 from roi.xirr import cashflows_for_xirr, compute_xirr
@@ -39,7 +39,7 @@ def build_broker_ticker_cashflows(
     trading_df: pd.DataFrame,
     broker_id: str,
 ) -> dict[str, pd.DataFrame]:
-    """BUY→INVESTMENT, SELL/DIV→INFLOW. FEE/TOP-UP poza ROI ticker."""
+    """BUY→CAPEX, SELL→DIVESTMENT, DIV→REVENUES. FEE/TOP-UP poza ROI ticker."""
     empty_cols = list(CashFlowEvent.COLUMN_ORDER)
     if trading_df is None or trading_df.empty:
         return {}
@@ -59,11 +59,13 @@ def build_broker_ticker_cashflows(
             continue
 
         if tx_type == RevolutTradingFile.TYPE_BUY:
-            category = INVESTMENT
-            # Po normalize Total Amount BUY jest ujemne; wymuś znak INVESTMENT.
+            category = CAPEX
             amount = -abs(amount)
-        elif tx_type in (RevolutTradingFile.TYPE_SELL, RevolutTradingFile.TYPE_DIVIDEND):
-            category = INFLOW
+        elif tx_type == RevolutTradingFile.TYPE_SELL:
+            category = DIVESTMENT
+            amount = abs(amount)
+        elif tx_type == RevolutTradingFile.TYPE_DIVIDEND:
+            category = REVENUES
             amount = abs(amount)
         else:
             continue
@@ -123,14 +125,18 @@ def compute_ticker_roi(
     open_qty: float,
     last_price: float,
 ) -> RoiSummary:
-    """ROI jak compute_roi, ale terminal = last_price×qty; is_sold ⇔ qty≈0 (bez CLOSING)."""
+    """ROI jak compute_roi; terminal = last_price×qty; is_sold ⇔ qty≈0 (nie DIVESTMENT)."""
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
 
-    capex = _aggregate_category(filtered, INVESTMENT)
-    opex = 0.0
-    revenue = _aggregate_category(filtered, INFLOW)
+    capex = _aggregate_category(filtered, CAPEX)
+    opex = _aggregate_category(filtered, OPEX)
+    revenue = _aggregate_category(filtered, REVENUES)
     sold = abs(open_qty) <= 1e-12
-    terminal_realized = 0.0
+    if filtered.empty:
+        terminal_realized = 0.0
+    else:
+        mask = filtered[CashFlowEvent.CATEGORY] == DIVESTMENT
+        terminal_realized = float(filtered.loc[mask, CashFlowEvent.AMOUNT].sum())
     terminal_unrealized = 0.0 if sold else float(last_price) * float(open_qty)
 
     flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
@@ -236,7 +242,6 @@ def _load_broker_trading(broker_id: str) -> tuple[pd.DataFrame, list[str]]:
     assets = read_assets()
     rows = assets[assets[AssetsDef.ID].astype(str) == broker_id]
     if rows.empty:
-        # Fallback: pierwszy BROKER w katalogu o tym id-prefiksie
         broker_mask = assets[AssetsDef.KIND].astype(str).str.startswith(KindDomain.BROKER)
         rows = assets.loc[broker_mask & (assets[AssetsDef.ID].astype(str) == broker_id)]
     if rows.empty:

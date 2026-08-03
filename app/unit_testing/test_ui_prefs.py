@@ -33,3 +33,11 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             save_last_tab("Waliduj", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")
+
+    def test_save_and_load_broker_roi_tabs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab("ROI Revolut robo", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut robo")
+            save_last_tab("ROI obligacje", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "ROI obligacje")

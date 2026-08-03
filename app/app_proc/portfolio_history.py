@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app_proc.data_root import resolve_asset_dir
-from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Properties
+from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, Properties, TypeDomain
 from importers.assets.property_lifecycle import (
     cash_owned_asset_ids,
     load_property_close_dates,
@@ -14,12 +14,12 @@ from importers.assets.read_assets import get_assets_file, read_assets, read_prop
 from roi.config import read_analyse_config
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
-from importers.pkobp.data_model import PkoBpBonds
+from importers.pkobp.data_model import PkoBpStan
+from importers.pkobp.read_stan import read_obligacje_stan
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
 from importers.revolut.read_r_transactions import read_revolut_account_transactions
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.deposit_data_model import RevolutDepositFile
-from evaluators.evaluate_obigacjeskarbowe import read_obligacje
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR
 
 
@@ -101,8 +101,10 @@ def _build_asset_history(asset_row: pd.Series) -> pd.DataFrame:
         return _mbank_history(asset_row)
     if kind.startswith(KindDomain.REVOLUT):
         return _revolut_history(asset_row)
-    if kind == KindDomain.BONDS:
-        return _bonds_history(asset_row)
+    if kind == KindDomain.BROKER or kind.startswith(KindDomain.BROKER + "."):
+        if str(asset_row[AssetsDef.TYPE]) == TypeDomain.BONDS:
+            return _bonds_broker_history(asset_row)
+        return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
     if kind.startswith(f"{KindDomain.ASSETS}."):
         return _assets_sheet_history(asset_row)
     return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
@@ -189,25 +191,25 @@ def _revolut_history(asset_row: pd.Series) -> pd.DataFrame:
     return pd.concat(series_parts, ignore_index=True)
 
 
-def _bonds_history(asset_row: pd.Series) -> pd.DataFrame:
+def _bonds_broker_history(asset_row: pd.Series) -> pd.DataFrame:
+    """Historia MTM z kolejnych plików StanRachunkuRejestrowego (Σ WARTOŚĆ AKTUALNA)."""
     asset_id = str(asset_row[AssetsDef.ID])
     currency = str(asset_row[AssetsDef.CURRENCY]).upper()
     input_path = resolve_asset_dir(asset_id, asset_row[AssetsDef.TYPE])
 
-    df = read_obligacje(input_path, asset_id)
+    df = read_obligacje_stan(input_path, asset_id)
     if df.empty:
         return pd.DataFrame(columns=["asset_key", "group", "date", "value", "currency"])
 
     history = (
-        df[[PkoBpBonds.DATE, PkoBpBonds.AMOUNT]]
-        .rename(columns={PkoBpBonds.DATE: "date", PkoBpBonds.AMOUNT: "value"})
+        df.groupby(PkoBpStan.FILE_DATE, as_index=False)[PkoBpStan.CURRENT_VALUE]
+        .sum()
+        .rename(columns={PkoBpStan.FILE_DATE: "date", PkoBpStan.CURRENT_VALUE: "value"})
         .copy()
     )
     history["date"] = pd.to_datetime(history["date"])
     history["value"] = pd.to_numeric(history["value"], errors="coerce")
-    history = history.dropna(subset=["date", "value"])
-    history = history.groupby("date", as_index=False)["value"].sum()
-    history["value"] = history["value"].cumsum()
+    history = history.dropna(subset=["date", "value"]).sort_values("date")
     history["asset_key"] = asset_id
     history["group"] = str(asset_row[AssetsDef.GROUP])
     history["currency"] = currency

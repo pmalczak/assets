@@ -22,7 +22,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from analyse_assets.config_model import (
-    CONFIG_FILE_NAME,
+    A_CONFIG_FILE_NAME,
     CATALOG_SHEET,
     DEFAULT_POOL_ID,
     MANUAL_SHEET,
@@ -227,22 +227,22 @@ def _rules() -> pd.DataFrame:
 def _manual() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "1997-06-02", "amount": -48600.0, "category": "INVESTMENT", "description": "zakup mieszkania [54m2]"},
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-01-03", "amount": 156600.0, "category": "CLOSING", "description": "sprzedaż"},
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-04-04", "amount": -3700.0, "category": "OUTFLOW", "description": "opłata skarbowa"},
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-04-04", "amount": -695.5, "category": "OUTFLOW", "description": "prowizja"},
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2001-08-20", "amount": -572.5, "category": "OUTFLOW", "description": "hipoteka - opłata sądowa"},
-            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2001-10-05", "amount": -145.0, "category": "OUTFLOW", "description": "hipoteka - opłata sądowa"},
-            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-05-28", "amount": -7290.0, "category": "OUTFLOW", "description": "OPŁATA NOTARIALNA I PODATKI / GOTÓWKA"},
-            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-05-28", "amount": -200.0, "category": "OUTFLOW", "description": "WYPIS Z KW / GOTÓWKA"},
-            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-06-13", "amount": -1904.29, "category": "OUTFLOW", "description": "ZAKUP OKIEN DO MIESZK B.JASI / GOTÓWKA"},
-            {"asset_id": "kiemliczow_4", "step_order": 0, "date": "2000-02-18", "amount": -185000.0, "category": "INVESTMENT", "description": "zakup mieszkania"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "1997-06-02", "amount": -48600.0, "category": "CAPEX", "description": "zakup mieszkania [54m2]"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-01-03", "amount": 156600.0, "category": "DIVESTMENT", "description": "sprzedaż"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-04-04", "amount": -3700.0, "category": "OPEX", "description": "opłata skarbowa"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2000-04-04", "amount": -695.5, "category": "OPEX", "description": "prowizja"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2001-08-20", "amount": -572.5, "category": "OPEX", "description": "hipoteka - opłata sądowa"},
+            {"asset_id": "kiemliczow_1", "step_order": 0, "date": "2001-10-05", "amount": -145.0, "category": "OPEX", "description": "hipoteka - opłata sądowa"},
+            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-05-28", "amount": -7290.0, "category": "OPEX", "description": "OPŁATA NOTARIALNA I PODATKI / GOTÓWKA"},
+            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-05-28", "amount": -200.0, "category": "OPEX", "description": "WYPIS Z KW / GOTÓWKA"},
+            {"asset_id": "kiemliczow_3", "step_order": 0, "date": "2012-06-13", "amount": -1904.29, "category": "OPEX", "description": "ZAKUP OKIEN DO MIESZK B.JASI / GOTÓWKA"},
+            {"asset_id": "kiemliczow_4", "step_order": 0, "date": "2000-02-18", "amount": -185000.0, "category": "CAPEX", "description": "zakup mieszkania"},
             {
                 "asset_id": "rumiankowa",
                 "step_order": 0,
                 "date": "2008-02-19",
                 "amount": 326601.45,
-                "category": "CLOSING",
+                "category": "DIVESTMENT",
                 "description": "sprzedane (rozliczenie jako spłata kredytu)",
             },
         ]
@@ -250,7 +250,7 @@ def _manual() -> pd.DataFrame:
 
 
 def main() -> None:
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / CONFIG_FILE_NAME
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / A_CONFIG_FILE_NAME
     roi_sheets = {CATALOG_SHEET, RULES_SHEET, MANUAL_SHEET, "rules-non-active"}
     if target.is_file():
         from openpyxl import load_workbook

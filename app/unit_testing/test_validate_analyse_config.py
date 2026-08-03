@@ -1,4 +1,4 @@
-import tempfile
+﻿import tempfile
 import unittest
 from pathlib import Path
 
@@ -136,7 +136,7 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
                     AnalyseAssetsManual.STEP_ORDER: 0,
                     AnalyseAssetsManual.DATE: "2020-01-01",
                     AnalyseAssetsManual.AMOUNT: 100.0,
-                    AnalyseAssetsManual.CATEGORY: "INVESTMENT",
+                    AnalyseAssetsManual.CATEGORY: "CAPEX",
                     AnalyseAssetsManual.DESCRIPTION: "bad sign",
                 }
             ]

@@ -21,7 +21,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from analyse_assets.config_model import (
-    CONFIG_FILE_NAME,
+    A_CONFIG_FILE_NAME,
     CATALOG_SHEET,
     MANUAL_SHEET,
     RULES_SHEET,
@@ -55,7 +55,7 @@ def migrate(path: Path) -> Path:
 
 
 def main() -> None:
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / CONFIG_FILE_NAME
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else get_online_data_root() / A_CONFIG_FILE_NAME
     assert target.is_file(), target
     migrate(target)
     print(f"Zmigrowano source→pool_id: {target.resolve()}")

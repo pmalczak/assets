@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import unittest
 from datetime import date
 from unittest.mock import patch
@@ -18,7 +18,7 @@ from importers.assets.pool_id import REVOLUT_PLN
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from importers.revolut.account_data_model import RevolutOperationType
 from roi.allocate import allocate_catalog
-from roi.categories import INVESTMENT
+from roi.categories import CAPEX
 from roi.data_model import CashFlowEvent
 from roi.gold_terminal import (
     GOLD_COINS_ROI_ASSET_ID,
@@ -67,7 +67,7 @@ def _capex_event(
         CashFlowEvent.ASSET_ID: GOLD_COINS_ROI_ASSET_ID,
         CashFlowEvent.DATE: tx_date,
         CashFlowEvent.AMOUNT: amount,
-        CashFlowEvent.CATEGORY: INVESTMENT,
+        CashFlowEvent.CATEGORY: CAPEX,
         CashFlowEvent.SOURCE: source,
         CashFlowEvent.DESCRIPTION: "CAPEX",
         CashFlowEvent.TITLE: title,
@@ -256,7 +256,7 @@ class GoldTerminalMtmTests(unittest.TestCase):
         passed = kwargs["cashflows"]
         self.assertEqual(len(passed), 1)
         self.assertAlmostEqual(float(passed.iloc[0][CashFlowEvent.AMOUNT]), -15000.0)
-        self.assertEqual(passed.iloc[0][CashFlowEvent.CATEGORY], INVESTMENT)
+        self.assertEqual(passed.iloc[0][CashFlowEvent.CATEGORY], CAPEX)
 
 
 class GoldCapexAllocationTests(unittest.TestCase):
@@ -321,7 +321,7 @@ class GoldCapexAllocationTests(unittest.TestCase):
 
         self.assertEqual(len(events_by_asset[GOLD_COINS_ROI_ASSET_ID]), 1)
         event = events_by_asset[GOLD_COINS_ROI_ASSET_ID].iloc[0]
-        self.assertEqual(event[CashFlowEvent.CATEGORY], INVESTMENT)
+        self.assertEqual(event[CashFlowEvent.CATEGORY], CAPEX)
         self.assertAlmostEqual(float(event[CashFlowEvent.AMOUNT]), -15000.0)
         self.assertEqual(len(unallocated), 1)
 
@@ -393,7 +393,7 @@ class GoldCapexAllocationTests(unittest.TestCase):
         self.assertEqual(len(unallocated), 1)
 
     def test_capex_from_two_pools_via_rules_pool_id(self):
-        """rules.pool_id wybiera pool kroku; puste → assets.pool_id."""
+        """rules.pool_id wybiera pool kroku; puste â†’ assets.pool_id."""
         pool = AssetRw.add_ymd_columns(
             pd.DataFrame(
                 [
@@ -472,7 +472,7 @@ class GoldCapexAllocationTests(unittest.TestCase):
         }
         self.assertAlmostEqual(by_source[REVOLUT_PLN], -35438.0)
         self.assertAlmostEqual(by_source[DEFAULT_POOL_ID], -34278.0)
-        self.assertTrue((events[CashFlowEvent.CATEGORY] == INVESTMENT).all())
+        self.assertTrue((events[CashFlowEvent.CATEGORY] == CAPEX).all())
         self.assertEqual(len(unallocated), 1)
 
 

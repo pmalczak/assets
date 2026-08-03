@@ -16,7 +16,7 @@ from roi.broker_trading_roi import (
     reconcile_robo_top_up,
     ticker_open_state,
 )
-from roi.categories import INFLOW, INVESTMENT
+from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.data_model import CashFlowEvent
 
 
@@ -87,7 +87,7 @@ class BrokerTickerCashflowTests(unittest.TestCase):
         self.assertEqual(set(events), {"p_re_robo:PRAR"})
         df = events["p_re_robo:PRAR"]
         cats = df[CashFlowEvent.CATEGORY].tolist()
-        self.assertEqual(cats, [INVESTMENT, INFLOW, INFLOW])
+        self.assertEqual(cats, [CAPEX, DIVESTMENT, REVENUES])
         self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.AMOUNT]), -50.0)
         self.assertAlmostEqual(float(df.iloc[1][CashFlowEvent.AMOUNT]), 24.0)
         self.assertAlmostEqual(float(df.iloc[2][CashFlowEvent.AMOUNT]), 1.5)
@@ -128,7 +128,9 @@ class BrokerTickerRoiTests(unittest.TestCase):
         self.assertFalse(bool(row["is_sold"]))
         self.assertAlmostEqual(float(row["terminal_unrealized"]), 72.0)  # 6×12
         self.assertAlmostEqual(float(row["capex"]), -100.0)
-        self.assertAlmostEqual(float(row["revenue"]), 48.0)
+        self.assertAlmostEqual(float(row["revenue"]), 0.0)
+        self.assertAlmostEqual(float(row["terminal_realized"]), 48.0)
+        self.assertEqual(events["p_re_robo:AAA"][CashFlowEvent.CATEGORY].tolist(), [CAPEX, DIVESTMENT])
         self.assertIn("p_re_robo:AAA", events)
 
     def test_full_sell_is_sold_zero_terminal(self):
@@ -158,6 +160,7 @@ class BrokerTickerRoiTests(unittest.TestCase):
         row = summary.iloc[0]
         self.assertTrue(bool(row["is_sold"]))
         self.assertAlmostEqual(float(row["terminal_unrealized"]), 0.0)
+        self.assertAlmostEqual(float(row["terminal_realized"]), 50.0)
         self.assertAlmostEqual(float(row["roi_nominal"]), 10.0)  # -40 + 50
 
     def test_dividend_inflow(self):

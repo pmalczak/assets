@@ -43,6 +43,11 @@ MAPPING_MAP = {
 }
 
 CATEGORY_MAP = {
+    "CAPEX": AssetRw.CAT_INVESTMENT,
+    "REVENUES": AssetRw.CAT_INFLOW,
+    "OPEX": AssetRw.CAT_OUTFLOW,
+    "DIVESTMENT": AssetRw.CAT_CLOSING,
+    # aliasy
     "INVESTMENT": AssetRw.CAT_INVESTMENT,
     "INFLOW": AssetRw.CAT_INFLOW,
     "OUTFLOW": AssetRw.CAT_OUTFLOW,

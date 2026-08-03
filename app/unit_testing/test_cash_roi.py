@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 from datetime import date
 from unittest.mock import patch
 
@@ -25,7 +25,7 @@ from importers.assets.data_model import (
 )
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from roi.allocate import allocate_catalog
-from roi.categories import INVESTMENT
+from roi.categories import CAPEX
 from roi.compute_roi import compute_roi
 from roi.data_model import CashFlowEvent
 from roi.terminal_value import resolve_terminal_value
@@ -138,7 +138,7 @@ class CashRoiAllocationTests(unittest.TestCase):
         self.assertEqual(events_by_asset["aquamarina"].iloc[0][CashFlowEvent.SOURCE], DEFAULT_POOL_ID)
         self.assertEqual(len(events_by_asset["cash"]), 1)
         self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.SOURCE], MBANK_EUR)
-        self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.CATEGORY], INVESTMENT)
+        self.assertEqual(events_by_asset["cash"].iloc[0][CashFlowEvent.CATEGORY], CAPEX)
         self.assertLess(events_by_asset["cash"].iloc[0][CashFlowEvent.AMOUNT], 0)
         self.assertEqual(len(unallocated), 0)
 
@@ -204,7 +204,7 @@ class CashRoiAllocationTests(unittest.TestCase):
                     CashFlowEvent.ASSET_ID: "cash",
                     CashFlowEvent.DATE: "2022-04-28",
                     CashFlowEvent.AMOUNT: -100120.94,
-                    CashFlowEvent.CATEGORY: INVESTMENT,
+                    CashFlowEvent.CATEGORY: CAPEX,
                     CashFlowEvent.SOURCE: MBANK_EUR,
                     CashFlowEvent.DESCRIPTION: MbankOperationType.PRZELEW_SEPA_PRZYCHODZACY,
                     CashFlowEvent.TITLE: "DYWIDENDA",

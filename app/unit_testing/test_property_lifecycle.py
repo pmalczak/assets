@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 from datetime import date
 
 import pandas as pd
@@ -60,7 +60,7 @@ def _manual_closing() -> pd.DataFrame:
                 AnalyseAssetsManual.STEP_ORDER: 0,
                 AnalyseAssetsManual.DATE: "2015-06-01",
                 AnalyseAssetsManual.AMOUNT: 400000.0,
-                AnalyseAssetsManual.CATEGORY: "CLOSING",
+                AnalyseAssetsManual.CATEGORY: "DIVESTMENT",
                 AnalyseAssetsManual.DESCRIPTION: "sprzedaz",
             }
         ]

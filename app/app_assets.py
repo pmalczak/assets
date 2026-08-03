@@ -22,7 +22,7 @@ from app_streamlit.render_diagnostics import render_diagnostics
 from app_streamlit.render_fx import render_fx
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
-from app_streamlit.render_roi import render_roi
+from app_streamlit.render_roi import render_roi, render_roi_obligacje, render_roi_revolut_robo
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
@@ -66,7 +66,11 @@ def render_import_wyciagow() -> None:
         f"- mBank: `{home / 'Downloads'}` oraz luźne CSV w `{get_online_data_root()}` "
         f"→ `{get_cash_pool_root()}`\n"
         f"- Revolut pm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'pm'}` → `{get_cash_pool_root()}`\n"
-        f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}` → `{get_cash_pool_root()}`"
+        f"- Revolut gm: `{home / 'Dropbox' / 'INWESTYCJE' / 'download' / 'gm'}` → `{get_cash_pool_root()}`\n"
+        f"- obligacje skarbowe: `{home / 'Downloads'}` "
+        f"(`StanRachunkuRejestrowego*.xls`, `HistoriaDyspozycji.xls` "
+        f"z nazwą wg zakresu dat dyspozycji) "
+        f"→ `{get_online_data_root() / 'obligacjeskarbowe'}`"
     )
 
     if st.button("Przenieś pliki do ich katalogów", key="move_downloaded_button"):
@@ -173,7 +177,17 @@ def main():
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    tab_reports, tab_chart, tab_roi, tab_fx, tab_import, tab_search, tab_validate = st.tabs(
+    (
+        tab_reports,
+        tab_chart,
+        tab_roi,
+        tab_roi_robo,
+        tab_roi_obligacje,
+        tab_fx,
+        tab_import,
+        tab_search,
+        tab_validate,
+    ) = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
@@ -193,6 +207,12 @@ def main():
 
     with tab_roi:
         render_roi(data["latest_snapshot_date"])
+
+    with tab_roi_robo:
+        render_roi_revolut_robo(data["latest_snapshot_date"])
+
+    with tab_roi_obligacje:
+        render_roi_obligacje(data["latest_snapshot_date"])
 
     with tab_fx:
         render_fx()

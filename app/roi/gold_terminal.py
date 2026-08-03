@@ -9,7 +9,7 @@ import pandas as pd
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import Inventory, UnitPriceEvaluation
 from importers.assets.read_assets import read_inventory, read_unit_price_evaluation
-from roi.categories import INVESTMENT
+from roi.categories import CAPEX
 from roi.data_model import CashFlowEvent
 
 GOLD_COINS_ROI_ASSET_ID = "zloto-monety"
@@ -72,7 +72,7 @@ def holdings_from_capex_and_inventory(
     valuation_date: date,
 ) -> tuple[dict[str, float], list[str]]:
     """
-    Join INVESTMENT CAPEX ↔ inventory po dacie.
+    Join CAPEX ↔ inventory po dacie.
     Udany join → sztuki/instrument.
     Brak / niejednoznaczne / niekompletne inventory → GoldInventoryJoinError.
     """
@@ -85,7 +85,7 @@ def holdings_from_capex_and_inventory(
     if filtered.empty:
         return holdings, []
 
-    capex = filtered[filtered[CashFlowEvent.CATEGORY] == INVESTMENT]
+    capex = filtered[filtered[CashFlowEvent.CATEGORY] == CAPEX]
     if capex.empty:
         return holdings, []
 

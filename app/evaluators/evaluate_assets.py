@@ -9,9 +9,9 @@ import pandas as pd
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
 from evaluators.evaluate_assets_file import evaluate_assets_file
+from evaluators.evaluate_broker_obligacje import evaluate_broker_obligacje, is_obligacje_broker
 from evaluators.evaluate_broker_revolut import evaluate_broker_revolut
 from evaluators.evaluate_mbank import evaluate_mbank
-from evaluators.evaluate_obigacjeskarbowe import evaluate_obligacjeskarbowe
 from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
 from evaluators.valuation_date import format_date_columns
@@ -48,12 +48,6 @@ def evaluate_assets(
                 AssetsDef.check_structure(r)
                 result += [r]
 
-        elif rodzaj_importu == 'obligacje_skarbowe_import':
-            r = evaluate_obligacjeskarbowe(data_root, asset_id, assets_file_row, valuation_date)
-            if not r.empty:
-                AssetsDef.check_structure(r)
-                result += [r]
-
         elif rodzaj_importu == 'assets.zloto-monety':
             r, gold_warnings = evaluate_zloto_monety(assets_file_row, valuation_date)
             for warning in gold_warnings:
@@ -65,9 +59,14 @@ def evaluate_assets(
                 result += [r]
 
         elif rodzaj_importu == KindDomain.BROKER or rodzaj_importu.startswith(KindDomain.BROKER + '.'):
-            r, broker_warnings = evaluate_broker_revolut(
-                data_root, asset_id, assets_file_row, valuation_date
-            )
+            if is_obligacje_broker(assets_file_row):
+                r, broker_warnings = evaluate_broker_obligacje(
+                    data_root, asset_id, assets_file_row, valuation_date
+                )
+            else:
+                r, broker_warnings = evaluate_broker_revolut(
+                    data_root, asset_id, assets_file_row, valuation_date
+                )
             for warning in broker_warnings:
                 msg = f"[{asset_id}] {warning}"
                 warnings.append(msg)

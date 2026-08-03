@@ -2,7 +2,6 @@
 __author__ = "pmalczak@gmail.com"
 
 from analyse_assets.account_tx import AccountTx
-from app_proc.data_root import A_CONFIG_FILE_NAME
 from importers.assets.pool_id import MBANK_EUR, MBANK_PLN, REVOLUT_EUR, REVOLUT_PLN
 from importers.data_model_generic import GenericStructureClass
 
@@ -74,8 +73,6 @@ AnalyseAssetsCatalog = AnalyseAssetsCatalogCls()
 AnalyseAssetsRules = AnalyseAssetsRulesCls()
 AnalyseAssetsManual = AnalyseAssetsManualCls()
 
-# Alias historyczny — kanoniczna nazwa pliku: A_CONFIG_FILE_NAME.
-CONFIG_FILE_NAME = A_CONFIG_FILE_NAME
 CATALOG_SHEET = "roi_def"
 RULES_SHEET = "roi_rules"
 MANUAL_SHEET = "roi_manual"
@@ -116,6 +113,11 @@ OPERATOR_NAMES = {
 }
 
 CATEGORY_NAMES = {
+    "CAPEX",
+    "REVENUES",
+    "OPEX",
+    "DIVESTMENT",
+    # aliasy starych nazw (normalize przy odczycie)
     "INVESTMENT",
     "INFLOW",
     "OUTFLOW",
