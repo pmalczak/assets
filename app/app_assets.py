@@ -22,7 +22,12 @@ from app_streamlit.render_diagnostics import render_diagnostics
 from app_streamlit.render_fx import render_fx
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
-from app_streamlit.render_roi import render_roi, render_roi_obligacje, render_roi_revolut_robo
+from app_streamlit.render_roi import (
+    render_roi,
+    render_roi_obligacje,
+    render_roi_revolut_deposits,
+    render_roi_revolut_robo,
+)
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
@@ -37,6 +42,7 @@ from maintenance.move_downloaded_results import (
 )
 from move_dowloaded import run_move_downloaded
 from app_proc.recalculate_snapshots import (
+    PORTFOLIO_WINDOW_DAYS,
     SnapshotResult,
     recalculate_today_snapshot,
     recalculate_weekly_snapshots,
@@ -121,7 +127,7 @@ def render_import_wyciagow() -> None:
     )
 
     full_recalculation = st.checkbox(
-        "Pełne przeliczenie (365 dni, wt/sr/pt/nd)",
+        f"Pełne przeliczenie ({PORTFOLIO_WINDOW_DAYS} dni ≈ 6 mies., wt/sr/pt/nd)",
         value=False,
         key="snapshot_full_recalculation",
     )
@@ -182,6 +188,7 @@ def main():
         tab_chart,
         tab_roi,
         tab_roi_robo,
+        tab_roi_deposits,
         tab_roi_obligacje,
         tab_fx,
         tab_import,
@@ -210,6 +217,9 @@ def main():
 
     with tab_roi_robo:
         render_roi_revolut_robo(data["latest_snapshot_date"])
+
+    with tab_roi_deposits:
+        render_roi_revolut_deposits(data["latest_snapshot_date"])
 
     with tab_roi_obligacje:
         render_roi_obligacje(data["latest_snapshot_date"])

@@ -6,6 +6,9 @@ import pandas as pd
 from importers.data_model_generic import GenericStructureClass
 from .account_data_model import RevolutAccountFile
 
+PERIOD_START = "period_start"
+PERIOD_END = "period_end"
+
 
 class RevolutDepositFileCls(GenericStructureClass):
     COMPLETED_DATE = 'Completed Date'
@@ -19,6 +22,8 @@ class RevolutDepositFileCls(GenericStructureClass):
     BALANCE = RevolutAccountFile.BALANCE
     CURRENCY = RevolutAccountFile.CURRENCY
     FILE_DATE = RevolutAccountFile.FILE_DATE
+    PERIOD_START = PERIOD_START
+    PERIOD_END = PERIOD_END
 
     def __init__(self):
         super().__init__()
@@ -36,6 +41,8 @@ class RevolutDepositFileCls(GenericStructureClass):
             self.BALANCE,
             self.CURRENCY,
             self.FILE_DATE,
+            self.PERIOD_START,
+            self.PERIOD_END,
         }
         return result
 
@@ -52,20 +59,30 @@ class RevolutDepositFileCls(GenericStructureClass):
 
 
     def normalize_dtypes(self, _df: pd.DataFrame) -> pd.DataFrame:
+        """UUID EN deposit CSV (legacy). Prefer savings-statement dla nowych importów."""
         df = _df.copy()
         df[RevolutDepositFile.DATE] = pd.to_datetime(df[RevolutDepositFile.COMPLETED_DATE], format="%d %b %Y")
         df[RevolutDepositFile.DATE] = df[RevolutDepositFile.DATE].dt.strftime("%Y-%m-%d")
 
-        all_have_euro = df[RevolutDepositFile.DEP_BALANCE].astype(str).str.startswith("€").all()
-        if not all_have_euro:
-            raise ValueError
-        df[RevolutDepositFile.CURRENCY] = "eur"
+        balance_text = df[RevolutDepositFile.DEP_BALANCE].astype(str)
+        all_have_euro = balance_text.str.contains("€", regex=False).all()
+        all_have_pln = balance_text.str.contains("PLN", regex=False).all()
+        if all_have_euro and not all_have_pln:
+            df[RevolutDepositFile.CURRENCY] = "eur"
+            df[RevolutDepositFile.BALANCE] = (
+                balance_text
+                .replace({'€': '', ',': ''}, regex=True)
+                .astype(float)
+            )
+        elif all_have_pln and not all_have_euro:
+            df[RevolutDepositFile.CURRENCY] = "pln"
+            from importers.revolut.savings_statement import parse_pl_amount
+            df[RevolutDepositFile.BALANCE] = balance_text.map(parse_pl_amount).astype(float)
+        else:
+            raise ValueError("UUID deposit: nierozpoznana lub mieszana waluta w Balance")
 
-        df[RevolutDepositFile.BALANCE] = (
-            df[RevolutDepositFile.DEP_BALANCE]
-            .replace({'€': '', ',': ''}, regex=True)
-            .astype(float)
-        )
+        df[RevolutDepositFile.PERIOD_START] = ""
+        df[RevolutDepositFile.PERIOD_END] = ""
         return df
 
 

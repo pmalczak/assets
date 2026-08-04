@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Przelicza calculate_assets() we wtorki, srody, piatki i niedziele w oknie 365 dni wstecz od dzis.
+Przelicza calculate_assets() we wtorki, srody, piatki i niedziele
+w oknie PORTFOLIO_WINDOW_DAYS (~6 mies.) wstecz od dzis.
 
 Wyniki trafiaja do data_steps/ASSETS_SNAPSHOT_STEP/YYYY-MM-DD.parquet (krok DATA_STEP).
 
@@ -23,7 +24,11 @@ if str(APP_ROOT) not in sys.path:
 
 from data_step.data_step import DATA_STEP
 from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE, ASSETS_SNAPSHOT_STEP
-from app_proc.recalculate_snapshots import recalculate_weekly_snapshots, valuation_dates_one_year_back
+from app_proc.recalculate_snapshots import (
+    PORTFOLIO_WINDOW_DAYS,
+    recalculate_weekly_snapshots,
+    valuation_dates_in_window,
+)
 
 
 def main() -> int:
@@ -31,7 +36,10 @@ def main() -> int:
     DATA_STEP.init_steps(root=local_data_steps_root)
 
     parser = argparse.ArgumentParser(
-        description=f"Przelicz snapshoty portfela ({ASSETS_SNAPSHOT_STEP}) we wtorki, srody, piatki i niedziele z ostatniego roku.",
+        description=(
+            f"Przelicz snapshoty portfela ({ASSETS_SNAPSHOT_STEP}) we wtorki, srody, "
+            f"piatki i niedziele z ostatnich ~6 miesiecy ({PORTFOLIO_WINDOW_DAYS} dni)."
+        ),
     )
     parser.add_argument(
         "--force",
@@ -47,8 +55,11 @@ def main() -> int:
     args = parser.parse_args()
 
     reference = args.reference_date or date.today()
-    dates = valuation_dates_one_year_back(reference)
-    print(f"Okno: {reference - timedelta(days=365):%Y-%m-%d} .. {reference:%Y-%m-%d}")
+    dates = valuation_dates_in_window(reference)
+    print(
+        f"Okno: {reference - timedelta(days=PORTFOLIO_WINDOW_DAYS):%Y-%m-%d} "
+        f".. {reference:%Y-%m-%d}"
+    )
     print(f"Dat wyceny (wt, sr, pt, nd): {len(dates)}")
     print(f"Kolumna daty snapshotu: {PORTFOLIO_VALUATION_DATE}")
     print()

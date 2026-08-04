@@ -88,11 +88,19 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 | Prefiks nazwy pliku | Zachowanie |
 |---------------------|------------|
 | `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`) |
-| stem = UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) | Depozyt → katalog waluty; inne nazwy bez `_` (np. `Eksport transakcji`) → pomijane |
-| pusty plik account/deposit | Usuwany; w raporcie importu: „usunięty (pusty)” |
+| `savings-statement_{od}_{do}_…` | Wyciąg depozytu (PL) → katalog waluty; **waluta z treści kwot** (`PLN` / `€`), nie z `kod1` w nazwie; nakładające się okresy → dedupe; **luka w pokryciu okresów → twardy błąd** |
+| stem = UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) | Legacy depozyt (EN) → katalog waluty; inne nazwy bez `_` (np. `Eksport transakcji`) → pomijane |
+| pusty plik account/deposit/savings | Usuwany; w raporcie importu: „usunięty (pusty)” |
 | `trading-account-statement_*` | Wyciąg brokerski Revolut (robo/trading) — osobna ścieżka (nie cash_pool) |
 | `trading-pnl-statement_*` | Rachunek zysków i strat brokerskich (zrealizowane sprzedaże, dywidendy) |
-| `consolidated-statement-v2_*`, `savings-statement_*` i inne nieznane | Pomijane — **nie** przerywają importu |
+| `consolidated-statement-v2_*` i inne nieznane | Pomijane — **nie** przerywają importu |
+
+### ROI depozytów Revolut (savings)
+
+- `asset_id` = katalog konta: `p_re_eur` / `p_re_pln` / `g_re_eur` / `g_re_pln` (osobno od ROR cash pool w sensie produktu ROI).
+- CF z `Opis`: `Depozyt` → `CAPEX` (`−abs`); `Wypłata` → `DIVESTMENT` (`+abs`). **`Oprocentowanie brutto` poza CF / XIRR** (jak odsetki w obligacjach) — efekt w `Saldo` / terminalu.
+- Terminal / snapshot NAV = ostatnie `Saldo` ≤ data wyceny.
+- Zobowiązanie podatkowe Belka 19%: osobne `asset_id` `{deposit_id}_zobowiazanie_podatkowe_{Y}` — OPEX `−0.19×` oprocentowania brutto tylko dla odsetek z roku `Y` (rok daty wyceny); w snapshocie wartość ujemna = zaległość YTD.
 
 mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
 

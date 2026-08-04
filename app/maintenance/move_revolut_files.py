@@ -9,6 +9,13 @@ import pandas as pd
 from app_proc.data_root import get_online_data_root
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.deposit_data_model import RevolutDepositFile
+from importers.revolut.savings_statement import (
+    SAVINGS_STATEMENT_PREFIX,
+    detect_savings_currency,
+    is_savings_statement_filename,
+    normalize_savings_statement,
+    parse_savings_period,
+)
 from maintenance.move_downloaded_results import (
     ACTION_DELETED_EMPTY,
     ACTION_MOVED,
@@ -59,6 +66,9 @@ def move_revolut_files(
 
         elif is_revolut_deposit_filename(file.stem):
             results.append(_move_file(file, file_owner, dropbox_cash_pool, 'deposit'))
+
+        elif fname[0] == SAVINGS_STATEMENT_PREFIX or is_savings_statement_filename(file.name):
+            results.append(_move_savings_file(file, file_owner, dropbox_cash_pool))
 
         else:
             results.append(
@@ -127,6 +137,42 @@ def _move_file(file: Path, file_owner: str, dropbox_cash_pool: Path, type: str) 
 
     currency = get_account_currency(df)
     target = dropbox_cash_pool / f'{file_owner}_{currency}' / file.name
+    file.rename(target)
+    return MoveResult(
+        source=file,
+        destination=target,
+        action=ACTION_MOVED,
+        kind=KIND_REVOLUT,
+    )
+
+
+def _move_savings_file(file: Path, file_owner: str, dropbox_cash_pool: Path) -> MoveResult:
+    raw = pd.read_csv(file)
+    if raw.empty:
+        file.unlink()
+        return MoveResult(
+            source=file,
+            destination=None,
+            action=ACTION_DELETED_EMPTY,
+            kind=KIND_REVOLUT,
+        )
+
+    period_start, period_end = parse_savings_period(file)
+    currency = detect_savings_currency(raw)
+    # Walidacja normalizacji przed przeniesieniem (nie zapisujemy znormalizowanego CSV).
+    normalized = normalize_savings_statement(raw, period_start=period_start, period_end=period_end)
+    if normalized.empty:
+        file.unlink()
+        return MoveResult(
+            source=file,
+            destination=None,
+            action=ACTION_DELETED_EMPTY,
+            kind=KIND_REVOLUT,
+        )
+
+    target_dir = dropbox_cash_pool / f'{file_owner}_{currency}'
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / file.name
     file.rename(target)
     return MoveResult(
         source=file,

@@ -15,6 +15,7 @@ from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
 from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
+from roi.revolut_deposit_roi import compute_revolut_deposit_roi
 
 ROI_DISPLAY_COLUMNS = {
     "asset_id": "Aktywo",
@@ -144,6 +145,46 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = st.selectbox("Ticker (robo)", options=asset_ids, key="roi_robo_selected_ticker")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla tickera.")
+
+
+def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
+    st.subheader("ROI Revolut depozyty (savings)")
+    valuation_date = st.date_input(
+        "Data wyceny ROI depozytów",
+        value=default_valuation_date or date.today(),
+        key="roi_deposits_valuation_date",
+    )
+    st.caption(
+        "Cashflow z `savings-statement`: Depozyt → CAPEX (−); Wypłata → DIVESTMENT (+). "
+        "Oprocentowanie brutto poza CF (w Saldo/terminalu). "
+        "Zobowiązanie podatkowe 19% (rok wyceny) jako osobne aktywo."
+    )
+    try:
+        with st.spinner("Liczenie ROI depozytów Revolut..."):
+            summary, events_by_asset, warnings = compute_revolut_deposit_roi(valuation_date)
+    except Exception as exc:
+        st.warning("Nie udało się policzyć ROI depozytów Revolut.")
+        st.exception(exc)
+        return
+
+    if warnings:
+        for msg in warnings:
+            st.warning(msg)
+
+    if summary.empty:
+        st.info("Brak danych savings-statement dla p_re_* / g_re_*.")
+        return
+
+    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+
+    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
+    selected = st.selectbox("Depozyt", options=asset_ids, key="roi_deposits_selected_asset")
+    _render_flow_details(
+        events_by_asset,
+        selected,
+        valuation_date,
+        empty_msg="Brak przepływów dla depozytu.",
+    )
 
 
 def render_roi_obligacje(default_valuation_date: date | None) -> None:

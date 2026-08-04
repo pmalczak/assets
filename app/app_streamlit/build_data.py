@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 from openpyxl import load_workbook
 
+from app_proc.recalculate_snapshots import PORTFOLIO_WINDOW_DAYS
 from app_proc.snapshots import snapshots_directory, list_snapshot_files, load_snapshot
 
 from importers.assets.data_model import AssetsDef
@@ -16,7 +17,7 @@ from importers.assets.read_assets import get_assets_file
 HISTORY_COLUMNS = [AssetsDef.GROUP, AssetsDef.VALUE_PLN]
 
 
-def build_data(days: int = 365) -> dict[str, object]:
+def build_data(days: int = PORTFOLIO_WINDOW_DAYS) -> dict[str, object]:
     data = build_portfolio_history_from_snapshots(
         days=days,
         end_date_iso=date.today().isoformat(),
@@ -40,7 +41,7 @@ def _read_timeline_events_cached() -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Wczytywanie snapshotow...")
 def build_portfolio_history_from_snapshots(
-    days: int = 365,
+    days: int = PORTFOLIO_WINDOW_DAYS,
     end_date_iso: str | None = None,
     _schema: int = 2,
 ) -> dict[str, object]:
@@ -51,7 +52,7 @@ def build_portfolio_history_from_snapshots(
 
 def _build_portfolio_history_from_snapshots(
     snapshots_dir: Path | None = None,
-    days: int = 365,
+    days: int = PORTFOLIO_WINDOW_DAYS,
     end_date: date | None = None,
 ) -> dict[str, object]:
     snapshots_dir = snapshots_dir or snapshots_directory()

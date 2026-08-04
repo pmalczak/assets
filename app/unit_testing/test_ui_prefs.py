@@ -39,5 +39,7 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             save_last_tab("ROI Revolut robo", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut robo")
+            save_last_tab("ROI Revolut depozyty", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut depozyty")
             save_last_tab("ROI obligacje", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "ROI obligacje")

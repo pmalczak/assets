@@ -14,6 +14,7 @@ WEDNESDAY = 2
 FRIDAY = 4
 SUNDAY = 6
 SNAPSHOT_WEEKDAYS = (TUESDAY, WEDNESDAY, FRIDAY, SUNDAY)
+PORTFOLIO_WINDOW_DAYS = 183  # ~6 months — wykres portfela i pełne przeliczenie snapshotów
 
 SNAPSHOT_DISPLAY_COLUMNS = {
     "valuation_date": "Data wyceny",
@@ -39,9 +40,13 @@ class SnapshotResult:
         }
 
 
-def valuation_dates_one_year_back(reference: date | None = None) -> list[date]:
+def valuation_dates_in_window(
+    reference: date | None = None,
+    *,
+    days: int = PORTFOLIO_WINDOW_DAYS,
+) -> list[date]:
     end = reference or date.today()
-    start = end - timedelta(days=365)
+    start = end - timedelta(days=days)
 
     dates: list[date] = []
     current = start
@@ -50,6 +55,10 @@ def valuation_dates_one_year_back(reference: date | None = None) -> list[date]:
             dates.append(current)
         current += timedelta(days=1)
     return dates
+
+
+# Alias historyczny — to samo okno co valuation_dates_in_window.
+valuation_dates_one_year_back = valuation_dates_in_window
 
 
 def _build_snapshot_result(valuation_date: date, assets: pd.DataFrame) -> SnapshotResult:
@@ -76,7 +85,7 @@ def recalculate_weekly_snapshots(
     force_read_all_data: bool = True,
     reference: date | None = None,
 ) -> list[SnapshotResult]:
-    valuation_dates = valuation_dates_one_year_back(reference)
+    valuation_dates = valuation_dates_in_window(reference)
     results: list[SnapshotResult] = []
 
     for index, valuation_date in enumerate(valuation_dates):
