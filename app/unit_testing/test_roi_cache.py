@@ -16,7 +16,7 @@ from app_proc.export_product_excel import (
 from importers.mbank.data_model import MBankFile
 from roi.data_model import CashFlowEvent
 from roi.roi_products import (
-    add_mbank_consolidated_ymd_columns,
+    add_account_tx_ymd_columns,
     load_catalog_events,
     load_roi_summary,
     roi_catalog_resource,
@@ -211,15 +211,15 @@ class ExportRoiProductExcelsTests(unittest.TestCase):
             self.assertFalse((out / "mbank_consolidated.xlsx").exists())
 
 
-class MbankConsolidatedYmdTests(unittest.TestCase):
-    def test_add_mbank_consolidated_ymd_columns(self):
+class AccountTxYmdTests(unittest.TestCase):
+    def test_add_account_tx_ymd_columns(self):
         df = pd.DataFrame(
             {
                 MBankFile.MBANK_TRANSACTION_DATE: ["2024-03-15", "2025-11-01"],
                 MBankFile.MBANK_AMOUNT: [-100.0, 200.0],
             }
         )
-        result = add_mbank_consolidated_ymd_columns(df)
+        result = add_account_tx_ymd_columns(df)
 
         self.assertEqual(result.loc[0, AssetRw.YEAR], "2024")
         self.assertEqual(result.loc[0, AssetRw.MONTH], "3")
@@ -230,11 +230,11 @@ class MbankConsolidatedYmdTests(unittest.TestCase):
         self.assertNotIn("MIESIĄC", result.columns)
         self.assertNotIn("DZIEŃ", result.columns)
 
-    def test_add_mbank_consolidated_ymd_columns_is_idempotent(self):
-        df = add_mbank_consolidated_ymd_columns(
+    def test_add_account_tx_ymd_columns_is_idempotent(self):
+        df = add_account_tx_ymd_columns(
             pd.DataFrame({MBankFile.MBANK_TRANSACTION_DATE: ["2024-01-02"]})
         )
-        again = add_mbank_consolidated_ymd_columns(df)
+        again = add_account_tx_ymd_columns(df)
         pd.testing.assert_frame_equal(df, again)
 
     def test_replaces_legacy_diacritic_columns(self):
@@ -246,7 +246,7 @@ class MbankConsolidatedYmdTests(unittest.TestCase):
                 "DZIEŃ": [15],
             }
         )
-        result = add_mbank_consolidated_ymd_columns(df)
+        result = add_account_tx_ymd_columns(df)
         self.assertEqual(result.loc[0, AssetRw.YEAR], "2024")
         self.assertEqual(result.loc[0, AssetRw.MONTH], "3")
         self.assertEqual(result.loc[0, AssetRw.DAY], "15")

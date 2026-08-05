@@ -48,11 +48,3 @@ def _fetch_nbp_fx_rates(start: str, end: str) -> pd.DataFrame:
 
     result = pd.concat(result)
     return result
-
-
-def nbp_fx_is_available(date: str):
-    try:
-        x = _fetch_nbp_fx_rates(date, date)
-        return True
-    except ReferenceError as e:
-        return False

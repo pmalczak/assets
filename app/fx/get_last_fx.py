@@ -7,12 +7,8 @@ import pandas as pd
 
 from importers.assets.data_model import AssetsDef
 from fx.data_model import LastFx
-from nbp_fx_repo.nbp_fx_rates_fetch import NBP_FX_DATE
+from nbp_pl_api.nbp_fx_rates_fetch import NBP_FX_DATE
 from nbp_fx_repo.nbp_fx_repository import NBP_API_PLN, NBP_API_EUR
-
-
-def get_last_fx(fx_rates: pd.DataFrame) -> pd.DataFrame:
-    return _format_fx_rows(fx_rates[-1:])
 
 
 def get_fx_as_of(fx_rates: pd.DataFrame, valuation_date: date) -> pd.DataFrame:

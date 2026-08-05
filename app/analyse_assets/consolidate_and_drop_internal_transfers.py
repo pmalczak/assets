@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -195,46 +195,3 @@ def consolidate_account_tx_drop_internal_transfers(
         "bank": bank,
     }
     return cleaned, report, meta
-
-
-# Kompatybilność ze starym API (testy / ewentualne call site'y na surowym mBank).
-def consolidate_many_drop_internal_transfers(
-    statements: List[pd.DataFrame],
-    *,
-    col_konto_bazowe=None,
-    col_numer_konta=None,
-    col_kwota=None,
-    col_data_transakcji=None,
-    col_tytul=None,
-    col_opis=None,
-    date_tolerance="D",
-    require_opposite_sign=True,
-    also_key_by_currency: Optional[str] = None,
-):
-    from analyse_assets.account_tx import mbank_statement_to_account_tx
-
-    # Jeśli już AccountTx — konsoliduj bezpośrednio.
-    if statements and AccountTx.OPERATION_TYPE in statements[0].columns:
-        return consolidate_account_tx_drop_internal_transfers(
-            statements,
-            bank="mbank",
-            date_tolerance=date_tolerance,
-            require_opposite_sign=require_opposite_sign,
-        )
-
-    converted = []
-    for stmt in statements:
-        account_id = ""
-        if AccountTx.ACCOUNT_ID in stmt.columns and not stmt.empty:
-            account_id = str(stmt[AccountTx.ACCOUNT_ID].iloc[0])
-        elif "_source" in stmt.columns and not stmt.empty:
-            account_id = str(stmt["_source"].iloc[0])
-        converted.append(
-            mbank_statement_to_account_tx(stmt, account_id=account_id, pool_id="mbank_pln")
-        )
-    return consolidate_account_tx_drop_internal_transfers(
-        converted,
-        bank="mbank",
-        date_tolerance=date_tolerance,
-        require_opposite_sign=require_opposite_sign,
-    )

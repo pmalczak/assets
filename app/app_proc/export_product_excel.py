@@ -10,7 +10,6 @@ from analyse_assets.config_model import AnalyseAssetsCatalog
 from app_proc.data_root import get_online_data_output
 
 ASSETS_EVALUATION_FILE = "assets_evaluation.xlsx"
-MBANK_CONSOLIDATED_FILE = "mbank_consolidated.xlsx"  # legacy alias; nie używany przy eksporcie
 
 
 def unallocated_excel_filename(pool_id: str) -> str:
@@ -60,24 +59,6 @@ def export_roi_product_excels(
         unallocated.to_excel(out_dir / unallocated_excel_filename(pool_id), index=False)
 
     return out_dir
-
-
-# Kompatybilność ze starym API (jeden DF unallocated).
-def export_roi_mbank_excels(
-    events_by_asset: dict[str, pd.DataFrame],
-    unallocated: pd.DataFrame,
-    catalog: pd.DataFrame,
-    snapshot_date: date,
-) -> Path:
-    from analyse_assets.account_tx import AccountTx
-
-    by_pool: dict[str, pd.DataFrame] = {}
-    if unallocated is not None and not unallocated.empty and AccountTx.POOL_ID in unallocated.columns:
-        for pool_id, group in unallocated.groupby(AccountTx.POOL_ID, sort=False):
-            by_pool[str(pool_id)] = group.copy()
-    elif unallocated is not None and not unallocated.empty:
-        by_pool["unknown"] = unallocated.copy()
-    return export_roi_product_excels(events_by_asset, by_pool, catalog, snapshot_date)
 
 
 def list_roi_product_excel_files(snapshot_date: date) -> list[Path]:

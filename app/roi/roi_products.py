@@ -42,10 +42,6 @@ def add_account_tx_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:
     return add_ymd_columns(df.copy())
 
 
-# Alias kompatybilności
-add_mbank_consolidated_ymd_columns = add_account_tx_ymd_columns
-
-
 def load_catalog_events(
     assets_date: date,
     config: dict[str, pd.DataFrame] | None = None,
@@ -122,16 +118,6 @@ def load_unallocated_pool(
     if len(frames) == 1:
         return frames[0]
     return pd.concat(frames, ignore_index=True)
-
-
-def load_unallocated_mbank(
-    assets_date: date,
-    config: dict[str, pd.DataFrame] | None = None,
-    *,
-    config_path: Path | None = None,
-) -> pd.DataFrame:
-    """Deprecated alias: wszystkie niezaalokowane pool'e."""
-    return load_unallocated_pool(assets_date, pool_id=None, config=config, config_path=config_path)
 
 
 def _enabled_pool_ids(catalog: pd.DataFrame) -> list[str]:

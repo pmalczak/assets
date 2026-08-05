@@ -23,8 +23,6 @@ ASSET_RW_TO_ROI = {
     AssetRw.CAT_CLOSING: DIVESTMENT,
 }
 
-ROI_TO_ASSET_RW = {value: key for key, value in ASSET_RW_TO_ROI.items()}
-
 
 def normalize_roi_category(name: str) -> str:
     """Zwraca kanoniczną kategorię ROI (z aliasami starych nazw)."""

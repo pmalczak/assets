@@ -7,7 +7,6 @@ import pandas as pd
 
 from asset_reports import rap1, rap2
 from app_proc.calculate_assets import calculate_assets
-from importers.assets.data_model import AssetsDef
 
 s = '________________________________________________\n'
 col_space=15
@@ -20,40 +19,9 @@ def main():
     print(assets)
     print(s)
 
-    # rap3(assets)
     rap2(assets)
     rap1_prn(assets)
     return
-
-
-def rap3(assets):
-    msg = 'RAP 3___________________________________________'
-    print(msg)
-    a1 = assets[[AssetsDef.TYPE,
-                 AssetsDef.CURRENCY,
-                 AssetsDef.EVALUATION_DATE, AssetsDef.VALUE]]
-    g1 = a1.groupby([
-        AssetsDef.EVALUATION_DATE,
-        AssetsDef.TYPE,
-    ]).agg({
-        AssetsDef.VALUE: 'sum',
-        AssetsDef.CURRENCY: 'first',  # waluta taka jak w grupie
-    })
-
-    g1[AssetsDef.VALUE] = (
-        g1[AssetsDef.VALUE]
-        .round()
-        .astype(int)
-        .map('{:,}'.format)
-        .str.replace(',', ' ')
-    )
-
-    g1[AssetsDef.VALUE] = g1[AssetsDef.VALUE] + ' ' + g1[AssetsDef.CURRENCY]
-    g1 = g1.drop(columns=[AssetsDef.CURRENCY])
-    print(g1.to_string(col_space=col_space))
-
-    # print(g1)
-    print(s)
 
 
 def rap1_prn(assets):
