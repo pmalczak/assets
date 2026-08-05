@@ -98,10 +98,21 @@ def roi_summary_to_row(summary: RoiSummary) -> dict[str, object]:
 def compute_portfolio_roi(
     valuation_date: date,
     config_path: Path | None = None,
+    *,
+    force_read_all_data: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    from data_step.data_step import DATA_STEP
     from roi.roi_products import load_catalog_events, load_roi_summary
 
-    config = read_analyse_config(config_path)
-    summary = load_roi_summary(valuation_date, config, config_path=config_path)
-    events_by_asset = load_catalog_events(valuation_date, config, config_path=config_path)
-    return summary, events_by_asset
+    if force_read_all_data:
+        DATA_STEP.force_read_data()
+
+    try:
+        config = read_analyse_config(config_path)
+        summary = load_roi_summary(valuation_date, config, config_path=config_path)
+        events_by_asset = load_catalog_events(valuation_date, config, config_path=config_path)
+        return summary, events_by_asset
+    finally:
+        if force_read_all_data:
+            # force_update jest globalne na DATA_STEP — wyłącz po wymuszonym odświeżeniu.
+            DATA_STEP.metadata.force_read_data(False)

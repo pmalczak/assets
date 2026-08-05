@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 
 from app_proc.data_root import resolve_asset_dir
@@ -12,6 +14,7 @@ from importers.assets.property_lifecycle import (
 )
 from importers.assets.read_assets import get_assets_file, read_assets, read_property_valuations
 from roi.config import read_analyse_config
+from roi.terminal_value import load_roi_aware_close_dates
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
 from importers.pkobp.data_model import PkoBpStan
@@ -246,7 +249,7 @@ def _assets_sheet_history(asset_row: pd.Series) -> pd.DataFrame:
     if kind in ("assets.properties-wyceny", "assets.properties"):
         valuations = read_property_valuations()
         config = read_analyse_config()
-        close_dates = load_property_close_dates(config["manual"], config["catalog"])
+        close_dates = load_roi_aware_close_dates(date.today(), config)
         property_ids = sorted(
             property_ids_in_scope(
                 valuations,

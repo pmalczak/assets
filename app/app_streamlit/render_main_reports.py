@@ -12,6 +12,7 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import recalculate_today_snapshot
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
+from app_streamlit.safe_download import dataframe_for_streamlit
 from importers.assets.data_model import AssetsDef
 
 
@@ -107,10 +108,10 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     investments = assets[typ.str.startswith("investment.")]
 
     st.markdown("**Cash pool**")
-    st.dataframe(cash_pool, width="stretch", hide_index=True, height=360)
+    st.dataframe(dataframe_for_streamlit(cash_pool), width="stretch", hide_index=True, height=360)
 
     st.markdown("**Inwestycje**")
-    st.dataframe(investments, width="stretch", hide_index=True, height=360)
+    st.dataframe(dataframe_for_streamlit(investments), width="stretch", hide_index=True, height=360)
 
     st.markdown("**RAP 2**")
     rap2_buffer = io.StringIO()

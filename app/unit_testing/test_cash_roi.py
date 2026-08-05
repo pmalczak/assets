@@ -401,6 +401,9 @@ class CashRoiAllocationTests(unittest.TestCase):
                 "manual": pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns())),
                 "catalog": pd.DataFrame(columns=list(AnalyseAssetsCatalog.expected_columns())),
             },
+        ), patch(
+            "evaluators.evaluate_assets_file.load_roi_aware_close_dates",
+            return_value={},
         ):
             result = evaluate_assets_file(
                 "assets.properties-wyceny",

@@ -32,15 +32,19 @@ Arkusze `a_config.xlsx`:
 | **CAPEX** | Nakłady inwestycyjne (zakup) |
 | **REVENUES** | Przychody (odsetki, dywidendy) — nie zmniejszenie pozycji |
 | **OPEX** | Wydatki operacyjne (podatek, opłata) |
-| **DIVESTMENT** | Zmniejszenie zaangażowania (częściowa lub pełna sprzedaż / zwrot kapitału); **nie** OPEX |
-| **is_sold** | Brak otwartej ekspozycji (qty≈0 / data zamknięcia w manual) — **nie** tożsame z samym wierszem DIVESTMENT |
+| **DIVESTMENT** | Cashflow wyjścia kapitału; **nie** OPEX. Dla `investment.property` = sprzedaż (zamknięcie). Dla brokerów/obligacji/depozytów może być częściowe zmniejszenie pozycji |
+| **is_sold** | Brak otwartej ekspozycji: `investment.property` ⇔ jest DIVESTMENT ≤ data wyceny; brokerzy `qty≈0`; cash — data zamknięcia z manual |
 
 ---
 
 ## Założenia domenowe (obowiązujące)
 
 1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`. Brak osobnej zakładki `cash` w `a_config.xlsx`.
-2. **DIVESTMENT ≠ is_sold** — `DIVESTMENT` to kategoria cashflowu (także częściowa sprzedaż). `is_sold` ⇔ brak ekspozycji: brokerzy `qty≈0`; nieruchomości/cash — data zamknięcia z manual (`DIVESTMENT` jako marker pełnego wyjścia / lifecycle). Arkusz wycen / `operacja=sprzedane` nie ustawia flagi sprzedaży.
+2. **DIVESTMENT a is_sold** — zależy od `typ`:
+   - **`investment.property`**: DIVESTMENT (bank lub manual) **=** sprzedaż / `is_sold` (nieruchomość nie ma częściowego „zmniejszenia zaangażowania” jak obligacje)
+   - **brokerzy / obligacje / depozyty**: DIVESTMENT może być częściowy; `is_sold` ⇔ `qty≈0`
+   - **`investment.cash`**: `is_sold` z daty zamknięcia w `roi_manual` (DIVESTMENT/CLOSING)
+   - Arkusz wycen / `operacja=sprzedane` nie ustawia flagi sprzedaży.
 3. **Wspólny arkusz wycen NAV** — `asset-evaluation` (ex `properties-wyceny`) trzyma NAV dla nieruchomości **oraz** pozycji `assets.cash` (np. `cash`, `rocky-iv`). Snapshot i ROI terminal dla tych ID biorą stąd ostatnią wycenę ≤ data wyceny.
 4. **Bez podwójnego liczenia** — przy rozwijaniu `assets.properties` / `properties-wyceny` / `asset-evaluation` **wykluczać** ID z wierszy katalogu `RODZAJ*=assets.cash`; te ID idą wyłącznie ścieżką `assets.cash`.
 5. **Numer konta w regułach** — dopuszczalny NRB (cyfry) **albo** IBAN (np. `LU91…`).

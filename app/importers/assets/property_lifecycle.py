@@ -22,30 +22,78 @@ def cash_owned_asset_ids(assets_catalog: pd.DataFrame) -> set[str]:
     return set(assets_catalog.loc[mask, AssetsFile.ID].astype(str))
 
 
-def load_property_close_dates(
-    manual: pd.DataFrame,
-    _catalog: pd.DataFrame | None = None,
-) -> dict[str, date]:
-    """Daty zamkniecia z ROI manual (DIVESTMENT; alias CLOSING), indeksowane po asset_id."""
-    from roi.categories import DIVESTMENT, normalize_roi_category
+def investment_property_ids(assets_catalog: pd.DataFrame | None = None) -> set[str]:
+    """Id z katalogu assets o typ=investment.property."""
+    from importers.assets.data_model import TypeDomain
+    from importers.assets.read_assets import read_assets
 
-    if manual.empty:
+    if assets_catalog is None:
+        assets_catalog = read_assets()
+    if assets_catalog is None or assets_catalog.empty:
+        return set()
+    if AssetsFile.TYPE not in assets_catalog.columns or AssetsFile.ID not in assets_catalog.columns:
+        return set()
+    mask = assets_catalog[AssetsFile.TYPE].astype(str) == TypeDomain.PROPERTY
+    return set(assets_catalog.loc[mask, AssetsFile.ID].astype(str))
+
+
+def earliest_divestment_dates(events: pd.DataFrame) -> dict[str, date]:
+    """Najwcześniejsza data DIVESTMENT per asset_id z cashflowów ROI."""
+    from roi.categories import DIVESTMENT
+    from roi.data_model import CashFlowEvent
+
+    if events is None or events.empty:
+        return {}
+    if CashFlowEvent.CATEGORY not in events.columns or CashFlowEvent.DATE not in events.columns:
         return {}
 
-    cats = manual[AnalyseAssetsManual.CATEGORY].astype(str).map(normalize_roi_category)
-    closing = manual[cats == DIVESTMENT].copy()
+    mask = events[CashFlowEvent.CATEGORY].astype(str) == DIVESTMENT
+    closing = events.loc[mask].copy()
     if closing.empty:
         return {}
 
-    closing[AnalyseAssetsManual.DATE] = pd.to_datetime(
-        closing[AnalyseAssetsManual.DATE],
-        errors="coerce",
-    )
-    closing = closing.dropna(subset=[AnalyseAssetsManual.DATE])
+    closing[CashFlowEvent.DATE] = pd.to_datetime(closing[CashFlowEvent.DATE], errors="coerce")
+    closing = closing.dropna(subset=[CashFlowEvent.DATE])
     by_asset_id: dict[str, date] = {}
-    for asset_id, group in closing.groupby(AnalyseAssetsManual.ASSET_ID):
-        earliest = group[AnalyseAssetsManual.DATE].min()
-        by_asset_id[str(asset_id)] = earliest.date()
+    for asset_id, group in closing.groupby(CashFlowEvent.ASSET_ID):
+        by_asset_id[str(asset_id)] = group[CashFlowEvent.DATE].min().date()
+    return by_asset_id
+
+
+def load_property_close_dates(
+    manual: pd.DataFrame,
+    _catalog: pd.DataFrame | None = None,
+    events: pd.DataFrame | None = None,
+) -> dict[str, date]:
+    """Daty zamkniecia: manual DIVESTMENT (+ dla investment.property także DIVESTMENT z CF)."""
+    from roi.categories import DIVESTMENT, normalize_roi_category
+
+    by_asset_id: dict[str, date] = {}
+
+    if manual is not None and not manual.empty:
+        cats = manual[AnalyseAssetsManual.CATEGORY].astype(str).map(normalize_roi_category)
+        closing = manual[cats == DIVESTMENT].copy()
+        if not closing.empty:
+            closing[AnalyseAssetsManual.DATE] = pd.to_datetime(
+                closing[AnalyseAssetsManual.DATE],
+                errors="coerce",
+            )
+            closing = closing.dropna(subset=[AnalyseAssetsManual.DATE])
+            for asset_id, group in closing.groupby(AnalyseAssetsManual.ASSET_ID):
+                by_asset_id[str(asset_id)] = group[AnalyseAssetsManual.DATE].min().date()
+
+    # Nieruchomość: DIVESTMENT (bank lub manual w events) = zamknięcie pozycji.
+    if events is not None and not events.empty:
+        property_ids = investment_property_ids()
+        if property_ids:
+            for asset_id, close_date in earliest_divestment_dates(events).items():
+                if asset_id not in property_ids:
+                    continue
+                previous = by_asset_id.get(asset_id)
+                by_asset_id[asset_id] = (
+                    close_date if previous is None else min(previous, close_date)
+                )
+
     return by_asset_id
 
 

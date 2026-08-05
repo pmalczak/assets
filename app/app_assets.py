@@ -9,6 +9,7 @@ Uruchomienie:
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pandas as pd
@@ -31,6 +32,7 @@ from app_streamlit.render_roi import (
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
+from app_streamlit.safe_download import opt_in_download_button
 from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
 from data_step.data_step import DATA_STEP
 
@@ -172,70 +174,69 @@ def main():
         file_name = "assets_evaluation.xlsx"
         if data["latest_snapshot_date"]:
             file_name = f"assets_evaluation_{data['latest_snapshot_date']:%Y-%m-%d}.xlsx"
-        st.download_button(
-            label="Pobierz ostatni snapshot (xlsx)",
-            data=data["excel_bytes"],
+        latest_snapshot = data["latest_snapshot"]
+
+        def _snapshot_xlsx_bytes() -> bytes:
+            buf = io.BytesIO()
+            latest_snapshot.to_excel(buf, index=False)
+            return buf.getvalue()
+
+        opt_in_download_button(
+            prepare_label="Przygotuj pobieranie snapshotu (xlsx)",
+            prepare_key="prepare_snapshot_xlsx",
+            button_label="Pobierz ostatni snapshot (xlsx)",
+            data_factory=_snapshot_xlsx_bytes,
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            disabled=data["latest_snapshot"].empty,
+            download_key="snapshot_xlsx_download",
+            disabled=not isinstance(latest_snapshot, pd.DataFrame) or latest_snapshot.empty,
         )
 
     if TABS_STATE_KEY not in st.session_state:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
-    (
-        tab_reports,
-        tab_chart,
-        tab_roi,
-        tab_roi_robo,
-        tab_roi_deposits,
-        tab_roi_obligacje,
-        tab_fx,
-        tab_import,
-        tab_search,
-        tab_validate,
-    ) = st.tabs(
+    tab_objs = st.tabs(
         TAB_LABELS,
         key=TABS_STATE_KEY,
         default=st.session_state[TABS_STATE_KEY],
         on_change=on_tab_changed,
     )
+    active_tab = st.session_state.get(TABS_STATE_KEY, TAB_LABELS[0])
+    latest = data["latest_snapshot_date"]
 
-    with tab_reports:
-        render_main_reports(data["latest_snapshot_date"], data["latest_snapshot"])
-
-    with tab_chart:
-        render_portfolio_history(
-            data["history"],
-            data["timeline_events"],
-            data["latest_snapshot_date"],
-        )
-        render_diagnostics(data)
-
-    with tab_roi:
-        render_roi(data["latest_snapshot_date"])
-
-    with tab_roi_robo:
-        render_roi_revolut_robo(data["latest_snapshot_date"])
-
-    with tab_roi_deposits:
-        render_roi_revolut_deposits(data["latest_snapshot_date"])
-
-    with tab_roi_obligacje:
-        render_roi_obligacje(data["latest_snapshot_date"])
-
-    with tab_fx:
-        render_fx()
-
-    with tab_import:
-        render_import_wyciagow()
-
-    with tab_search:
-        render_transaction_search()
-
-    with tab_validate:
-        render_validate()
+    # Tylko aktywna zakładka — równoległy render wszystkich (Altair + wiele downloadów)
+    # na Python 3.14/pyarrow potrafi ubić proces bez tracebacku.
+    for tab, label in zip(tab_objs, TAB_LABELS):
+        with tab:
+            if label != active_tab:
+                continue
+            if label == "Raporty":
+                render_main_reports(latest, data["latest_snapshot"])
+            elif label == "Wykres portfela":
+                render_portfolio_history(
+                    data["history"],
+                    data["timeline_events"],
+                    latest,
+                )
+                render_diagnostics(data)
+            elif label == "ROI":
+                render_roi(latest)
+            elif label == "ROI Revolut robo":
+                render_roi_revolut_robo(latest)
+            elif label == "ROI Revolut depozyty":
+                render_roi_revolut_deposits(latest)
+            elif label == "ROI obligacje":
+                render_roi_obligacje(latest)
+            elif label == "FX":
+                render_fx()
+            elif label == "Import wyciągów":
+                render_import_wyciagow()
+            elif label == "Wyszukiwanie transakcji":
+                render_transaction_search()
+            elif label == "Waliduj":
+                render_validate()
 
 if __name__ == "__main__":
-    pd.options.future.infer_string = True
+    # infer_string + pyarrow na CPython 3.14 bywa przyczyną segfaultu Streamlit.
+    pd.options.future.infer_string = False
     main()

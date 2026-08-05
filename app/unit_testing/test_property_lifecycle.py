@@ -16,6 +16,9 @@ from importers.assets.property_lifecycle import (
     property_ids_in_scope,
     property_valuation_history,
 )
+from roi.categories import DIVESTMENT
+from roi.data_model import CashFlowEvent
+from unittest.mock import patch
 
 
 def _valuations_frame() -> pd.DataFrame:
@@ -162,6 +165,44 @@ class PropertyLifecycleTests(unittest.TestCase):
         )
         self.assertIn("garaz", scope)
         self.assertNotIn("cash", scope)
+
+    def test_property_close_dates_include_bank_divestment_events(self):
+        events = pd.DataFrame(
+            [
+                {
+                    CashFlowEvent.ASSET_ID: "horbaczewskiego",
+                    CashFlowEvent.DATE: "2025-04-02",
+                    CashFlowEvent.AMOUNT: 65000.0,
+                    CashFlowEvent.CATEGORY: DIVESTMENT,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "zaliczka",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "horbaczewskiego",
+                    CashFlowEvent.DATE: "2025-04-23",
+                    CashFlowEvent.AMOUNT: 585000.0,
+                    CashFlowEvent.CATEGORY: DIVESTMENT,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "reszta",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+            ]
+        )
+        with patch(
+            "importers.assets.property_lifecycle.investment_property_ids",
+            return_value={"horbaczewskiego"},
+        ):
+            close_dates = load_property_close_dates(
+                pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns())),
+                None,
+                events=events,
+            )
+        self.assertEqual(close_dates["horbaczewskiego"], date(2025, 4, 2))
 
 
 if __name__ == "__main__":

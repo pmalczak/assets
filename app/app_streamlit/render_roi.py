@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -11,6 +10,7 @@ from app_proc.export_product_excel import (
     list_roi_product_excel_files,
     roi_summary_excel_filename,
 )
+from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download_button
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
@@ -49,12 +49,51 @@ def render_roi(default_valuation_date: date | None) -> None:
         key="roi_valuation_date",
     )
 
-    info_col, _ = st.columns([3, 1])
+    btn_col, info_col = st.columns([1, 3])
+    with btn_col:
+        recalculate = st.button(
+            f"Przelicz ROI ({valuation_date:%Y-%m-%d})",
+            key="recalculate_roi_button",
+            type="primary",
+            help="Przebudowuje cache DATA_STEP (10 roi) dla wybranej daty — alokacja CF + summary + Excel product.",
+        )
     with info_col:
-        st.caption(f"Konfiguracja: `{get_config_file()}`")
+        st.caption(
+            f"Konfiguracja: `{get_config_file()}`. "
+            "Bez przycisku używany jest cache; przycisk wymusza pełne przeliczenie na wybraną datę."
+        )
+
+    if recalculate:
+        try:
+            with st.spinner(f"Przeliczanie ROI {valuation_date:%Y-%m-%d}..."):
+                summary, events_by_asset = compute_portfolio_roi(
+                    valuation_date,
+                    force_read_all_data=True,
+                )
+            st.session_state["roi_last_recalculated"] = {
+                "valuation_date": valuation_date.isoformat(),
+                "assets": len(summary),
+                "sold": int(summary["is_sold"].sum()) if not summary.empty and "is_sold" in summary else 0,
+            }
+            st.success(
+                f"ROI {valuation_date:%Y-%m-%d}: {len(summary)} aktywów, "
+                f"sprzedane {st.session_state['roi_last_recalculated']['sold']}."
+            )
+            st.rerun()
+        except Exception as exc:
+            st.error("Nie udało się przeliczyć ROI.")
+            st.exception(exc)
+            return
+
+    last_recalc = st.session_state.get("roi_last_recalculated")
+    if last_recalc:
+        st.caption(
+            f"Ostatnie wymuszone przeliczenie: {last_recalc['valuation_date']} "
+            f"({last_recalc['assets']} aktywów)."
+        )
 
     try:
-        with st.spinner("Liczenie ROI..."):
+        with st.spinner("Ładowanie ROI..."):
             summary, events_by_asset = compute_portfolio_roi(valuation_date)
     except Exception as exc:
         st.error("Nie udalo sie policzyc ROI.")
@@ -70,7 +109,8 @@ def render_roi(default_valuation_date: date | None) -> None:
         "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza asset-evaluation dla otwartych inwestycji. "
         "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
         "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
-        f"Dezynwestycja: DIVESTMENT w {A_CONFIG_FILE_NAME}; is_sold z daty zamkniecia / qty=0."
+        f"Dezynwestycja: DIVESTMENT w {A_CONFIG_FILE_NAME}; "
+        "nieruchomosc: DIVESTMENT=sprzedane; brokerzy qty=0; cash=data zamkniecia manual."
     )
 
     total_roi = int(summary["roi_nominal"].sum())
@@ -81,15 +121,16 @@ def render_roi(default_valuation_date: date | None) -> None:
     c3.metric("Suma ROI nominal", f"{total_roi:,}".replace(",", " "))
 
     display = _format_roi_summary_display(summary)
-    st.dataframe(display, width="stretch", hide_index=True)
+    st.dataframe(dataframe_for_streamlit(display), width="stretch", hide_index=True)
 
-    csv = summary.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="Pobierz ROI (CSV)",
-        data=csv,
+    opt_in_download_button(
+        prepare_label="Przygotuj pobieranie ROI (CSV)",
+        prepare_key="prepare_roi_csv",
+        button_label="Pobierz ROI (CSV)",
+        data_factory=lambda: summary.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"roi_{valuation_date:%Y-%m-%d}.csv",
         mime="text/csv",
-        key="roi_csv_download",
+        download_key="roi_csv_download",
     )
 
     _render_product_excel_downloads(valuation_date)
@@ -97,7 +138,11 @@ def render_roi(default_valuation_date: date | None) -> None:
     warned = summary[summary["warnings"].astype(str).str.len() > 0]
     if not warned.empty:
         st.markdown("**Ostrzezenia**")
-        st.dataframe(warned[["asset_id", "warnings"]], width="stretch", hide_index=True)
+        st.dataframe(
+            dataframe_for_streamlit(warned[["asset_id", "warnings"]]),
+            width="stretch",
+            hide_index=True,
+        )
 
     st.markdown("**Szczegoly przeplywow**")
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
@@ -109,7 +154,12 @@ def render_roi(default_valuation_date: date | None) -> None:
         events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
         flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
         flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
-        st.dataframe(flow_display, width="stretch", hide_index=True, height=280)
+        st.dataframe(
+            dataframe_for_streamlit(flow_display),
+            width="stretch",
+            hide_index=True,
+            height=280,
+        )
 
 
 def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
@@ -236,6 +286,9 @@ def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
         display["XIRR"] = summary["xirr"].map(
             lambda v: f"{v * 100:.1f}%" if v is not None and pd.notna(v) else "—"
         )
+    if "Sprzedane" in display.columns:
+        # bool + pyarrow na Python 3.14 potrafi zabić proces Streamlit (segfault).
+        display["Sprzedane"] = summary["is_sold"].map(lambda v: "tak" if bool(v) else "nie")
     return display
 
 
@@ -261,26 +314,27 @@ def _render_product_excel_downloads(valuation_date: date) -> None:
     st.caption(
         f"Katalog `INWESTYCJE/product/{valuation_date:%Y-%m-%d}/` — "
         f"`{roi_summary_excel_filename(valuation_date)}`, "
-        "`unallocated_{pool_id}.xlsx`, per-asset `mbank_*.xlsx`."
+        "`unallocated_{pool_id}.xlsx`, per-asset `mbank_*.xlsx`. "
+        "Jeden plik naraz (wiele równoległych download_button + pyarrow bywa niestabilne na Python 3.14)."
     )
     files = list_roi_product_excel_files(valuation_date)
     if not files:
         st.caption("Brak plikow Excel — wygeneruj ROI (alokacja) lub sprawdz katalog product.")
         return
 
-    for path in files:
-        _download_excel_file(path, key_prefix=f"roi_xlsx_{valuation_date:%Y%m%d}")
-
-
-def _download_excel_file(path: Path, *, key_prefix: str) -> None:
+    key_prefix = f"roi_xlsx_{valuation_date:%Y%m%d}"
+    names = [path.name for path in files]
+    selected_name = st.selectbox("Plik do pobrania", options=names, key=f"{key_prefix}_pick")
+    path = next(path for path in files if path.name == selected_name)
     if not path.is_file():
         st.caption(f"Brak pliku: `{path.name}`")
         return
-    data = path.read_bytes()
-    st.download_button(
-        label=f"Pobierz {path.name}",
-        data=data,
+    opt_in_download_button(
+        prepare_label=f"Przygotuj pobieranie `{selected_name}`",
+        prepare_key=f"{key_prefix}_prepare",
+        button_label=f"Pobierz {path.name}",
+        data_factory=path.read_bytes,
         file_name=path.name,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"{key_prefix}_{path.name}",
+        download_key=f"{key_prefix}_{path.name}",
     )

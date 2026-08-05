@@ -254,5 +254,32 @@ class MbankConsolidatedYmdTests(unittest.TestCase):
         self.assertNotIn("DZIEŃ", result.columns)
 
 
+class ComputePortfolioRoiForceTests(unittest.TestCase):
+    @patch("roi.compute_roi.read_analyse_config")
+    @patch("roi.roi_products.load_catalog_events")
+    @patch("roi.roi_products.load_roi_summary")
+    @patch("data_step.data_step.DATA_STEP")
+    def test_force_read_toggles_data_step_flag(
+        self,
+        data_step_mock,
+        load_summary_mock,
+        load_events_mock,
+        read_config_mock,
+    ):
+        from roi.compute_roi import compute_portfolio_roi
+
+        read_config_mock.return_value = {"catalog": pd.DataFrame()}
+        load_summary_mock.return_value = pd.DataFrame(
+            [{"asset_id": "x", "is_sold": False}]
+        )
+        load_events_mock.return_value = {}
+        data_step_mock.metadata = MagicMock()
+
+        compute_portfolio_roi(date(2026, 8, 4), force_read_all_data=True)
+
+        data_step_mock.force_read_data.assert_called_once_with()
+        data_step_mock.metadata.force_read_data.assert_called_once_with(False)
+
+
 if __name__ == "__main__":
     unittest.main()

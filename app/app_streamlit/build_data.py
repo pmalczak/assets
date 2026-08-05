@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -25,12 +24,7 @@ def build_data(days: int = PORTFOLIO_WINDOW_DAYS) -> dict[str, object]:
     )
     data["timeline_events"] = _read_timeline_events_cached()
 
-    latest_snapshot = data["latest_snapshot"]
-    excel_buffer = io.BytesIO()
-    if isinstance(latest_snapshot, pd.DataFrame) and not latest_snapshot.empty:
-        latest_snapshot.to_excel(excel_buffer, index=False)
-    excel_buffer.seek(0)
-    data["excel_bytes"] = excel_buffer
+    # excel_bytes budowane leniwie w UI (opt-in download) — nie przy każdym build_data.
     return data
 
 

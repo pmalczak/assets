@@ -6,6 +6,8 @@ from datetime import date
 import pandas as pd
 
 from importers.assets.property_lifecycle import (
+    earliest_divestment_dates,
+    investment_property_ids,
     is_property_closed,
     latest_valuation_on_date,
     load_property_close_dates,
@@ -24,14 +26,41 @@ def _sum_divestment(filtered: pd.DataFrame) -> float:
     return float(filtered.loc[mask, CashFlowEvent.AMOUNT].sum())
 
 
+def load_roi_aware_close_dates(
+    valuation_date: date,
+    config: dict | None = None,
+) -> dict[str, date]:
+    """Close dates: manual + DIVESTMENT z alokacji ROI (dla investment.property)."""
+    from roi.roi_products import load_catalog_events
+
+    if config is None:
+        config = read_analyse_config()
+    events_by_asset = load_catalog_events(valuation_date, config)
+    frames = [frame for frame in events_by_asset.values() if not frame.empty]
+    events = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+    )
+    return load_property_close_dates(config["manual"], config["catalog"], events=events)
+
+
 def is_asset_sold(
     asset_id: str,
     cashflows: pd.DataFrame,
     valuations: pd.DataFrame | None,
     valuation_date: date,
 ) -> bool:
-    """is_sold ⇔ brak ekspozycji (close date / lifecycle) — nie samo DIVESTMENT w cashflowach."""
-    del cashflows, valuations  # API kompatybilne; zamknięcie z manual / lifecycle
+    """is_sold: property ⇔ DIVESTMENT≤data; cash ⇔ close z manual; nie broker qty."""
+    del valuations
+    asset_key = str(asset_id)
+
+    # investment.property: DIVESTMENT = pełne wyjście (inaczej niż obligacje / ticker).
+    filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
+    close_date = earliest_divestment_dates(filtered).get(asset_key)
+    if close_date is not None and asset_key in investment_property_ids():
+        return valuation_date >= close_date
+
     config = read_analyse_config()
     close_dates = load_property_close_dates(config["manual"], config["catalog"])
     return is_property_closed(asset_id, valuation_date, close_dates)

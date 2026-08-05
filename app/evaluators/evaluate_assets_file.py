@@ -16,6 +16,7 @@ from importers.assets.property_lifecycle import (
 )
 from importers.assets.read_assets import get_assets_file, read_assets, read_property_valuations
 from roi.config import read_analyse_config
+from roi.terminal_value import load_roi_aware_close_dates
 
 
 def evaluate_assets_file(rodzaj_importu, assets_file_row, valuation_date: date):
@@ -66,6 +67,7 @@ def _evaluate_single_property_id(
     valuations = read_property_valuations()
     PropertyValuations.check_structure(valuations)
     config = read_analyse_config()
+    # cash / rocky-iv: zamknięcie wyłącznie z roi_manual (nie z CF property).
     close_dates = load_property_close_dates(config["manual"], config["catalog"])
 
     properties_id = str(assets_file_row[AssetsDef.ID])
@@ -95,7 +97,7 @@ def _evaluate_property_valuations(assets_file_row: pd.Series, valuation_date: da
     valuations = read_property_valuations()
     PropertyValuations.check_structure(valuations)
     config = read_analyse_config()
-    close_dates = load_property_close_dates(config["manual"], config["catalog"])
+    close_dates = load_roi_aware_close_dates(valuation_date, config)
 
     property_ids = sorted(
         property_ids_in_scope(
