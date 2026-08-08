@@ -11,6 +11,10 @@ from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
 from evaluators.evaluate_assets_file import evaluate_assets_file
 from evaluators.evaluate_broker_obligacje import evaluate_broker_obligacje, is_obligacje_broker
 from evaluators.evaluate_broker_revolut import evaluate_broker_revolut
+from evaluators.evaluate_broker_traderepublic import (
+    evaluate_broker_traderepublic,
+    is_traderepublic_broker,
+)
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
@@ -61,6 +65,10 @@ def evaluate_assets(
         elif rodzaj_importu == KindDomain.BROKER or rodzaj_importu.startswith(KindDomain.BROKER + '.'):
             if is_obligacje_broker(assets_file_row):
                 r, broker_warnings = evaluate_broker_obligacje(
+                    data_root, asset_id, assets_file_row, valuation_date
+                )
+            elif is_traderepublic_broker(assets_file_row):
+                r, broker_warnings = evaluate_broker_traderepublic(
                     data_root, asset_id, assets_file_row, valuation_date
                 )
             else:

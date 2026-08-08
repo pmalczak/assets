@@ -28,7 +28,8 @@ download_dir = {'p_re': 'Dropbox/INWESTYCJE/download/pm',
                 'g_re': 'Dropbox/INWESTYCJE/download/gm'}
 
 _TRADING_PREFIXES = ('trading-account-statement', 'trading-pnl-statement')
-# Stem pliku depozytu Revolut = UUID (bez `_`); inne nazwy bez `_` (np. Eksport transakcji) → skip.
+# Stem pliku depozytu Revolut = UUID (bez `_`); inne nazwy bez `_` → skip
+# (Trade Republic `Eksport transakcji` przenosi move_traderepublic_files wcześniej).
 _DEPOSIT_UUID_STEM = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,

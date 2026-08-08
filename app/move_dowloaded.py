@@ -10,6 +10,7 @@ from maintenance.move_downloaded_results import MoveResult
 from maintenance.move_mbank_files import move_mbank_files
 from maintenance.move_obligacje_files import move_obligacje_files
 from maintenance.move_revolut_files import move_revolut_files
+from maintenance.move_traderepublic_files import move_traderepublic_files
 
 pd.options.future.infer_string = True
 
@@ -26,6 +27,8 @@ def run_move_downloaded(
     assert download.is_dir()
 
     results: list[MoveResult] = []
+    # Trade Republic z download/pm — przed Revolut PM, żeby nie było SKIPPED jako unknown.
+    results.extend(move_traderepublic_files(assets_root))
     results.extend(move_revolut_files(cash_pool_root, 'p_re', assets_root=assets_root))
     results.extend(move_revolut_files(cash_pool_root, 'g_re', assets_root=assets_root))
     results.extend(move_mbank_files(cash_pool_root, download))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -192,18 +192,9 @@ def empty_savings_frame() -> pd.DataFrame:
 
 def assert_no_coverage_gaps(periods: list[tuple[date, date]], *, asset_id: str = "") -> None:
     """Po posortowaniu okresów: next.start > prev.end + 1 day → twardy błąd."""
-    if len(periods) <= 1:
-        return
-    ordered = sorted(periods, key=lambda p: (p[0], p[1]))
-    for prev, nxt in zip(ordered, ordered[1:]):
-        expected_next = prev[1] + timedelta(days=1)
-        if nxt[0] > expected_next:
-            prefix = f"[{asset_id}] " if asset_id else ""
-            raise ValueError(
-                f"{prefix}Luka w pokryciu savings-statement: "
-                f"{prev[1].isoformat()} .. {nxt[0].isoformat()} "
-                f"(brak cash-flow między wyciągami)"
-            )
+    from importers.period_coverage import assert_no_coverage_gaps as _assert_gaps
+
+    _assert_gaps(periods, asset_id=asset_id, label="savings-statement")
 
 
 def savings_unique_key() -> list[str]:

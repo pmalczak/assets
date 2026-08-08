@@ -93,7 +93,8 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 |---------------------|------------|
 | `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`) |
 | `savings-statement_{od}_{do}_…` | Wyciąg depozytu (PL) → katalog waluty; **waluta z treści kwot** (`PLN` / `€`), nie z `kod1` w nazwie; nakładające się okresy → dedupe; **luka w pokryciu okresów → twardy błąd** |
-| stem = UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) | Legacy depozyt (EN) → katalog waluty; inne nazwy bez `_` (np. `Eksport transakcji`) → pomijane |
+| stem = UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) | Legacy depozyt (EN) → katalog waluty; inne nazwy bez `_` → pomijane |
+| `Eksport transakcji.csv` | **Trade Republic** — przenoszone **przed** Revolut PM (osobna ścieżka, nie skip Revolut) |
 | pusty plik account/deposit/savings | Usuwany; w raporcie importu: „usunięty (pusty)” |
 | `trading-account-statement_*` | Wyciąg brokerski Revolut (robo/trading) — osobna ścieżka (nie cash_pool) |
 | `trading-pnl-statement_*` | Rachunek zysków i strat brokerskich (zrealizowane sprzedaże, dywidendy) |
@@ -108,17 +109,20 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 
 mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
 
+Trade Republic (PM): `Eksport transakcji.csv` z `download/pm` → `assets/p_traderepublic/eksport-transakcji_{od}_{do}.csv` (min/max kolumny `date`). Merge wielu plików: **luka okresów → twardy błąd**; overlap → dedupe po `transaction_id`. W katalogu: `id=p_traderepublic`, `RODZAJ*=BROKER`, `typ=investment.udziały`, `waluta=PLN`; bez `roi_def`. Snapshot na start: 1 wiersz NAV=0 (mapowanie BUY/SELL / ROI per instrument — osobna decyzja).
+
 Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspozycji.xls` z `~/Downloads` → `assets/obligacjeskarbowe`. Przy przenoszeniu historia dostaje nazwę `{YYYY-MM-DD} {YYYY-MM-DD} HistoriaDyspozycji.xls` (min/max `DATA DYSPOZYCJI`). Jeśli w katalogu jest już plik zawierający wszystkie transakcje z nowego — nowy jest usuwany (pominięty); nadpisanie tej samej nazwy/zawartości nie jest błędem.
 
 ---
 
-## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO; wzorzec na XTB / Trade Republic / Degiro)
+## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO + Trade Republic; wzorzec na XTB / Degiro)
 
 - To **nie** jest `cash_pool` ani pojedyncza inwestycja-lump z przelewu ROR — kontener pozycji instrumentów (+ gotówka robocza brokera).
 - W katalogu: `RODZAJ*=BROKER`. **`roi_def` / reguły ROI nie są wymagane**.
   - Revolut: `id=p_re_robo`, `typ` → `investment.udziały`
   - Obligacje: `id=obligacjeskarbowe`, `typ=investment.obligacje`
-- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; inaczej → Revolut trading.
+  - Trade Republic: `id=p_traderepublic`, `typ` → `investment.udziały`
+- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; inaczej → Revolut trading.
 
 ### Revolut robo
 
