@@ -102,9 +102,13 @@ class Metadata(MetadataPrimitives):
         return
 
     def delete(self, missing_file):
-        _metadata = self.get_metadata()
-        del _metadata[missing_file]
-        return
+        """Usuwa wpis z rejestru i atomowo zapisuje metadata (pod flock)."""
+        with self._exclusive_metadata_lock():
+            self._reload_metadata_unlocked()
+            if missing_file in self._metadata:
+                del self._metadata[missing_file]
+                self._dump_metadata_unlocked()
+
 
     def force_read_data(self, value: bool) -> None:
         self.force_update = value

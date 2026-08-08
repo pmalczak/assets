@@ -101,6 +101,34 @@ class MetadataTests(unittest.TestCase):
         self.metadata.is_updated(token)
         self.assertIn(token, self.metadata.updated_stat_cache)
 
+    def test_dump_metadata_is_atomic_and_creates_lock_file(self):
+        token = "atomic.parquet"
+        path = self.data_steps / token
+        pd.DataFrame({"x": [1]}).to_parquet(path)
+        self.metadata.update(DIGEST, token, [], rows=1)
+
+        meta_path = self.data_steps / "_metadata.json"
+        lock_path = self.data_steps / "_metadata.lock"
+        self.assertTrue(lock_path.is_file())
+        self.assertTrue(meta_path.is_file())
+        # Brak porzuconych plików tymczasowych po udanym zapisie.
+        leftovers = list(self.data_steps.glob("_metadata.*.json.tmp"))
+        self.assertEqual(leftovers, [])
+        loaded = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertIn(token, loaded)
+        self.assertEqual(loaded[token]["data_frame_rows"], 1)
+
+    def test_delete_persists_under_lock(self):
+        token = "to-delete.parquet"
+        path = self.data_steps / token
+        pd.DataFrame({"x": [1]}).to_parquet(path)
+        self.metadata.update(DIGEST, token, [])
+        self.metadata.delete(token)
+
+        loaded = json.loads((self.data_steps / "_metadata.json").read_text(encoding="utf-8"))
+        self.assertNotIn(token, loaded)
+        self.assertNotIn(token, self.metadata.get_metadata())
+
         pd.DataFrame({"x": [9]}).to_parquet(path)
         self.metadata.update(DIGEST, token, [])
         self.assertNotIn(token, self.metadata.updated_stat_cache)

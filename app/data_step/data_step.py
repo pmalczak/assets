@@ -87,7 +87,6 @@ class DataStep(DataStepPrimitives):  # interface class
         except Exception as e:
             try:
                 self.metadata.delete(product)
-                self.metadata.dump_metadata()
             except KeyError:
                 pass
             raise e
