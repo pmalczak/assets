@@ -17,7 +17,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
-import yfinance as yf
+
+from data_step.data_step import DATA_STEP
+from yahoo_finance.repository import download_yahoo as _download_yahoo
 
 
 # ------------------------------------------------
@@ -116,25 +118,8 @@ def download_yahoo(
     start: str = START,
     end: str | None = END,
 ) -> pd.DataFrame:
-    data = yf.download(
-        tickers,
-        start=start,
-        end=end,
-        auto_adjust=True,
-        progress=False,
-        group_by="column",
-    )
-
-    close_data = data["Close"]
-    if isinstance(close_data, pd.Series):
-        close = close_data.to_frame(tickers[0] if len(tickers) == 1 else "Close")
-    else:
-        close = close_data.copy()
-        if len(tickers) == 1 and len(close.columns) == 1:
-            close.columns = tickers
-
-    close.index = pd.to_datetime(close.index)
-    return close
+    DATA_STEP.init_steps(root=Path(__file__).resolve().parent.parent)
+    return _download_yahoo(tickers, start=start, end=end)
 
 
 # ------------------------------------------------

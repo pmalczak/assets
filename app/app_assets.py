@@ -21,6 +21,7 @@ from app_proc.data_steps_root import get_data_steps_root
 from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
 from app_streamlit.render_diagnostics import render_diagnostics
 from app_streamlit.render_fx import render_fx
+from app_streamlit.render_global_momentum import render_global_momentum
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
 from app_streamlit.render_roi import (
@@ -239,6 +240,8 @@ def main():
                 render_roi_obligacje(latest)
             elif label == "FX":
                 render_fx()
+            elif label == "Global momentum":
+                render_global_momentum()
             elif label == "Import wyciągów":
                 render_import_wyciagow()
             elif label == "Wyszukiwanie transakcji":

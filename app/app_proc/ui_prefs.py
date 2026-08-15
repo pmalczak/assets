@@ -16,6 +16,7 @@ TAB_LABELS = [
     "ROI Revolut depozyty",
     "ROI obligacje",
     "FX",
+    "Global momentum",
     "Import wyciągów",
     "Wyszukiwanie transakcji",
     "Waliduj",
@@ -32,6 +33,7 @@ SLUG_TO_LABEL = {
     "roi-depozyty": "ROI Revolut depozyty",
     "roi-obligacje": "ROI obligacje",
     "fx": "FX",
+    "global-momentum": "Global momentum",
     "import": "Import wyciągów",
     "waliduj": "Waliduj",
 }
