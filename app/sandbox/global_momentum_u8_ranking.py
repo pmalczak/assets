@@ -246,10 +246,10 @@ def download_biznesradar_index(
     return close.loc[close.index >= START].rename(symbol)
 
 
-def print_current_universe8_ranking(
+def compute_current_universe8_ranking(
     monthly: pd.DataFrame,
     universe8: list[str],
-) -> None:
+) -> dict:
     prices = monthly[universe8]
     returns_by_period = {
         f"{months}M": prices / prices.shift(months) - 1
@@ -270,18 +270,7 @@ def print_current_universe8_ranking(
     signal_dates = required[required.all(axis=1)].index
     signal_dates = signal_dates[signal_dates <= latest_full_month]
     if signal_dates.empty:
-        print("\nNo complete Universe 8 signal date is available using execution ETF prices.")
-        print(f"Latest completed month: {latest_full_month.date()}")
-        print(
-            "Minimum required month-end observations per asset: "
-            f"{max(max(MOMENTUM_PERIODS) + 1, SMA_MONTHS)}"
-        )
-        print("\nData availability:")
-        asset_width = max(32, *(len(display_name(asset)) for asset in universe8))
-        print(
-            f"{'Asset':<{asset_width}} {'Ticker':<18} {'First':<10} "
-            f"{'Last':<10} {'Months':>6} {'Ready Through':<13}"
-        )
+        availability_rows = []
         for asset in universe8:
             history = prices[asset].dropna()
             ready_dates = (
@@ -291,38 +280,32 @@ def print_current_universe8_ranking(
             )
             ready_dates = ready_dates[ready_dates].index
             ready_dates = ready_dates[ready_dates <= latest_full_month]
-            first = history.index.min().date() if not history.empty else "n/a"
-            last = history.index.max().date() if not history.empty else "n/a"
-            ready_through = (
-                ready_dates.max().date()
-                if not ready_dates.empty
-                else "not ready"
+            availability_rows.append(
+                {
+                    "Asset": display_name(asset),
+                    "Ticker": RANKING_TICKERS[asset],
+                    "First": history.index.min().date() if not history.empty else None,
+                    "Last": history.index.max().date() if not history.empty else None,
+                    "Months": len(history),
+                    "Ready Through": (
+                        ready_dates.max().date() if not ready_dates.empty else None
+                    ),
+                }
             )
-            print(
-                f"{display_name(asset):<{asset_width}} "
-                f"{RANKING_TICKERS[asset]:<18} "
-                f"{str(first):<10} {str(last):<10} "
-                f"{len(history):>6} {str(ready_through):<13}"
-            )
-        return
+        return {
+            "ready": False,
+            "latest_full_month": latest_full_month.date(),
+            "min_observations": max(max(MOMENTUM_PERIODS) + 1, SMA_MONTHS),
+            "availability": pd.DataFrame(availability_rows),
+        }
 
     signal_date = signal_dates[-1]
     ranking = momentum.loc[signal_date].dropna().sort_values(ascending=False)
     top_assets = list(ranking.head(TOP_N).index)
-    asset_width = max(32, *(len(display_name(asset)) for asset in ranking.index))
     weight = 1 / TOP_N
     safe_weight = 0.0
     allocation: dict[str, float] = {}
-
-    print("\n")
-    print("=" * 70)
-    print("CURRENT UNIVERSE 8 RANKING")
-    print(f"Signal date: {signal_date.date()}")
-    print("=" * 70)
-    print(
-        f"{'Rank':<5} {'Asset':<{asset_width}} {'3M':>8} {'6M':>8} {'12M':>8} "
-        f"{'Score':>8} {'Price':>10} {'SMA10':>10} {'Trend':>7} {'TOP3':>5}"
-    )
+    ranking_rows = []
 
     for rank, asset in enumerate(ranking.index, start=1):
         price = prices.loc[signal_date, asset]
@@ -335,36 +318,108 @@ def print_current_universe8_ranking(
         elif is_top:
             safe_weight += weight
 
-        shown_asset = display_name(asset)
+        ranking_rows.append(
+            {
+                "Rank": rank,
+                "Asset": display_name(asset),
+                "3M": returns_by_period["3M"].loc[signal_date, asset],
+                "6M": returns_by_period["6M"].loc[signal_date, asset],
+                "12M": returns_by_period["12M"].loc[signal_date, asset],
+                "Score": ranking.loc[asset],
+                "Price": price,
+                "SMA10": sma10,
+                "Trend": trend,
+                "TOP3": is_top,
+            }
+        )
+
+    allocation_rows = [
+        {"Asset": display_name(asset), "Weight": allocation.get(asset, 0.0)}
+        for asset in top_assets
+    ]
+    allocation_rows.append({"Asset": display_name("Safe"), "Weight": safe_weight})
+    return {
+        "ready": True,
+        "signal_date": signal_date.date(),
+        "ranking": pd.DataFrame(ranking_rows),
+        "allocation": pd.DataFrame(allocation_rows),
+    }
+
+
+def run_u8_ranking() -> dict:
+    monthly = load_current_ranking_prices(START)
+    return compute_current_universe8_ranking(monthly, list(RANKING_TICKERS.keys()))
+
+
+def print_current_universe8_ranking(
+    monthly: pd.DataFrame,
+    universe8: list[str],
+) -> None:
+    result = compute_current_universe8_ranking(monthly, universe8)
+    if not result["ready"]:
+        print("\nNo complete Universe 8 signal date is available using execution ETF prices.")
+        print(f"Latest completed month: {result['latest_full_month']}")
         print(
-            f"{rank:<5} {shown_asset:<{asset_width}} "
-            f"{returns_by_period['3M'].loc[signal_date, asset]:>8.2%} "
-            f"{returns_by_period['6M'].loc[signal_date, asset]:>8.2%} "
-            f"{returns_by_period['12M'].loc[signal_date, asset]:>8.2%} "
-            f"{ranking.loc[asset]:>8.2%} "
-            f"{price:>10.2f} "
-            f"{sma10:>10.2f} "
-            f"{trend:>7} "
-            f"{'*' if is_top else '':>5}"
+            "Minimum required month-end observations per asset: "
+            f"{result['min_observations']}"
+        )
+        print("\nData availability:")
+        availability = result["availability"]
+        asset_width = max(32, *(len(str(name)) for name in availability["Asset"]))
+        print(
+            f"{'Asset':<{asset_width}} {'Ticker':<18} {'First':<10} "
+            f"{'Last':<10} {'Months':>6} {'Ready Through':<13}"
+        )
+        for row in availability.to_dict("records"):
+            first = row["First"] if row["First"] is not None else "n/a"
+            last = row["Last"] if row["Last"] is not None else "n/a"
+            ready_through = row["Ready Through"]
+            ready_through = ready_through if ready_through is not None else "not ready"
+            print(
+                f"{row['Asset']:<{asset_width}} "
+                f"{row['Ticker']:<18} "
+                f"{str(first):<10} {str(last):<10} "
+                f"{row['Months']:>6} {str(ready_through):<13}"
+            )
+        return
+
+    ranking = result["ranking"]
+    asset_width = max(32, *(len(str(name)) for name in ranking["Asset"]))
+    print("\n")
+    print("=" * 70)
+    print("CURRENT UNIVERSE 8 RANKING")
+    print(f"Signal date: {result['signal_date']}")
+    print("=" * 70)
+    print(
+        f"{'Rank':<5} {'Asset':<{asset_width}} {'3M':>8} {'6M':>8} {'12M':>8} "
+        f"{'Score':>8} {'Price':>10} {'SMA10':>10} {'Trend':>7} {'TOP3':>5}"
+    )
+    for row in ranking.to_dict("records"):
+        print(
+            f"{row['Rank']:<5} {row['Asset']:<{asset_width}} "
+            f"{row['3M']:>8.2%} "
+            f"{row['6M']:>8.2%} "
+            f"{row['12M']:>8.2%} "
+            f"{row['Score']:>8.2%} "
+            f"{row['Price']:>10.2f} "
+            f"{row['SMA10']:>10.2f} "
+            f"{row['Trend']:>7} "
+            f"{'*' if row['TOP3'] else '':>5}"
         )
 
     print("\n")
     print("=" * 70)
     print("CURRENT TOP3 ALLOCATION")
     print("=" * 70)
-    allocation_width = max(asset_width, len(display_name("Safe")))
-    for asset in top_assets:
-        print(f"{display_name(asset):<{allocation_width}} {allocation.get(asset, 0.0):>8.2%}")
-    print(f"{display_name('Safe'):<{allocation_width}} {safe_weight:>8.2%}")
+    allocation = result["allocation"]
+    allocation_width = max(asset_width, *(len(str(name)) for name in allocation["Asset"]))
+    for row in allocation.to_dict("records"):
+        print(f"{row['Asset']:<{allocation_width}} {row['Weight']:>8.2%}")
 
-# ------------------------------------------------
-# RUN CURRENT RANKING
-# ------------------------------------------------
 
 def main() -> None:
     monthly = load_current_ranking_prices(START)
-    universe8 = list(RANKING_TICKERS.keys())
-    print_current_universe8_ranking(monthly, universe8)
+    print_current_universe8_ranking(monthly, list(RANKING_TICKERS.keys()))
 
 
 if __name__ == "__main__":

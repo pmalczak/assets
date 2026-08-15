@@ -57,6 +57,8 @@ class UiPrefsTests(unittest.TestCase):
             self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut depozyty")
             save_last_tab("ROI obligacje", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "ROI obligacje")
+            save_last_tab("Global momentum", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "Global momentum")
 
 
 class SoldFilterPrefsTests(unittest.TestCase):
