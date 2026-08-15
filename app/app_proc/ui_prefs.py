@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from app_proc.data_steps_root import get_data_steps_root
@@ -38,6 +39,21 @@ LABEL_TO_SLUG = {label: slug for slug, label in SLUG_TO_LABEL.items()}
 
 LAST_TAB_FILE = "last_tab.txt"
 
+SOLD_FILTER_ACTIVE = "Niesprzedane"
+SOLD_FILTER_SOLD = "Sprzedane"
+SOLD_FILTER_ALL = "Wszystkie"
+SOLD_FILTER_LABELS = [SOLD_FILTER_ACTIVE, SOLD_FILTER_SOLD, SOLD_FILTER_ALL]
+DEFAULT_SOLD_FILTER = SOLD_FILTER_ALL
+SOLD_FILTER_STATE_KEY = "app_assets_sold_filter"
+SOLD_FILTER_FILE = "sold_filter.txt"
+SOLD_FILTER_SLUG_TO_LABEL = {
+    "active": SOLD_FILTER_ACTIVE,
+    "sold": SOLD_FILTER_SOLD,
+    "all": SOLD_FILTER_ALL,
+}
+SOLD_FILTER_LABEL_TO_SLUG = {label: slug for slug, label in SOLD_FILTER_SLUG_TO_LABEL.items()}
+SOLD_COLUMN = "is_sold"
+
 
 def last_tab_path(prefs_root: Path | None = None) -> Path:
     root = prefs_root or (get_data_steps_root() / "_ui")
@@ -64,3 +80,60 @@ def save_last_tab(label: str, prefs_root: Path | None = None) -> None:
 
 def on_tab_changed() -> None:
     save_last_tab(st.session_state[TABS_STATE_KEY])
+
+
+def sold_filter_path(prefs_root: Path | None = None) -> Path:
+    root = prefs_root or (get_data_steps_root() / "_ui")
+    return root / SOLD_FILTER_FILE
+
+
+def load_sold_filter(prefs_root: Path | None = None) -> str:
+    path = sold_filter_path(prefs_root)
+    if not path.is_file():
+        return DEFAULT_SOLD_FILTER
+
+    slug = path.read_text(encoding="utf-8").strip()
+    return SOLD_FILTER_SLUG_TO_LABEL.get(slug, DEFAULT_SOLD_FILTER)
+
+
+def save_sold_filter(label: str, prefs_root: Path | None = None) -> None:
+    if label not in SOLD_FILTER_LABEL_TO_SLUG:
+        return
+
+    path = sold_filter_path(prefs_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(SOLD_FILTER_LABEL_TO_SLUG[label], encoding="utf-8")
+
+
+def on_sold_filter_changed() -> None:
+    save_sold_filter(st.session_state[SOLD_FILTER_STATE_KEY])
+
+
+def current_sold_filter() -> str:
+    return st.session_state.get(SOLD_FILTER_STATE_KEY, DEFAULT_SOLD_FILTER)
+
+
+def filter_by_sold(df: pd.DataFrame, label: str | None = None, *, column: str = SOLD_COLUMN) -> pd.DataFrame:
+    """Zostaw wiersze wg globalnego filtra pozycji (is_sold). Brak kolumny = bez zmian."""
+    mode = label if label is not None else current_sold_filter()
+    slug = SOLD_FILTER_LABEL_TO_SLUG.get(mode, "all")
+    if slug == "all" or df.empty or column not in df.columns:
+        return df
+
+    mask = df[column].map(lambda v: bool(v) if pd.notna(v) else False)
+    if slug == "sold":
+        return df.loc[mask].copy()
+    return df.loc[~mask].copy()
+
+
+def render_sold_filter_control() -> None:
+    if SOLD_FILTER_STATE_KEY not in st.session_state:
+        st.session_state[SOLD_FILTER_STATE_KEY] = load_sold_filter()
+
+    st.sidebar.radio(
+        "Pozycje",
+        options=SOLD_FILTER_LABELS,
+        key=SOLD_FILTER_STATE_KEY,
+        on_change=on_sold_filter_changed,
+        help="Filtruje tabele ROI według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
+    )

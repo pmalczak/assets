@@ -160,6 +160,7 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zadania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
+- Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele ROI wg `is_sold`. Preferencja w `_ui/sold_filter.txt`. Snapshoty i tak pomijają `VALUE=0`.
 - Zakładka **Waliduj**: walidacja ROI (`roi_def`/`roi_rules`/`roi_manual`) + ewaluacja katalogu `assets` w `a_config.xlsx` (dry-run, bez zapisu snapshotu).
 - **DATA_STEP** — jedyna warstwa cache i łańcucha zależności. Korzystamy **tylko z API wysokopoziomowego** — w praktyce wyłącznie z metod klasy `DataStep` (np. `init_steps`, `obtain`, `obtain_dependent`, `force_read_data`). Nie wywoływać prywatnych pól/metod (`_dependencies_stack`, `_dependencies`, …) i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
 - Komunikacja z użytkownikiem: zwięźle, po polsku jeśli pyta po polsku.

@@ -33,7 +33,13 @@ from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
 from app_streamlit.safe_download import opt_in_download_button
-from app_proc.ui_prefs import TAB_LABELS, TABS_STATE_KEY, load_last_tab, on_tab_changed
+from app_proc.ui_prefs import (
+    TAB_LABELS,
+    TABS_STATE_KEY,
+    load_last_tab,
+    on_tab_changed,
+    render_sold_filter_control,
+)
 from data_step.data_step import DATA_STEP
 
 from maintenance.move_downloaded_results import (
@@ -158,6 +164,7 @@ def main():
     DATA_STEP.init_steps(root=snapshot_path)
 
     st.title("Assets Dashboard (snapshoty DATA_STEP)")
+    render_sold_filter_control()
 
     with st.spinner("Ladowanie snapshotow..."):
         try:

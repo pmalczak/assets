@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.data_root import A_CONFIG_FILE_NAME
+from app_proc.ui_prefs import current_sold_filter, filter_by_sold
 from app_proc.export_product_excel import (
     list_roi_product_excel_files,
     roi_summary_excel_filename,
@@ -113,6 +114,11 @@ def render_roi(default_valuation_date: date | None) -> None:
         "nieruchomosc: DIVESTMENT=sprzedane; brokerzy qty=0; cash=data zamkniecia manual."
     )
 
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        _render_product_excel_downloads(valuation_date)
+        return
+
     total_roi = int(summary["roi_nominal"].sum())
     sold_count = int(summary["is_sold"].sum())
     c1, c2, c3 = st.columns(3)
@@ -146,7 +152,7 @@ def render_roi(default_valuation_date: date | None) -> None:
 
     st.markdown("**Szczegoly przeplywow**")
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected_asset = st.selectbox("Aktywo", options=asset_ids, key="roi_selected_asset")
+    selected_asset = _asset_selectbox("Aktywo", asset_ids, "roi_selected_asset")
     events = events_by_asset.get(selected_asset, pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER)))
     if events.empty:
         st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
@@ -190,10 +196,14 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
         st.info("Brak transakcji trading dla p_re_robo.")
         return
 
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        return
+
     st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected = st.selectbox("Ticker (robo)", options=asset_ids, key="roi_robo_selected_ticker")
+    selected = _asset_selectbox("Ticker (robo)", asset_ids, "roi_robo_selected_ticker")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla tickera.")
 
 
@@ -225,10 +235,14 @@ def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
         st.info("Brak danych savings-statement dla p_re_* / g_re_*.")
         return
 
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        return
+
     st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected = st.selectbox("Depozyt", options=asset_ids, key="roi_deposits_selected_asset")
+    selected = _asset_selectbox("Depozyt", asset_ids, "roi_deposits_selected_asset")
     _render_flow_details(
         events_by_asset,
         selected,
@@ -266,11 +280,30 @@ def render_roi_obligacje(default_valuation_date: date | None) -> None:
         st.info("Brak danych historii/stanu dla obligacjeskarbowe.")
         return
 
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        return
+
     st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected = st.selectbox("Kod obligacji", options=asset_ids, key="roi_bonds_selected_code")
+    selected = _asset_selectbox("Kod obligacji", asset_ids, "roi_bonds_selected_code")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla kodu.")
+
+
+def _apply_sold_filter(summary: pd.DataFrame) -> pd.DataFrame | None:
+    mode = current_sold_filter()
+    filtered = filter_by_sold(summary, mode)
+    if filtered.empty:
+        st.info(f"Brak pozycji dla filtra: {mode}.")
+        return None
+    return filtered
+
+
+def _asset_selectbox(label: str, asset_ids: list[str], key: str) -> str:
+    if key in st.session_state and st.session_state[key] not in asset_ids:
+        del st.session_state[key]
+    return st.selectbox(label, options=asset_ids, key=key)
 
 
 def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
