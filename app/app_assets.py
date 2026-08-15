@@ -15,6 +15,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app_proc.ui_prefs import (
+    TAB_LABELS,
+    TABS_STATE_KEY,
+    load_last_tab,
+    on_tab_changed,
+    render_sold_filter_control,
+)
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_root import get_cash_pool_root, get_online_data_root
 from app_proc.data_steps_root import get_data_steps_root
@@ -33,13 +40,6 @@ from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
 from app_streamlit.safe_download import opt_in_download_button
-from app_proc.ui_prefs import (
-    TAB_LABELS,
-    TABS_STATE_KEY,
-    load_last_tab,
-    on_tab_changed,
-    render_sold_filter_control,
-)
 from data_step.data_step import DATA_STEP
 
 from maintenance.move_downloaded_results import (

@@ -11,7 +11,7 @@ from data_step.data_step_dependencies import Dependencies
 from data_step.data_step_frame import DataStepFrame
 from data_step.data_strep_data_types import CACHED, REFRESHED
 from data_step.metadata_class import DIGEST, Metadata, MetadataUpdateError
-from data_step.metadata_primitives_class import HOME_PATH
+from data_step.metadata_primitives_class import HOME_PATH, _lock_exclusive, _unlock
 
 
 def _make_data_steps_tree() -> tuple[Path, Path]:
@@ -48,6 +48,16 @@ class DependenciesTests(unittest.TestCase):
         deps.update("product", "source.parquet")
         deps.update("product", "source.parquet")
         self.assertEqual(deps.get("product"), ["source.parquet"])
+
+
+class MetadataLockTests(unittest.TestCase):
+    def test_lock_and_unlock_sidecar_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "_metadata.lock"
+            with open(lock_path, "a+", encoding="utf-8") as lock_fp:
+                _lock_exclusive(lock_fp)
+                _unlock(lock_fp)
+            self.assertTrue(lock_path.is_file())
 
 
 class MetadataTests(unittest.TestCase):

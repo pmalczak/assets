@@ -4,9 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-import streamlit as st
-
-from app_proc.data_steps_root import get_data_steps_root
 
 TAB_LABELS = [
     "Raporty",
@@ -55,9 +52,20 @@ SOLD_FILTER_LABEL_TO_SLUG = {label: slug for slug, label in SOLD_FILTER_SLUG_TO_
 SOLD_COLUMN = "is_sold"
 
 
+def _st():
+    import streamlit as st
+    return st
+
+
+def _prefs_root(prefs_root: Path | None) -> Path:
+    if prefs_root is not None:
+        return prefs_root
+    from app_proc.data_steps_root import get_data_steps_root
+    return get_data_steps_root() / "_ui"
+
+
 def last_tab_path(prefs_root: Path | None = None) -> Path:
-    root = prefs_root or (get_data_steps_root() / "_ui")
-    return root / LAST_TAB_FILE
+    return _prefs_root(prefs_root) / LAST_TAB_FILE
 
 
 def load_last_tab(prefs_root: Path | None = None) -> str:
@@ -79,12 +87,11 @@ def save_last_tab(label: str, prefs_root: Path | None = None) -> None:
 
 
 def on_tab_changed() -> None:
-    save_last_tab(st.session_state[TABS_STATE_KEY])
+    save_last_tab(_st().session_state[TABS_STATE_KEY])
 
 
 def sold_filter_path(prefs_root: Path | None = None) -> Path:
-    root = prefs_root or (get_data_steps_root() / "_ui")
-    return root / SOLD_FILTER_FILE
+    return _prefs_root(prefs_root) / SOLD_FILTER_FILE
 
 
 def load_sold_filter(prefs_root: Path | None = None) -> str:
@@ -106,11 +113,11 @@ def save_sold_filter(label: str, prefs_root: Path | None = None) -> None:
 
 
 def on_sold_filter_changed() -> None:
-    save_sold_filter(st.session_state[SOLD_FILTER_STATE_KEY])
+    save_sold_filter(_st().session_state[SOLD_FILTER_STATE_KEY])
 
 
 def current_sold_filter() -> str:
-    return st.session_state.get(SOLD_FILTER_STATE_KEY, DEFAULT_SOLD_FILTER)
+    return _st().session_state.get(SOLD_FILTER_STATE_KEY, DEFAULT_SOLD_FILTER)
 
 
 def filter_by_sold(df: pd.DataFrame, label: str | None = None, *, column: str = SOLD_COLUMN) -> pd.DataFrame:
@@ -127,6 +134,7 @@ def filter_by_sold(df: pd.DataFrame, label: str | None = None, *, column: str = 
 
 
 def render_sold_filter_control() -> None:
+    st = _st()
     if SOLD_FILTER_STATE_KEY not in st.session_state:
         st.session_state[SOLD_FILTER_STATE_KEY] = load_sold_filter()
 

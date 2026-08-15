@@ -13,6 +13,7 @@ from app_proc.ui_prefs import (
     filter_by_sold,
     load_last_tab,
     load_sold_filter,
+    render_sold_filter_control,
     save_last_tab,
     save_sold_filter,
 )
@@ -59,6 +60,9 @@ class UiPrefsTests(unittest.TestCase):
 
 
 class SoldFilterPrefsTests(unittest.TestCase):
+    def test_render_sold_filter_control_is_exported(self):
+        self.assertTrue(callable(render_sold_filter_control))
+
     def test_load_sold_filter_returns_default_when_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(load_sold_filter(Path(tmp)), DEFAULT_SOLD_FILTER)

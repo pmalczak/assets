@@ -5,9 +5,9 @@ __author__ = "pmalczak@gmail.com"
 
 from contextlib import contextmanager
 from pathlib import Path
-import fcntl
 import json
 import os
+import sys
 import tempfile
 
 from utils.get_app_path import AppFile, GetAppPathError
@@ -17,6 +17,30 @@ DIR_TOKEN = 'DIR:'
 DEPENDENCIES = 'dependencies'
 METADATA_FILE_NAME = '_metadata.json'
 METADATA_LOCK_NAME = '_metadata.lock'
+
+
+def _lock_exclusive(lock_fp) -> None:
+    if sys.platform == "win32":
+        import msvcrt
+        lock_fp.seek(0)
+        if lock_fp.read(1) == "":
+            lock_fp.write("0")
+            lock_fp.flush()
+        lock_fp.seek(0)
+        msvcrt.locking(lock_fp.fileno(), msvcrt.LK_LOCK, 1)
+        return
+    import fcntl
+    fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock(lock_fp) -> None:
+    if sys.platform == "win32":
+        import msvcrt
+        lock_fp.seek(0)
+        msvcrt.locking(lock_fp.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+    import fcntl
+    fcntl.flock(lock_fp.fileno(), fcntl.LOCK_UN)
 
 
 class MetadataPrimitives:
@@ -61,14 +85,14 @@ class MetadataPrimitives:
 
     @contextmanager
     def _exclusive_metadata_lock(self):
-        """Exclusive flock on sidecar lock file (serializes read-modify-write)."""
+        """Exclusive lock on sidecar lock file (serializes read-modify-write)."""
         self._metadata_path.mkdir(parents=True, exist_ok=True)
         with open(self._lock_file, 'a+', encoding='utf-8') as lock_fp:
-            fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+            _lock_exclusive(lock_fp)
             try:
                 yield
             finally:
-                fcntl.flock(lock_fp.fileno(), fcntl.LOCK_UN)
+                _unlock(lock_fp)
 
     def _reload_metadata_unlocked(self) -> None:
         try:
