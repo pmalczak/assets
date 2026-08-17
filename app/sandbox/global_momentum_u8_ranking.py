@@ -1,5 +1,5 @@
 # ================================================================
-# GLOBAL MOMENTUM U8 RANKING
+# GLOBAL MOMENTUM U7 RANKING
 # Operational monthly portfolio selection
 # ================================================================
 
@@ -29,7 +29,6 @@ RANKING_TICKERS = {
     "Emerging Markets": "IS3N.DE",
     "Bonds": "EUNA.DE",
     "Commodities": "SXRS.DE",
-    "Gold": "PPFB.DE",
     # Yahoo Finance uses the Warsaw suffix .WA for this GPW-listed ETF.
     "Poland": "ETFPZUW20M40.WA",
 }
@@ -246,11 +245,11 @@ def download_biznesradar_index(
     return close.loc[close.index >= START].rename(symbol)
 
 
-def compute_current_universe8_ranking(
+def compute_current_universe7_ranking(
     monthly: pd.DataFrame,
-    universe8: list[str],
+    universe7: list[str],
 ) -> dict:
-    prices = monthly[universe8]
+    prices = monthly[universe7]
     returns_by_period = {
         f"{months}M": prices / prices.shift(months) - 1
         for months in MOMENTUM_PERIODS
@@ -271,7 +270,7 @@ def compute_current_universe8_ranking(
     signal_dates = signal_dates[signal_dates <= latest_full_month]
     if signal_dates.empty:
         availability_rows = []
-        for asset in universe8:
+        for asset in universe7:
             history = prices[asset].dropna()
             ready_dates = (
                 prices[asset].notna()
@@ -346,18 +345,29 @@ def compute_current_universe8_ranking(
     }
 
 
-def run_u8_ranking() -> dict:
-    monthly = load_current_ranking_prices(START)
-    return compute_current_universe8_ranking(monthly, list(RANKING_TICKERS.keys()))
-
-
-def print_current_universe8_ranking(
+def compute_current_universe8_ranking(
     monthly: pd.DataFrame,
     universe8: list[str],
+) -> dict:
+    return compute_current_universe7_ranking(monthly, universe8)
+
+
+def run_u7_ranking() -> dict:
+    monthly = load_current_ranking_prices(START)
+    return compute_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
+
+
+def run_u8_ranking() -> dict:
+    return run_u7_ranking()
+
+
+def print_current_universe7_ranking(
+    monthly: pd.DataFrame,
+    universe7: list[str],
 ) -> None:
-    result = compute_current_universe8_ranking(monthly, universe8)
+    result = compute_current_universe7_ranking(monthly, universe7)
     if not result["ready"]:
-        print("\nNo complete Universe 8 signal date is available using execution ETF prices.")
+        print("\nNo complete Universe 7 signal date is available using execution ETF prices.")
         print(f"Latest completed month: {result['latest_full_month']}")
         print(
             "Minimum required month-end observations per asset: "
@@ -387,7 +397,7 @@ def print_current_universe8_ranking(
     asset_width = max(32, *(len(str(name)) for name in ranking["Asset"]))
     print("\n")
     print("=" * 70)
-    print("CURRENT UNIVERSE 8 RANKING")
+    print("CURRENT UNIVERSE 7 RANKING")
     print(f"Signal date: {result['signal_date']}")
     print("=" * 70)
     print(
@@ -419,7 +429,14 @@ def print_current_universe8_ranking(
 
 def main() -> None:
     monthly = load_current_ranking_prices(START)
-    print_current_universe8_ranking(monthly, list(RANKING_TICKERS.keys()))
+    print_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
+
+
+def print_current_universe8_ranking(
+    monthly: pd.DataFrame,
+    universe8: list[str],
+) -> None:
+    print_current_universe7_ranking(monthly, universe8)
 
 
 if __name__ == "__main__":

@@ -12,18 +12,18 @@ if str(_SANDBOX) not in sys.path:
     sys.path.insert(0, str(_SANDBOX))
 
 from global_momentum_benchmarks import run_benchmarks
-from global_momentum_common import display_name, format_metric_table
-from global_momentum_u8_ranking import run_u8_ranking
+from global_momentum_common import format_metric_table
+from global_momentum_u8_ranking import run_u7_ranking
 
-_RANKING_SCHEMA = 1
-_BENCHMARK_SCHEMA = 1
-_SECTION_RANKING = "Ranking U8"
+_RANKING_SCHEMA = 3
+_BENCHMARK_SCHEMA = 8
+_SECTION_RANKING = "Ranking U7"
 _SECTION_BENCHMARK = "Benchmark"
 
 
 @st.cache_data(show_spinner=False)
-def _load_u8_ranking(_schema: int = _RANKING_SCHEMA) -> dict:
-    return run_u8_ranking()
+def _load_u7_ranking(_schema: int = _RANKING_SCHEMA) -> dict:
+    return run_u7_ranking()
 
 
 @st.cache_data(show_spinner=False)
@@ -32,15 +32,21 @@ def _load_benchmarks(_schema: int = _BENCHMARK_SCHEMA) -> dict:
     return {
         key: value
         for key, value in raw.items()
-        if key not in {"bt7", "bt8", "benchmarks", "polish_cpi"}
+        if key
+        not in {
+            "bt8",
+            "u7_equal_weight",
+            "benchmarks",
+            "polish_cpi",
+        }
     }
 
 
 def render_global_momentum() -> None:
     st.subheader("Global momentum")
     st.caption(
-        "Ranking operacyjny Universe 8 oraz historyczny backtest / benchmarki. "
-        "Ceny Yahoo przez DATA_STEP (`yahoo/{ticker}/{as_of}.parquet`)."
+        "Ranking operacyjny Universe 7 oraz historyczny backtest / benchmarki. "
+        "Ranking korzysta z DATA_STEP; backtest używa walidowanych adjusted close z yfinance."
     )
 
     section = st.radio(
@@ -50,7 +56,7 @@ def render_global_momentum() -> None:
         key="global_momentum_section",
     )
     if st.button("Odśwież dane", key="global_momentum_refresh"):
-        _load_u8_ranking.clear()
+        _load_u7_ranking.clear()
         _load_benchmarks.clear()
         st.rerun()
 
@@ -62,16 +68,16 @@ def render_global_momentum() -> None:
 
 def _render_ranking() -> None:
     try:
-        with st.spinner("Liczenie rankingu U8..."):
-            result = _load_u8_ranking()
+        with st.spinner("Liczenie rankingu U7..."):
+            result = _load_u7_ranking()
     except Exception as exc:
-        st.error("Nie udało się policzyć rankingu U8.")
+        st.error("Nie udało się policzyć rankingu U7.")
         st.exception(exc)
         return
 
     if not result["ready"]:
         st.warning(
-            "Brak kompletnej daty sygnału Universe 8 na cenach ETF wykonania. "
+            "Brak kompletnej daty sygnału Universe 7 na cenach ETF wykonania. "
             f"Ostatni zakończony miesiąc: {result['latest_full_month']}. "
             f"Minimum obserwacji: {result['min_observations']}."
         )
@@ -118,20 +124,23 @@ def _render_benchmarks() -> None:
         st.exception(exc)
         return
 
-    comparison = result["comparison"]
-    universe8_label = result["universe8_label"]
+    strategy = result["strategy_comparison"]
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("CAGR U8", f"{comparison.loc['CAGR', universe8_label]:.2%}")
-    c2.metric("CAGR U7", f"{comparison.loc['CAGR', 'Universe 7']:.2%}")
-    c3.metric(
-        f"{display_name('Poland')} w TOP3",
-        f"{result['poland_in_top3']} / {result['total_signals']}",
-        f"{result['poland_frequency']:.1%}",
+    c1.metric("CAGR U7", f"{strategy.loc['CAGR', 'GM U7']:.2%}")
+    c2.metric(
+        "CAGR U7 EW",
+        f"{strategy.loc['CAGR', 'U7 Equal Weight']:.2%}",
+        f"{strategy.loc['CAGR', 'U7 Equal Weight'] - strategy.loc['CAGR', 'GM U7']:.2%}",
     )
-    c4.metric("Max DD U8", f"{comparison.loc['Max Drawdown', universe8_label]:.2%}")
-
-    st.markdown("**U7 vs U8**")
-    st.dataframe(_format_percent_metrics(comparison), width="stretch")
+    c3.metric(
+        "CAGR All-World",
+        f"{strategy.loc['CAGR', 'All-World Buy & Hold']:.2%}",
+        f"{strategy.loc['CAGR', 'All-World Buy & Hold'] - strategy.loc['CAGR', 'GM U7']:.2%}",
+    )
+    c4.metric(
+        "Max DD U7",
+        f"{strategy.loc['Max Drawdown', 'GM U7']:.2%}",
+    )
 
     period = result["comparison_period"]
     cpi_through = result["cpi_through"]
@@ -142,14 +151,9 @@ def _render_benchmarks() -> None:
         caption += f"; CPI PL do {cpi_through}"
     st.caption(caption)
 
-    strategy = result["strategy_comparison"]
     if not strategy.empty:
         st.markdown("**Strategy vs benchmarks**")
         st.dataframe(format_metric_table(strategy), width="stretch")
-
-    if not result["displaced"].empty:
-        st.markdown(f"**Aktywa wypierane przez {display_name('Poland')}**")
-        st.dataframe(result["displaced"], width="stretch", hide_index=True)
 
     annual = result["annual"].copy()
     st.markdown("**Zwroty roczne**")
@@ -173,23 +177,3 @@ def _render_benchmarks() -> None:
     st.line_chart(drawdowns, width="stretch")
 
 
-def _format_percent_metrics(frame: pd.DataFrame) -> pd.DataFrame:
-    percent_rows = {
-        "Total Return",
-        "CAGR",
-        "Volatility",
-        "Max Drawdown",
-        "Worst Year",
-        "Annual Turnover",
-    }
-    formatted = frame.copy().astype(object)
-    for row in formatted.index:
-        if row in percent_rows:
-            formatted.loc[row] = formatted.loc[row].map(
-                lambda value: "" if pd.isna(value) else f"{value:.2%}"
-            )
-        elif row == "End Value":
-            formatted.loc[row] = formatted.loc[row].map(
-                lambda value: "" if pd.isna(value) else f"{value:,.0f}"
-            )
-    return formatted
