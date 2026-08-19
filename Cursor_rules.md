@@ -64,7 +64,7 @@ Arkusze `a_config.xlsx`:
     - `assets/` — `a_config.xlsx` (ex `assets_1` + `analyse_assets_config`), katalogi aktywów `investment.*`
     - `cash_pool/` — katalogi aktywów `cash_pool.*` (wyciągi ROR mBank/Revolut)
     - `download/pm|gm/` — źródło importu Revolut
-    - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`)
+    - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`), Trade Republic (`p_traderepublic`), DEGIRO (`p_degiro`)
     - Migrator: `app/maintenance/migrate_to_a_config.py`
 
 ---
@@ -115,14 +115,14 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
 
 ---
 
-## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO + Trade Republic; wzorzec na XTB / Degiro)
+## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO + Trade Republic + DEGIRO; wzorzec na XTB)
 
 - To **nie** jest `cash_pool` ani pojedyncza inwestycja-lump z przelewu ROR — kontener pozycji instrumentów (+ gotówka robocza brokera).
-- W katalogu: `RODZAJ*=BROKER`. **`roi_def` / reguły ROI nie są wymagane**.
+- W katalogu: `RODZAJ*=BROKER`. **`roi_def` / reguły ROI nie są wymagane**. DEGIRO używa `id=p_degiro`, `typ=investment.udziały`, `waluta=EUR`.
   - Revolut: `id=p_re_robo`, `typ` → `investment.udziały`
   - Obligacje: `id=obligacjeskarbowe`, `typ=investment.obligacje`
   - Trade Republic: `id=p_traderepublic`, `typ` → `investment.udziały`
-- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; inaczej → Revolut trading.
+- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; `id=p_degiro` → DEGIRO; inaczej → Revolut trading.
 
 ### Revolut robo
 
@@ -133,6 +133,22 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
 - **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; FEE / TOP-UP poza XIRR; `is_sold` ⇔ qty≈0.
 - Terminal otwartych = last trade price × qty; `is_sold` ⇔ qty == 0.
 - Reconciliacja: Σ `CASH TOP-UP` vs `|To Robo portfolio|` na `revolut_eur` (tol. 0.01 EUR).
+
+### DEGIRO
+
+- W katalogu: `id=p_degiro`, `RODZAJ*=BROKER`, `typ=investment.udziały`, `waluta=EUR`; bez `roi_def` / `roi_rules`.
+- Źródła: pakiet `Portfolio.csv`, `Transactions.csv`, `Account.csv` z `~/Downloads`; import pakietowy do `assets/p_degiro/`.
+- Import wymaga kompletu 3 plików. Okres pakietu = `min(Data)..max(Data)` z pierwszej kolumny `Data` w `Account.csv` (data księgowania); te same daty obowiązują wszystkie trzy pliki.
+- Nazwy docelowe: `portfolio_{od}_{do}.csv`, `transactions_{od}_{do}.csv`, `account_{od}_{do}.csv`.
+- Format eksportu PL: separator CSV `,`, liczby z przecinkiem dziesiętnym w cudzysłowie; w `Account.csv` są dwie kolumny `Data` i puste nagłówki walut — importer nadaje nazwy techniczne (`booking_date`, `value_date`, `change_currency`, `balance_currency`).
+- Przy przenoszeniu: istniejący identyczny/obejmujący pakiet → skip + usunięcie incoming; ten sam okres z inną treścią → twardy konflikt.
+- Przy odczycie wielu pakietów: `Transactions` dedupe po `Identyfikator zlecenia` + polach transakcji; `Account` dedupe po pełnym kluczu księgowania. Overlap okresów jest OK; luka okresów → warning w v1.
+- `Portfolio.csv` nie jest ledgerem; do snapshotu używać najnowszego `portfolio_{od}_{do}.csv` z `do <= data wyceny`.
+- **Snapshot:** 1 wiersz — Σ `Wartość w EUR` z `Portfolio.csv` dla gotówki i pozycji. To MTM, nie koszt FIFO.
+- **ROI:** per ISIN (`p_degiro:LT0000128621`); BUY → `CAPEX`; SELL → `DIVESTMENT`; `Dywidenda` → `REVENUES`; `is_sold` ⇔ qty≈0 / brak pozycji w najnowszym `Portfolio.csv`.
+- Terminal otwartych = `Wartość w EUR` z `Portfolio.csv` per ISIN; dla zamkniętych terminal = 0.
+- Do ROI transakcji używać `Wartość EUR`, a nie `Razem EUR`; opłaty, podatki, FX, cash sweep, depozyty/wypłaty i odsetki są poza XIRR per instrument w v1.
+- Implementacja: dedykowany importer DEGIRO, nie parser Revolut; źródła przez DATA_STEP (`01 source`), bez osobnego cache; testy obok istniejących testów brokerów.
 
 ### Obligacje skarbowe (PKO BP)
 

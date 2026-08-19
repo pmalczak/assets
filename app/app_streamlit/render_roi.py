@@ -16,6 +16,7 @@ from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
 from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
+from roi.degiro_roi import compute_degiro_ticker_roi
 from roi.revolut_deposit_roi import compute_revolut_deposit_roi
 
 ROI_DISPLAY_COLUMNS = {
@@ -289,6 +290,45 @@ def render_roi_obligacje(default_valuation_date: date | None) -> None:
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = _asset_selectbox("Kod obligacji", asset_ids, "roi_bonds_selected_code")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla kodu.")
+
+
+def render_roi_degiro(default_valuation_date: date | None) -> None:
+    st.subheader("ROI DEGIRO (per ISIN)")
+    valuation_date = st.date_input(
+        "Data wyceny ROI DEGIRO",
+        value=default_valuation_date or date.today(),
+        key="roi_degiro_valuation_date",
+    )
+    st.caption(
+        "Analityka z pakietów DEGIRO: Transactions → CAPEX/DIVESTMENT, "
+        "Account: Dywidenda → REVENUES. Terminal otwartych = Wartość w EUR "
+        "z najnowszego Portfolio <= data wyceny; opłaty/podatki/FX poza XIRR v1."
+    )
+    try:
+        with st.spinner("Liczenie ROI DEGIRO..."):
+            summary, events_by_asset, warnings = compute_degiro_ticker_roi(valuation_date)
+    except Exception as exc:
+        st.warning("Nie udało się policzyć ROI DEGIRO.")
+        st.exception(exc)
+        return
+
+    if warnings:
+        for msg in warnings:
+            st.warning(msg)
+
+    if summary.empty:
+        st.info("Brak danych DEGIRO dla p_degiro.")
+        return
+
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        return
+
+    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+
+    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
+    selected = _asset_selectbox("ISIN (DEGIRO)", asset_ids, "roi_degiro_selected_isin")
+    _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla ISIN.")
 
 
 def _apply_sold_filter(summary: pd.DataFrame) -> pd.DataFrame | None:
