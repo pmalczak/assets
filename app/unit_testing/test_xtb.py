@@ -33,6 +33,7 @@ from importers.xtb.normalize import (
     normalize_xtb_transactions,
 )
 from importers.xtb.read_xtb import (
+    _normalize_cash,
     _read_xtb_cash,
     _read_xtb_open,
     inspect_xtb_export,
@@ -182,6 +183,78 @@ class ReadXtbTests(unittest.TestCase):
         self.assertIn("AAA.PL", tickers)
         self.assertIn("ETFPZUW20M40.PL", tickers)
 
+    def test_cash_id_mixed_float_and_empty_writes_parquet(self):
+        raw = pd.DataFrame(
+            [
+                {
+                    XtbCashOperationsFile.ID: 12345.0,
+                    XtbCashOperationsFile.TYPE: "Deposit",
+                    XtbCashOperationsFile.INSTRUMENT: "",
+                    XtbCashOperationsFile.TICKER: "",
+                    XtbCashOperationsFile.ISIN: "",
+                    XtbCashOperationsFile.TIME: "2026-08-17",
+                    XtbCashOperationsFile.AMOUNT: 100.0,
+                    XtbCashOperationsFile.COMMENT: "",
+                    XtbCashOperationsFile.POSITION_ID: float("nan"),
+                    XtbCashOperationsFile.BALANCE: 100.0,
+                    XtbCashOperationsFile.CURRENCY: "PLN",
+                },
+                {
+                    XtbCashOperationsFile.ID: float("nan"),
+                    XtbCashOperationsFile.TYPE: "Stock purchase",
+                    XtbCashOperationsFile.INSTRUMENT: "ETF",
+                    XtbCashOperationsFile.TICKER: "AAA.PL",
+                    XtbCashOperationsFile.ISIN: "",
+                    XtbCashOperationsFile.TIME: "2026-08-18",
+                    XtbCashOperationsFile.AMOUNT: -40.0,
+                    XtbCashOperationsFile.COMMENT: "",
+                    XtbCashOperationsFile.POSITION_ID: 99.0,
+                    XtbCashOperationsFile.BALANCE: 60.0,
+                    XtbCashOperationsFile.CURRENCY: "PLN",
+                },
+            ]
+        )
+        cash = _normalize_cash(raw)
+        self.assertEqual(cash[XtbCashOperationsFile.ID].tolist(), ["12345", ""])
+        self.assertEqual(cash[XtbCashOperationsFile.POSITION_ID].tolist(), ["", "99"])
+        with tempfile.TemporaryDirectory() as tmp:
+            cash.to_parquet(Path(tmp) / "p_xtb-cash.parquet")
+
+    def test_drops_cash_total_footer_row(self):
+        raw = pd.DataFrame(
+            [
+                {
+                    XtbCashOperationsFile.ID: "1",
+                    XtbCashOperationsFile.TYPE: "Deposit",
+                    XtbCashOperationsFile.INSTRUMENT: "",
+                    XtbCashOperationsFile.TICKER: "",
+                    XtbCashOperationsFile.ISIN: "",
+                    XtbCashOperationsFile.TIME: "2026-08-17",
+                    XtbCashOperationsFile.AMOUNT: 100.0,
+                    XtbCashOperationsFile.COMMENT: "",
+                    XtbCashOperationsFile.POSITION_ID: "",
+                    XtbCashOperationsFile.BALANCE: 100.0,
+                    XtbCashOperationsFile.CURRENCY: "PLN",
+                },
+                {
+                    XtbCashOperationsFile.ID: "",
+                    XtbCashOperationsFile.TYPE: "Total",
+                    XtbCashOperationsFile.INSTRUMENT: "",
+                    XtbCashOperationsFile.TICKER: "",
+                    XtbCashOperationsFile.ISIN: "",
+                    XtbCashOperationsFile.TIME: "",
+                    XtbCashOperationsFile.AMOUNT: 100.0,
+                    XtbCashOperationsFile.COMMENT: "",
+                    XtbCashOperationsFile.POSITION_ID: "",
+                    XtbCashOperationsFile.BALANCE: None,
+                    XtbCashOperationsFile.CURRENCY: "PLN",
+                },
+            ]
+        )
+        cash = _normalize_cash(raw)
+        self.assertEqual(len(cash), 1)
+        self.assertEqual(cash.iloc[0][XtbCashOperationsFile.TYPE], "Deposit")
+
     def test_period_gap_warning(self):
         warnings = period_gap_warnings(
             [(date(2026, 1, 1), date(2026, 3, 31)), (date(2026, 5, 1), date(2026, 8, 20))],
@@ -272,6 +345,7 @@ class XtbRoiTests(unittest.TestCase):
                 _cash_row("Stock sale", "GONE.PL", "2026-02-01", 22.0),
                 _cash_row("Dividend", "KEEP.PL", "2026-03-01", 1.5),
                 _cash_row("Loyalty bonus", "KEEP.PL", "2026-03-02", 0.4),
+                _cash_row("Total", "", "", 52.4),
             ]
         )
         closed_df = pd.DataFrame(
@@ -284,6 +358,7 @@ class XtbRoiTests(unittest.TestCase):
             closed_positions_df=closed_df,
         )
         self.assertTrue(any("Loyalty bonus" in msg for msg in warnings))
+        self.assertFalse(any("Total" in msg for msg in warnings))
         by_id = {row["asset_id"]: row for _, row in summary.iterrows()}
         self.assertIn("p_xtb:KEEP.PL", by_id)
         self.assertIn("p_xtb:GONE.PL", by_id)

@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 
+TAB_ASSETS = "Wartość aktywów"
+
 TAB_LABELS = [
-    "Raporty",
+    TAB_ASSETS,
     "Wykres portfela",
     "ROI",
     "ROI Revolut robo",
@@ -20,12 +22,12 @@ TAB_LABELS = [
     "Wyszukiwanie transakcji",
     "Waliduj",
 ]
-DEFAULT_TAB = "Raporty"
+DEFAULT_TAB = TAB_ASSETS
 TABS_STATE_KEY = "app_assets_tab"
 
 SLUG_TO_LABEL = {
     "wykres": "Wykres portfela",
-    "raporty": "Raporty",
+    "raporty": TAB_ASSETS,
     "szukaj": "Wyszukiwanie transakcji",
     "roi": "ROI",
     "roi-robo": "ROI Revolut robo",

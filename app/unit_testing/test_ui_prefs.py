@@ -30,6 +30,14 @@ class UiPrefsTests(unittest.TestCase):
             save_last_tab("Wyszukiwanie transakcji", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Wyszukiwanie transakcji")
 
+    def test_assets_tab_slug_still_loads_legacy_raporty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "last_tab.txt").write_text("raporty", encoding="utf-8")
+            self.assertEqual(load_last_tab(prefs_root=root), DEFAULT_TAB)
+            save_last_tab(DEFAULT_TAB, prefs_root=root)
+            self.assertEqual((root / "last_tab.txt").read_text(encoding="utf-8").strip(), "raporty")
+
     def test_load_last_tab_falls_back_on_unknown_slug(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

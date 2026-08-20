@@ -19,6 +19,7 @@ from importers.xtb.data_model import (
     XtbClosedPositionsFile,
     XtbOpenPositionsFile,
     classify_xtb_cash_type,
+    is_xtb_cash_footer,
     xtb_instrument_id,
 )
 from importers.xtb.read_xtb import (
@@ -104,6 +105,8 @@ def build_xtb_cashflows(
     seen_unknown: set[str] = set()
     for _, row in cash_operations_df.iterrows():
         raw_type = str(row.get(XtbCashOperationsFile.TYPE) or "").strip()
+        if is_xtb_cash_footer(raw_type):
+            continue
         op_type = classify_xtb_cash_type(raw_type)
         if op_type is None:
             if raw_type and raw_type not in seen_unknown:

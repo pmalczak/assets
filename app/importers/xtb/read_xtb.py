@@ -22,6 +22,7 @@ from importers.xtb.data_model import (
     XtbClosedPositionsFile,
     XtbExportSheetInfo,
     XtbOpenPositionsFile,
+    is_xtb_cash_footer,
 )
 
 SUPPORTED_XTB_SUFFIXES = {".xlsx", ".xls", ".csv", ".zip"}
@@ -326,8 +327,12 @@ def _normalize_closed(df: pd.DataFrame) -> pd.DataFrame:
 
 def _normalize_cash(df: pd.DataFrame) -> pd.DataFrame:
     out = _ensure_columns(df, XtbCashOperationsFile)
+    if not out.empty:
+        footer = out[XtbCashOperationsFile.TYPE].map(is_xtb_cash_footer)
+        out = out.loc[~footer].copy()
     for col in (XtbCashOperationsFile.AMOUNT, XtbCashOperationsFile.BALANCE):
-        out[col] = out[col].map(parse_xtb_number)
+        if col in out.columns:
+            out[col] = out[col].map(parse_xtb_number)
     return out
 
 
@@ -355,8 +360,8 @@ def _ensure_columns(df: pd.DataFrame, model) -> pd.DataFrame:
     for col in expected:
         if col in numeric:
             continue
-        out[col] = out[col].map(lambda value: "" if value is None or (isinstance(value, float) and pd.isna(value)) else value)
-        out[col] = out[col].map(lambda value: "" if str(value).strip().lower() in {"nan", "none"} else value)
+        # Excel: puste ID → float NaN, wypełnione → float/int; parquet nie znosi mieszanego object.
+        out[col] = out[col].map(_cell_str)
     return out
 
 
@@ -471,6 +476,19 @@ def _nonempty_values(row: pd.Series) -> set[str]:
 
 
 def _cell_str(value) -> str:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    if value is None:
         return ""
-    return str(value).strip()
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number.is_integer():
+            return str(int(number))
+        return str(value).strip()
+    text = str(value).strip()
+    return "" if text.lower() in {"nan", "none"} else text

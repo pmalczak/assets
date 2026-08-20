@@ -123,7 +123,8 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
   - Obligacje: `id=obligacjeskarbowe`, `typ=investment.obligacje`
   - Trade Republic: `id=p_traderepublic`, `typ` → `investment.udziały`
   - XTB: `id=p_xtb`, `typ` → `investment.udziały`, `waluta=PLN` (zgodnie z rachunkiem `55260027`; eksport `PLN_…`)
-- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; `id=p_degiro` → DEGIRO; `id=p_xtb` → XTB; inaczej → Revolut trading.
+- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; pozostali brokerzy udziałowi przez rejestr `BROKER_SNAPSHOT_EVALUATORS` (`p_traderepublic`, `p_degiro`, `p_xtb`, `p_re_robo`). Nieznane `id` **nie** spadają na Revolut — warning i brak wiersza.
+- Snapshot brokera udziałowego (DEGIRO / XTB / Revolut robo): **1 wiersz = wartość pozycji + gotówka robocza**. Wymuszenie: `BrokerHoldings(positions_value, cash_value)` + `BrokerSnapshotEvaluator`; nowy broker = podklasa + wpis w rejestrze. Dziedziczenie bez rejestru nic nie daje. Obligacje PKO są poza tym kontraktem (MTM papierów). Trade Republic v1: wyjątek — NAV=0 (instrumenty niezmapowane).
 - Docelowy przepływ architektoniczny:
 
 ```text
@@ -142,7 +143,7 @@ Market Data --> GMS Ranking --> Target --------+
 - Źródła: `trading-account-statement_*` + `trading-pnl-statement_*`.
 - Merge wielu plików: usuwać duplikaty; luki w okresach nazw → ostrzeżenie.
 - Po wczytaniu blottera: SELL → `Quantity` ujemne; BUY → `Total Amount` ujemne; FX → `1/fx`.
-- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji.
+- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Sama gotówka (wpłata bez kupna) też daje wiersz. Zakładka ROI per ticker **bez** gotówki w XIRR (TOP-UP/FEE poza XIRR jak dotychczas).
 - **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; FEE / TOP-UP poza XIRR; `is_sold` ⇔ qty≈0.
 - Terminal otwartych = last trade price × qty; `is_sold` ⇔ qty == 0.
 - Reconciliacja: Σ `CASH TOP-UP` vs `|To Robo portfolio|` na `revolut_eur` (tol. 0.01 EUR).
@@ -169,11 +170,11 @@ Market Data --> GMS Ranking --> Target --------+
 - Źródła: eksporty z platformy XTB (ZIP z xStation), nie API. Realny pakiet to jeden XLSX z arkuszami `Open Positions`, `Closed Positions`, `Cash Operations`. Historia zleceń nie występuje w tym eksporcie — poza v1 do czasu osobnej próbki.
 - Surowe eksporty XTB przychodzą jako ZIP-y z `~/Downloads`: `{nr_klienta}_{od}_{do}.zip`, dla klienta `55260027`; warianty Windows ` (1)`, ` (2)` traktować jako duplikaty pobrań. ZIP rozpakować, rozpoznać zawartość XLSX/CSV po strukturze arkuszy i zapisać plik kanoniczny w `assets/p_xtb/` jako `xtb_{open,closed,cash}_55260027_{od}_{do}.xlsx` (często `xtb_open_closed_cash_…` gdy ZIP ma wszystkie trzy arkusze); identyczne SHA256 rozpakowanego pliku usuwać jako pominięte, różna treść dla tej samej nazwy docelowej = twardy konflikt.
 - Import musi uwzględniać: zakupy, sprzedaże, wpłaty, wypłaty, dywidendy, prowizje, opłaty, podatki, przewalutowania i gotówkę roboczą brokera.
-- Parser: nagłówki tabel XTB są przesunięte (Open Positions ok. wiersz 8, Closed/Cash ok. wiersz 4). Kolumny kanoniczne po imporcie: Open (`Product`, `Instrument/Position`, `Ticker`, `Volume`, `Value`, …); Cash (`Type`, `Instrument`, `Ticker`, `Time`, `Amount`, …); Closed (`Instrument`, `Ticker`, `Volume`, `Position ID`, …). Brakujące kolumny uzupełniane puste.
+- Parser: nagłówki tabel XTB są przesunięte (Open Positions ok. wiersz 8, Closed/Cash ok. wiersz 4). Kolumny kanoniczne po imporcie: Open (`Product`, `Instrument/Position`, `Ticker`, `Volume`, `Value`, …); Cash (`Type`, `Instrument`, `Ticker`, `Time`, `Amount`, …); Closed (`Instrument`, `Ticker`, `Volume`, `Position ID`, …). Brakujące kolumny uzupełniane puste. Wiersz stopki Cash (`Type=Total` / `Suma`) odrzucać przy imporcie — to nie jest operacja.
 - DATA_STEP (`01 source`): `p_xtb-open.parquet`, `p_xtb-closed.parquet`, `p_xtb-cash.parquet`. **Nie** używać nazw Revolut `p_xtb-trading` / `p_xtb-pnl`. Open to snapshoty (do wyceny brać najnowszy `period_end <= data wyceny`); Cash/Closed to ledger — merge wszystkich plików, dedupe, luka okresów Cash → warning (jak DEGIRO Transactions/Account).
 - Normalizacja instrumentów: klucz ROI = ISIN jeśli jest w eksporcie, inaczej ticker XTB (np. `ETFPZUW20M40.PL`). Mapowanie na instrumenty GMS — osobna decyzja; eksport XTB nie dostarcza historycznych market data.
 - **Snapshot:** 1 wiersz — Σ `Value` z najnowszego Open Positions ≤ data wyceny: pozycje (wiersze z tickerem) **+ gotówka** z sekcji podsumowania (`Cash` / `Free funds`). To MTM, nie koszt FIFO. Brak katalogu/raportu → brak wiersza (jak DEGIRO).
-- **ROI:** per instrument (`p_xtb:TICKER`); merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`; `is_sold` ⇔ qty≈0 / brak w najnowszym Open. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Nieznany `Type` → warning, nie cichy skip.
+- **ROI:** per instrument (`p_xtb:TICKER`); merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`; `is_sold` ⇔ qty≈0 / brak w najnowszym Open. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Stopka `Total` poza warningiem. Nieznany prawdziwy `Type` → warning, nie cichy skip.
 - GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie. Wspólny model: `importers/xtb/normalize.py` → `BrokerPositionFrame` / `BrokerTransactionFrame` / `BrokerCashFlowFrame` / `BrokerCashBalanceFrame`.
 - Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), walidacja kolumn/typów operacji/duplikatów oraz testy obok istniejących testów brokerów.
 
@@ -230,9 +231,9 @@ Pozostaje:
 - Osobna wycena całego holdingu złota (dawne `zloto-monety-wyceny`).
 - Auto-migracja starego Excela inventory → nowy schemat bez prośby.
 - FX w XIRR cash (osobna decyzja, jeśli kiedyś wspólny mianownik PLN z nieruchomościami).
-- MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot = koszt FIFO; ROI ticker = last price × qty.
+- MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot brokerów udziałowych = pozycje (FIFO lub MTM wg źródła) **+ gotówka robocza**; ROI ticker Revolut = last price × qty.
 - Klasyczne ROI katalogowe `p_re_robo` / `obligacjeskarbowe` z cash pool / `roi_def` (równolegle do ROI per instrument).
-- Fee / TOP-UP / podatki / przelewy PKO w XIRR per instrument; rozbicie instrumentów w tabeli Raporty → Inwestycje.
+- Fee / TOP-UP / podatki / przelewy PKO w XIRR per instrument; rozbicie instrumentów w tabeli Wartość aktywów → Inwestycje.
 
 ---
 

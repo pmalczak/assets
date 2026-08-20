@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from evaluators.evaluate_broker_revolut import evaluate_broker_revolut, open_holdings_at_cost
+from evaluators.evaluate_broker_revolut import (
+    evaluate_broker_revolut,
+    is_revolut_robo_broker,
+    open_holdings_at_cost,
+    revolut_working_cash,
+)
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
 from importers.revolut.read_r_trading import (
     _read_revolut_trading_transactions,
@@ -373,38 +378,8 @@ class MoveTradingFilesTests(unittest.TestCase):
 
 
 class EvaluateBrokerTests(unittest.TestCase):
-    def test_evaluate_synthetic_single_row_sum_of_costs(self):
-        trading = pd.DataFrame(
-            [
-                {
-                    RevolutTradingFile.DATE: "2026-01-01T00:00:00Z",
-                    RevolutTradingFile.TICKER: "AAA",
-                    RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
-                    RevolutTradingFile.QUANTITY: 2.0,
-                    RevolutTradingFile.PRICE_PER_SHARE: "10.5",
-                    RevolutTradingFile.TOTAL_AMOUNT: "21",
-                    RevolutTradingFile.CURRENCY: "EUR",
-                    RevolutTradingFile.FX_RATE: 1.0,
-                    RevolutTradingFile.FILE_DATE: "2026-01-31",
-                    RevolutTradingFile.PERIOD_START: "2026-01-01",
-                    RevolutTradingFile.PERIOD_END: "2026-01-31",
-                },
-                {
-                    RevolutTradingFile.DATE: "2026-01-02T00:00:00Z",
-                    RevolutTradingFile.TICKER: "BBB",
-                    RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
-                    RevolutTradingFile.QUANTITY: 1.0,
-                    RevolutTradingFile.PRICE_PER_SHARE: "30",
-                    RevolutTradingFile.TOTAL_AMOUNT: "30",
-                    RevolutTradingFile.CURRENCY: "EUR",
-                    RevolutTradingFile.FX_RATE: 1.0,
-                    RevolutTradingFile.FILE_DATE: "2026-01-31",
-                    RevolutTradingFile.PERIOD_START: "2026-01-01",
-                    RevolutTradingFile.PERIOD_END: "2026-01-31",
-                },
-            ]
-        )
-        catalog = pd.Series(
+    def _catalog(self) -> pd.Series:
+        return pd.Series(
             {
                 AssetsDef.ID: "p_re_robo",
                 AssetsDef.TYPE: TypeDomain.EQUITIES,
@@ -415,6 +390,25 @@ class EvaluateBrokerTests(unittest.TestCase):
                 AssetsDef.NOTES: "",
             }
         )
+
+    def _tx(self, **overrides) -> dict:
+        row = {
+            RevolutTradingFile.DATE: "2026-01-01T00:00:00Z",
+            RevolutTradingFile.TICKER: "AAA",
+            RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+            RevolutTradingFile.QUANTITY: 1.0,
+            RevolutTradingFile.PRICE_PER_SHARE: "10",
+            RevolutTradingFile.TOTAL_AMOUNT: "10",
+            RevolutTradingFile.CURRENCY: "EUR",
+            RevolutTradingFile.FX_RATE: 1.0,
+            RevolutTradingFile.FILE_DATE: "2026-01-31",
+            RevolutTradingFile.PERIOD_START: "2026-01-01",
+            RevolutTradingFile.PERIOD_END: "2026-01-31",
+        }
+        row.update(overrides)
+        return row
+
+    def _evaluate(self, trading: pd.DataFrame, pnl_warnings=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "p_re_robo").mkdir()
@@ -425,24 +419,157 @@ class EvaluateBrokerTests(unittest.TestCase):
                 ),
                 patch(
                     "evaluators.evaluate_broker_revolut.read_revolut_trading_pnl",
-                    return_value=(pd.DataFrame(), ["luka test"]),
+                    return_value=(pd.DataFrame(), pnl_warnings or []),
                 ),
                 patch(
                     "evaluators.evaluate_broker_revolut.resolve_asset_dir",
                     return_value=root / "p_re_robo",
                 ),
             ):
-                result, warnings = evaluate_broker_revolut(
-                    root, "p_re_robo", catalog, date(2026, 1, 31)
+                return evaluate_broker_revolut(
+                    root, "p_re_robo", self._catalog(), date(2026, 1, 31)
                 )
 
+    def test_is_revolut_robo_broker(self):
+        self.assertTrue(is_revolut_robo_broker(self._catalog()))
+        self.assertFalse(is_revolut_robo_broker(pd.Series({AssetsDef.ID: "p_xtb"})))
+
+    def test_evaluate_positions_plus_cash(self):
+        trading = pd.DataFrame(
+            [
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.QUANTITY: None,
+                        RevolutTradingFile.PRICE_PER_SHARE: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "51",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.DATE: "2026-01-01T00:00:00Z",
+                        RevolutTradingFile.TICKER: "AAA",
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                        RevolutTradingFile.QUANTITY: 2.0,
+                        RevolutTradingFile.PRICE_PER_SHARE: "10.5",
+                        RevolutTradingFile.TOTAL_AMOUNT: "21",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.DATE: "2026-01-02T00:00:00Z",
+                        RevolutTradingFile.TICKER: "BBB",
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                        RevolutTradingFile.QUANTITY: 1.0,
+                        RevolutTradingFile.PRICE_PER_SHARE: "30",
+                        RevolutTradingFile.TOTAL_AMOUNT: "30",
+                    }
+                ),
+            ]
+        )
+        result, warnings = self._evaluate(trading, pnl_warnings=["luka test"])
         self.assertEqual(len(result), 1)
         self.assertEqual(result.iloc[0][AssetsDef.ID], "p_re_robo")
         self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 51.0)
         self.assertEqual(result.iloc[0][AssetsDef.TYPE], TypeDomain.EQUITIES)
         self.assertEqual(result.iloc[0][AssetsDef.GROUP], GroupDomain.INVESTMENT)
-        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (2 poz.)")
+        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (2 poz. + 1 cash)")
         self.assertEqual(warnings, ["luka test"])
+
+    def test_evaluate_includes_uninvested_top_up(self):
+        trading = pd.DataFrame(
+            [
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.QUANTITY: None,
+                        RevolutTradingFile.PRICE_PER_SHARE: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "100",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.DATE: "2026-01-02T00:00:00Z",
+                        RevolutTradingFile.QUANTITY: 2.0,
+                        RevolutTradingFile.PRICE_PER_SHARE: "10.5",
+                        RevolutTradingFile.TOTAL_AMOUNT: "21",
+                    }
+                ),
+            ]
+        )
+        result, warnings = self._evaluate(trading)
+        self.assertEqual(warnings, [])
+        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 100.0)
+        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (1 poz. + 1 cash)")
+
+    def test_evaluate_cash_only_top_up(self):
+        trading = pd.DataFrame(
+            [
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.QUANTITY: None,
+                        RevolutTradingFile.PRICE_PER_SHARE: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "500",
+                    }
+                )
+            ]
+        )
+        result, _warnings = self._evaluate(trading)
+        self.assertEqual(len(result), 1)
+        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 500.0)
+        self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (0 poz. + 1 cash)")
+
+    def test_working_cash_signs_and_unknown_type(self):
+        trading = pd.DataFrame(
+            [
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "100",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                        RevolutTradingFile.TOTAL_AMOUNT: "40",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_SELL,
+                        RevolutTradingFile.TOTAL_AMOUNT: "10",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_DIVIDEND,
+                        RevolutTradingFile.TOTAL_AMOUNT: "3",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_ROBO_FEE,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "2",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: "STOCK SPLIT",
+                        RevolutTradingFile.TOTAL_AMOUNT: "99",
+                    }
+                ),
+            ]
+        )
+        cash, warnings = revolut_working_cash(trading)
+        self.assertAlmostEqual(cash, 71.0)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("STOCK SPLIT", warnings[0])
 
 
 if __name__ == "__main__":

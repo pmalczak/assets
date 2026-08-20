@@ -32,7 +32,7 @@ def _clear_reports_related_cache() -> None:
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import rap1, rap2
 
-    st.subheader("Raporty (jak w main.py)")
+    st.subheader("Wartość aktywów")
 
     today = date.today()
     btn_col, info_col = st.columns([1, 3])

@@ -38,6 +38,9 @@ ACCOUNT_LEVEL_TYPES = {
     CASH_OP_INTEREST,
 }
 
+# Stopka tabeli Cash Operations (nie jest operacją).
+CASH_FOOTER_TYPES = frozenset({"total", "suma"})
+
 
 @dataclass(frozen=True)
 class XtbExportSheetInfo:
@@ -175,10 +178,15 @@ XtbClosedPositionsFile = XtbClosedPositionsFileCls()
 XtbCashOperationsFile = XtbCashOperationsFileCls()
 
 
+def is_xtb_cash_footer(operation_type: str) -> bool:
+    """Wiersz podsumowania arkusza (Type=Total/Suma), nie operacja kasowa."""
+    return str(operation_type or "").strip().lower() in CASH_FOOTER_TYPES
+
+
 def classify_xtb_cash_type(operation_type: str) -> str | None:
     """Mapuje Type z Cash Operations na klasę v1; None = nieznany typ."""
     text = str(operation_type or "").strip().lower()
-    if not text:
+    if not text or is_xtb_cash_footer(text):
         return None
     if "purchase" in text or text == "buy":
         return CASH_OP_PURCHASE

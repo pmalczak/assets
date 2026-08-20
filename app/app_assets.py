@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.ui_prefs import (
+    TAB_ASSETS,
     TAB_LABELS,
     TABS_STATE_KEY,
     load_last_tab,
@@ -229,7 +230,7 @@ def main():
         with tab:
             if label != active_tab:
                 continue
-            if label == "Raporty":
+            if label == TAB_ASSETS:
                 render_main_reports(latest, data["latest_snapshot"])
             elif label == "Wykres portfela":
                 render_portfolio_history(

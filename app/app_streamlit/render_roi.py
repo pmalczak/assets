@@ -179,7 +179,7 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
     )
     st.caption(
         "Analityka z blottera `p_re_robo-trading` — osobno od syntetycznego wiersza "
-        "`p_re_robo` w Raporty → Inwestycje. Terminal otwartych = last price × qty; "
+        "`p_re_robo` w Wartość aktywów → Inwestycje. Terminal otwartych = last price × qty; "
         "sprzedane gdy qty=0. SELL → DIVESTMENT; DIVIDEND → REVENUES."
     )
     try:
