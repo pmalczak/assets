@@ -122,7 +122,7 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
   - Revolut: `id=p_re_robo`, `typ` → `investment.udziały`
   - Obligacje: `id=obligacjeskarbowe`, `typ=investment.obligacje`
   - Trade Republic: `id=p_traderepublic`, `typ` → `investment.udziały`
-  - XTB: `id=p_xtb`, `typ` → `investment.udziały`, `waluta=EUR` (docelowo zgodnie z walutą rachunku)
+  - XTB: `id=p_xtb`, `typ` → `investment.udziały`, `waluta=PLN` (zgodnie z rachunkiem `55260027`; eksport `PLN_…`)
 - Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; `id=p_degiro` → DEGIRO; `id=p_xtb` → XTB; inaczej → Revolut trading.
 - Docelowy przepływ architektoniczny:
 
@@ -165,27 +165,27 @@ Market Data --> GMS Ranking --> Target --------+
 
 ### XTB
 
-- W katalogu: `id=p_xtb`, `RODZAJ*=BROKER`, `typ=investment.udziały`, waluta zgodna z rachunkiem; bez `roi_def` / `roi_rules`.
-- Źródła: eksporty z platformy XTB, nie API. Obsłużyć co najmniej otwarte pozycje, zamknięte pozycje, historię zleceń oraz operacje gotówkowe.
-- Surowe eksporty XTB przychodzą jako ZIP-y z `~/Downloads`: `{nr_klienta}_{od}_{do}.zip`, dla klienta `55260027`; warianty Windows ` (1)`, ` (2)` traktować jako duplikaty pobrań. ZIP rozpakować, rozpoznać zawartość XLSX/CSV po strukturze arkuszy i zapisać plik kanoniczny w `assets/p_xtb/` jako np. `xtb_open_...`, `xtb_closed_...`, `xtb_cash_...` albo `xtb_open_closed_cash_55260027_{od}_{do}.xlsx`; identyczne SHA256 rozpakowanego pliku usuwać jako pominięte, różna treść dla tej samej nazwy docelowej = twardy konflikt.
+- W katalogu: `id=p_xtb`, `RODZAJ*=BROKER`, `typ=investment.udziały`, `waluta=PLN` (rachunek `55260027`); bez `roi_def` / `roi_rules`.
+- Źródła: eksporty z platformy XTB (ZIP z xStation), nie API. Realny pakiet to jeden XLSX z arkuszami `Open Positions`, `Closed Positions`, `Cash Operations`. Historia zleceń nie występuje w tym eksporcie — poza v1 do czasu osobnej próbki.
+- Surowe eksporty XTB przychodzą jako ZIP-y z `~/Downloads`: `{nr_klienta}_{od}_{do}.zip`, dla klienta `55260027`; warianty Windows ` (1)`, ` (2)` traktować jako duplikaty pobrań. ZIP rozpakować, rozpoznać zawartość XLSX/CSV po strukturze arkuszy i zapisać plik kanoniczny w `assets/p_xtb/` jako `xtb_{open,closed,cash}_55260027_{od}_{do}.xlsx` (często `xtb_open_closed_cash_…` gdy ZIP ma wszystkie trzy arkusze); identyczne SHA256 rozpakowanego pliku usuwać jako pominięte, różna treść dla tej samej nazwy docelowej = twardy konflikt.
 - Import musi uwzględniać: zakupy, sprzedaże, wpłaty, wypłaty, dywidendy, prowizje, opłaty, podatki, przewalutowania i gotówkę roboczą brokera.
-- Normalizacja instrumentów: mapować ticker / ISIN / nazwę z XTB do instrumentów GMS; nie zakładać, że eksport XTB dostarcza historyczne market data.
-- **Snapshot:** MTM aktualnych pozycji + gotówka z najnowszego kompletnego eksportu ≤ data wyceny; szczegóły kolumn potwierdzić na realnym eksporcie XTB.
-- **ROI:** per instrument (`p_xtb:ISIN` albo stabilny ticker); BUY → `CAPEX`; SELL → `DIVESTMENT`; dywidendy → `REVENUES`; prowizje/opłaty/podatki jako koszty raportowe, a w XIRR per instrument dopiero po decyzji o alokacji kosztów.
-- GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie.
-- Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), raport diagnostyczny importu, walidacja kolumn/typów operacji/duplikatów/spójności pozycji oraz testy obok istniejących testów brokerów.
+- Parser: nagłówki tabel XTB są przesunięte (Open Positions ok. wiersz 8, Closed/Cash ok. wiersz 4). Kolumny kanoniczne po imporcie: Open (`Product`, `Instrument/Position`, `Ticker`, `Volume`, `Value`, …); Cash (`Type`, `Instrument`, `Ticker`, `Time`, `Amount`, …); Closed (`Instrument`, `Ticker`, `Volume`, `Position ID`, …). Brakujące kolumny uzupełniane puste.
+- DATA_STEP (`01 source`): `p_xtb-open.parquet`, `p_xtb-closed.parquet`, `p_xtb-cash.parquet`. **Nie** używać nazw Revolut `p_xtb-trading` / `p_xtb-pnl`. Open to snapshoty (do wyceny brać najnowszy `period_end <= data wyceny`); Cash/Closed to ledger — merge wszystkich plików, dedupe, luka okresów Cash → warning (jak DEGIRO Transactions/Account).
+- Normalizacja instrumentów: klucz ROI = ISIN jeśli jest w eksporcie, inaczej ticker XTB (np. `ETFPZUW20M40.PL`). Mapowanie na instrumenty GMS — osobna decyzja; eksport XTB nie dostarcza historycznych market data.
+- **Snapshot:** 1 wiersz — Σ `Value` z najnowszego Open Positions ≤ data wyceny: pozycje (wiersze z tickerem) **+ gotówka** z sekcji podsumowania (`Cash` / `Free funds`). To MTM, nie koszt FIFO. Brak katalogu/raportu → brak wiersza (jak DEGIRO).
+- **ROI:** per instrument (`p_xtb:TICKER`); merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`; `is_sold` ⇔ qty≈0 / brak w najnowszym Open. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Nieznany `Type` → warning, nie cichy skip.
+- GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie. Wspólny model: `importers/xtb/normalize.py` → `BrokerPositionFrame` / `BrokerTransactionFrame` / `BrokerCashFlowFrame` / `BrokerCashBalanceFrame`.
+- Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), walidacja kolumn/typów operacji/duplikatów oraz testy obok istniejących testów brokerów.
 
 ### Zadania XTB / GMS / ROI
 
-1. Zgrać przykładowe eksporty XTB `.xlsx`/`.csv` i opisać rzeczywiste kolumny dla pozycji, zleceń, transakcji i operacji gotówkowych.
-2. Dodać import pakietu XTB do `assets/p_xtb/` z nazwami plików zawierającymi okres lub datę wyceny oraz konfliktami dla tej samej zawartości/okresu.
-3. Zbudować parser i normalizator XTB do wspólnego modelu brokerów: instrument, ISIN/ticker, data, qty, cena, wartość, waluta, prowizja, podatek, typ operacji.
-4. Zaimplementować snapshot XTB: pozycje, gotówka, wartość portfela, niezrealizowany wynik i ekspozycje.
-5. Dodać reconciliation XTB ↔ GMS: current portfolio + cash vs target portfolio, lista BUY/SELL/rebalance do ręcznego wykonania w XTB.
-6. Ująć cash flows: wpłaty, wypłaty, dywidendy, odsetki, podatki, prowizje, opłaty i przewalutowania; rozdzielić wynik strategii od przepływów inwestora.
-7. Dodać metryki: ROI, TWR jako wynik strategii, XIRR/MWR jako wynik kapitału, Total Return, CAGR, YTD, okresowe stopy zwrotu, drawdown, volatility, Sharpe i turnover.
-8. Dodać walidację importu: brakujące kolumny, nieznane typy operacji, duplikaty, niespójna waluta, ujemna gotówka, brak ceny, rozjazd liczby jednostek.
-9. Przygotować fixture'y i testy dla: zakup, sprzedaż, częściowa sprzedaż, dywidenda, prowizja, podatek, wpłata, wypłata, przewalutowanie i pełny flow XTB → GMS → raport ROI/TWR/XIRR.
+Zrobione w v1: (1) próbka XLSX i kolumny Open/Closed/Cash; (2) import ZIP → `assets/p_xtb/`; (3) parser + normalizator do wspólnego modelu brokerów; (4) snapshot MTM pozycji + gotówka; (8) warning nieznanego `Type`, dedupe, luka okresów; (9) testy: zakup, sprzedaż, dywidenda, prowizja poza XIRR, wpłata, merge wielu plików.
+
+Pozostaje:
+5. Reconciliation XTB ↔ GMS: current portfolio + cash vs target, lista BUY/SELL/rebalance do ręcznego wykonania w XTB.
+6. Rozdzielić wynik strategii od przepływów inwestora (TWR vs XIRR/MWR) — poza XIRR v1 per instrument.
+7. Metryki: TWR, CAGR, YTD, drawdown, volatility, Sharpe, turnover.
+9. (dalsze) częściowa sprzedaż, przewalutowanie i pełny flow XTB → GMS → raport TWR/XIRR, gdy będzie historia zleceń / ISIN w eksporcie.
 
 ### Obligacje skarbowe (PKO BP)
 

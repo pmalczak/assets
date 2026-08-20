@@ -340,9 +340,9 @@ def render_roi_xtb(default_valuation_date: date | None) -> None:
         key="roi_xtb_valuation_date",
     )
     st.caption(
-        "Analityka z eksportu XTB: Cash Operations → CAPEX/DIVESTMENT/REVENUES/OPEX, "
-        "terminal otwartych = Value z najnowszego Open Positions <= data wyceny. "
-        "To jest v1 po strukturze eksportu, przed pełną rekonstrukcją NAV historycznego."
+        "Analityka z DATA_STEP (`p_xtb-cash`): Cash Operations → CAPEX/DIVESTMENT/REVENUES. "
+        "Terminal otwartych = Value z najnowszego Open Positions <= data wyceny. "
+        "Wpłaty/wypłaty/prowizje/podatki/FX poza XIRR per instrument (jak DEGIRO v1)."
     )
     try:
         with st.spinner("Liczenie ROI XTB..."):

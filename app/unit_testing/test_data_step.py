@@ -1,7 +1,9 @@
+import errno
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -142,6 +144,46 @@ class MetadataTests(unittest.TestCase):
         pd.DataFrame({"x": [9]}).to_parquet(path)
         self.metadata.update(DIGEST, token, [])
         self.assertNotIn(token, self.metadata.updated_stat_cache)
+
+    def test_delete_many_removes_all_tokens_in_one_dump(self):
+        tokens = ["a.parquet", "b.parquet"]
+        for token in tokens:
+            path = self.data_steps / token
+            pd.DataFrame({"x": [1]}).to_parquet(path)
+            self.metadata.update(DIGEST, token, [])
+        self.metadata.delete_many(tokens)
+        loaded = json.loads((self.data_steps / "_metadata.json").read_text(encoding="utf-8"))
+        self.assertNotIn("a.parquet", loaded)
+        self.assertNotIn("b.parquet", loaded)
+
+
+class ReplaceRetryTests(unittest.TestCase):
+    def test_retries_access_denied_then_succeeds(self):
+        from data_step.metadata_primitives_class import _replace_with_retry
+
+        calls = {"n": 0}
+
+        def fake_replace(_src, _dst):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                err = PermissionError(5, "Access is denied")
+                err.winerror = 5
+                raise err
+
+        with (
+            patch("data_step.metadata_primitives_class.os.replace", side_effect=fake_replace),
+            patch("data_step.metadata_primitives_class.time.sleep"),
+        ):
+            _replace_with_retry("tmp", "dest")
+        self.assertEqual(calls["n"], 3)
+
+    def test_non_retryable_oserror_is_raised(self):
+        from data_step.metadata_primitives_class import _replace_with_retry
+
+        err = OSError(errno.ENOENT, "missing")
+        with patch("data_step.metadata_primitives_class.os.replace", side_effect=err):
+            with self.assertRaises(OSError):
+                _replace_with_retry("tmp", "dest")
 
 
 class DataStepIntegrationTests(unittest.TestCase):
