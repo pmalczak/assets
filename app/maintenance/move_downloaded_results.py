@@ -15,6 +15,7 @@ KIND_REVOLUT = "Revolut"
 KIND_OBLIGACJE = "obligacje skarbowe"
 KIND_TRADEREPUBLIC = "Trade Republic"
 KIND_DEGIRO = "DEGIRO"
+KIND_XTB = "XTB"
 
 NO_DESTINATION = "—"
 

@@ -64,7 +64,7 @@ Arkusze `a_config.xlsx`:
     - `assets/` — `a_config.xlsx` (ex `assets_1` + `analyse_assets_config`), katalogi aktywów `investment.*`
     - `cash_pool/` — katalogi aktywów `cash_pool.*` (wyciągi ROR mBank/Revolut)
     - `download/pm|gm/` — źródło importu Revolut
-    - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`), Trade Republic (`p_traderepublic`), DEGIRO (`p_degiro`)
+    - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`), Trade Republic (`p_traderepublic`), DEGIRO (`p_degiro`), XTB (`p_xtb`)
     - Migrator: `app/maintenance/migrate_to_a_config.py`
 
 ---
@@ -115,14 +115,27 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
 
 ---
 
-## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO + Trade Republic + DEGIRO; wzorzec na XTB)
+## Rachunek brokerski (Revolut robo + obligacje skarbowe PKO + Trade Republic + DEGIRO + XTB)
 
 - To **nie** jest `cash_pool` ani pojedyncza inwestycja-lump z przelewu ROR — kontener pozycji instrumentów (+ gotówka robocza brokera).
 - W katalogu: `RODZAJ*=BROKER`. **`roi_def` / reguły ROI nie są wymagane**. DEGIRO używa `id=p_degiro`, `typ=investment.udziały`, `waluta=EUR`.
   - Revolut: `id=p_re_robo`, `typ` → `investment.udziały`
   - Obligacje: `id=obligacjeskarbowe`, `typ=investment.obligacje`
   - Trade Republic: `id=p_traderepublic`, `typ` → `investment.udziały`
-- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; `id=p_degiro` → DEGIRO; inaczej → Revolut trading.
+  - XTB: `id=p_xtb`, `typ` → `investment.udziały`, `waluta=EUR` (docelowo zgodnie z walutą rachunku)
+- Dispatch snapshotu: `typ=investment.obligacje` → ewaluator obligacji; `id=p_traderepublic` → Trade Republic; `id=p_degiro` → DEGIRO; `id=p_xtb` → XTB; inaczej → Revolut trading.
+- Docelowy przepływ architektoniczny:
+
+```text
+DEGIRO export --> DegiroAdapter --+
+                                  +--> Normalized Portfolio --> Performance
+XTB export -----> XtbAdapter -----+             |
+                                                |
+Market Data --> GMS Ranking --> Target --------+
+                                                |
+                                                +--> Rebalancing
+                                                     BUY / SELL
+```
 
 ### Revolut robo
 
@@ -149,6 +162,30 @@ Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspo
 - Terminal otwartych = `Wartość w EUR` z `Portfolio.csv` per ISIN; dla zamkniętych terminal = 0.
 - Do ROI transakcji używać `Wartość EUR`, a nie `Razem EUR`; opłaty, podatki, FX, cash sweep, depozyty/wypłaty i odsetki są poza XIRR per instrument w v1.
 - Implementacja: dedykowany importer DEGIRO, nie parser Revolut; źródła przez DATA_STEP (`01 source`), bez osobnego cache; testy obok istniejących testów brokerów.
+
+### XTB
+
+- W katalogu: `id=p_xtb`, `RODZAJ*=BROKER`, `typ=investment.udziały`, waluta zgodna z rachunkiem; bez `roi_def` / `roi_rules`.
+- Źródła: eksporty z platformy XTB, nie API. Obsłużyć co najmniej otwarte pozycje, zamknięte pozycje, historię zleceń oraz operacje gotówkowe.
+- Surowe eksporty XTB przychodzą jako ZIP-y z `~/Downloads`: `{nr_klienta}_{od}_{do}.zip`, dla klienta `55260027`; warianty Windows ` (1)`, ` (2)` traktować jako duplikaty pobrań. ZIP rozpakować, rozpoznać zawartość XLSX/CSV po strukturze arkuszy i zapisać plik kanoniczny w `assets/p_xtb/` jako np. `xtb_open_...`, `xtb_closed_...`, `xtb_cash_...` albo `xtb_open_closed_cash_55260027_{od}_{do}.xlsx`; identyczne SHA256 rozpakowanego pliku usuwać jako pominięte, różna treść dla tej samej nazwy docelowej = twardy konflikt.
+- Import musi uwzględniać: zakupy, sprzedaże, wpłaty, wypłaty, dywidendy, prowizje, opłaty, podatki, przewalutowania i gotówkę roboczą brokera.
+- Normalizacja instrumentów: mapować ticker / ISIN / nazwę z XTB do instrumentów GMS; nie zakładać, że eksport XTB dostarcza historyczne market data.
+- **Snapshot:** MTM aktualnych pozycji + gotówka z najnowszego kompletnego eksportu ≤ data wyceny; szczegóły kolumn potwierdzić na realnym eksporcie XTB.
+- **ROI:** per instrument (`p_xtb:ISIN` albo stabilny ticker); BUY → `CAPEX`; SELL → `DIVESTMENT`; dywidendy → `REVENUES`; prowizje/opłaty/podatki jako koszty raportowe, a w XIRR per instrument dopiero po decyzji o alokacji kosztów.
+- GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie.
+- Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), raport diagnostyczny importu, walidacja kolumn/typów operacji/duplikatów/spójności pozycji oraz testy obok istniejących testów brokerów.
+
+### Zadania XTB / GMS / ROI
+
+1. Zgrać przykładowe eksporty XTB `.xlsx`/`.csv` i opisać rzeczywiste kolumny dla pozycji, zleceń, transakcji i operacji gotówkowych.
+2. Dodać import pakietu XTB do `assets/p_xtb/` z nazwami plików zawierającymi okres lub datę wyceny oraz konfliktami dla tej samej zawartości/okresu.
+3. Zbudować parser i normalizator XTB do wspólnego modelu brokerów: instrument, ISIN/ticker, data, qty, cena, wartość, waluta, prowizja, podatek, typ operacji.
+4. Zaimplementować snapshot XTB: pozycje, gotówka, wartość portfela, niezrealizowany wynik i ekspozycje.
+5. Dodać reconciliation XTB ↔ GMS: current portfolio + cash vs target portfolio, lista BUY/SELL/rebalance do ręcznego wykonania w XTB.
+6. Ująć cash flows: wpłaty, wypłaty, dywidendy, odsetki, podatki, prowizje, opłaty i przewalutowania; rozdzielić wynik strategii od przepływów inwestora.
+7. Dodać metryki: ROI, TWR jako wynik strategii, XIRR/MWR jako wynik kapitału, Total Return, CAGR, YTD, okresowe stopy zwrotu, drawdown, volatility, Sharpe i turnover.
+8. Dodać walidację importu: brakujące kolumny, nieznane typy operacji, duplikaty, niespójna waluta, ujemna gotówka, brak ceny, rozjazd liczby jednostek.
+9. Przygotować fixture'y i testy dla: zakup, sprzedaż, częściowa sprzedaż, dywidenda, prowizja, podatek, wpłata, wypłata, przewalutowanie i pełny flow XTB → GMS → raport ROI/TWR/XIRR.
 
 ### Obligacje skarbowe (PKO BP)
 
@@ -208,3 +245,6 @@ Dopisz / popraw sekcję, gdy zmienia się:
 - kanoniczna nazwa arkusza / kolumny / typu.
 
 Nie zapisuj tu szczegółów implementacji (sygnatury, refaktory) — tylko decyzje i kontekst.
+
+
+

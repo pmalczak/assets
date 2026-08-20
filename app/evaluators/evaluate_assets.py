@@ -16,6 +16,7 @@ from evaluators.evaluate_broker_traderepublic import (
     is_traderepublic_broker,
 )
 from evaluators.evaluate_broker_degiro import evaluate_broker_degiro, is_degiro_broker
+from evaluators.evaluate_broker_xtb import evaluate_broker_xtb, is_xtb_broker
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
@@ -74,6 +75,10 @@ def evaluate_assets(
                 )
             elif is_degiro_broker(assets_file_row):
                 r, broker_warnings = evaluate_broker_degiro(
+                    data_root, asset_id, assets_file_row, valuation_date
+                )
+            elif is_xtb_broker(assets_file_row):
+                r, broker_warnings = evaluate_broker_xtb(
                     data_root, asset_id, assets_file_row, valuation_date
                 )
             else:
