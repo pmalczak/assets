@@ -295,6 +295,24 @@ class DataStepIntegrationTests(unittest.TestCase):
         self.assertEqual(refreshed.get_status(), REFRESHED)
         self.assertEqual(calls["n"], 2)
 
+    def test_invalidate_rebuilds_product_on_next_obtain(self):
+        self.step.init_steps(root=self.start_file)
+        calls = {"n": 0}
+
+        def collector(**kwargs):
+            calls["n"] += 1
+            return pd.DataFrame({"v": [calls["n"]]})
+
+        self.step.obtain("once.parquet", collector)
+        self.step.obtain("once.parquet", collector)
+        self.assertEqual(calls["n"], 1)
+
+        self.step.invalidate("once.parquet")
+        self.assertFalse((self.data_steps / "once.parquet").is_file())
+        rebuilt = self.step.obtain("once.parquet", collector)
+        self.assertEqual(rebuilt.get_status(), REFRESHED)
+        self.assertEqual(calls["n"], 2)
+
     def test_keep_cached_avoids_second_collector_call(self):
         self.step.init_steps(root=self.start_file)
         calls = {"n": 0}

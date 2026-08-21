@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
-from app_proc.recalculate_snapshots import recalculate_today_snapshot
+from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
 from app_streamlit.safe_download import dataframe_for_streamlit
@@ -45,14 +45,18 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         )
     with info_col:
         st.caption(
-            "Bezwarunkowe przeliczenie `calculate_assets()` na datę bieżącą "
-            f"(`{ASSETS_SNAPSHOT_STEP}/{today:%Y-%m-%d}.parquet`), niezależnie od cache."
+            "Przebudowuje snapshot na dziś w osobnym procesie "
+            f"(`{ASSETS_SNAPSHOT_STEP}/{today:%Y-%m-%d}.parquet`). "
+            "Źródła (`01 source`) zostają z DATA_STEP, jeśli są aktualne."
         )
 
     if generate:
         try:
             with st.spinner(f"Generowanie snapshotu {today:%Y-%m-%d}..."):
-                result = recalculate_today_snapshot(force_read_all_data=True)
+                results = run_snapshot_job_isolated(weekly=False, force_read_all_data=False)
+            if not results:
+                raise RuntimeError("Proces snapshotu nie zwrócił wyniku.")
+            result = results[0]
             _clear_reports_related_cache()
             st.session_state["reports_last_generated_snapshot"] = result.to_row()
             st.success(

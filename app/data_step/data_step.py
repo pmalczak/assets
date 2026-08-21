@@ -36,6 +36,17 @@ class DataStep(DataStepPrimitives):  # interface class
         self.is_initialised()
         self.metadata.force_read_data(True)
 
+    def invalidate(self, product: str) -> None:
+        """Usuwa produkt z DATA_STEP (metadata, plik, RAM) — następny ``obtain`` przebuduje."""
+        self.is_initialised()
+        assert isinstance(product, str)
+        self._cache.pop(product, None)
+        self.metadata.updated_stat_cache.pop(product, None)
+        path = self.metadata.token_as_path(product)
+        self.metadata.delete(product)
+        if path.is_file():
+            path.unlink()
+
     def obtain(self,
                product: str,
                data_collector,

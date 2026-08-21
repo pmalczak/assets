@@ -54,8 +54,7 @@ from move_dowloaded import run_move_downloaded
 from app_proc.recalculate_snapshots import (
     PORTFOLIO_WINDOW_DAYS,
     SnapshotResult,
-    recalculate_today_snapshot,
-    recalculate_weekly_snapshots,
+    run_snapshot_job_isolated,
 )
 
 st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
@@ -68,9 +67,10 @@ def _clear_dashboard_cache() -> None:
 
 
 def _run_snapshot_recalculation(*, full_recalculation: bool) -> list[SnapshotResult]:
-    if full_recalculation:
-        return recalculate_weekly_snapshots(force_read_all_data=True)
-    return [recalculate_today_snapshot(force_read_all_data=True)]
+    return run_snapshot_job_isolated(
+        weekly=full_recalculation,
+        force_read_all_data=True,
+    )
 
 
 def render_import_wyciagow() -> None:
@@ -266,5 +266,8 @@ def main():
 
 if __name__ == "__main__":
     # infer_string + pyarrow na CPython 3.14 bywa przyczyną segfaultu Streamlit.
+    import faulthandler
+
+    faulthandler.enable(all_threads=True)
     pd.options.future.infer_string = False
     main()

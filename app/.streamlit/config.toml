@@ -1,0 +1,9 @@
+[server]
+# Zapis parquet/metadata w data_steps nie może restartować ani zabijać Streamlit.
+folderWatchBlacklist = [
+    "data_steps",
+    "../data_steps",
+    "unit_testing/data_steps",
+    ".venv",
+    "../.venv",
+]

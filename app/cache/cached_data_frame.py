@@ -8,6 +8,7 @@ import pandas as pd
 from pyarrow import ArrowInvalid
 
 from cache.non_cached_data_frame import NonCachedDataFrame
+from data_step.parquet_safe import write_dataframe_parquet
 from utils.create_missing_path import create_missing_paths
 
 
@@ -77,7 +78,7 @@ class CachedDataFrame(NonCachedDataFrame):
 
         while True:
             try:
-                result.to_parquet(self._parquet_file_name, compression='GZIP')
+                write_dataframe_parquet(result, self._parquet_file_name, compression="gzip")
                 break
             except ArrowInvalid as e:
                 column = e.args[1]

@@ -9,6 +9,7 @@ from data_step.data_step_frame import DataStepFrame
 from data_step.data_strep_data_types import REFRESHED, CACHED
 from data_step.metadata_class import Metadata, MetadataUpdateError, MTIME, DIGEST
 from data_step.metadata_primitives_class import HOME_PATH
+from data_step.parquet_safe import write_dataframe_parquet
 
 
 class DataStepPrimitives:
@@ -110,7 +111,7 @@ class DataStepPrimitives:
             if '.gzip.parquet' in data_file.name:
                 compression = 'gzip'
             try:
-                data.to_parquet(data_file, compression=compression)
+                write_dataframe_parquet(data, data_file, compression=compression)
             except Exception as e:
                 data.info()
                 raise
