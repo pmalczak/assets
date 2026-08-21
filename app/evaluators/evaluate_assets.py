@@ -9,12 +9,9 @@ import pandas as pd
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
 from evaluators.evaluate_assets_file import evaluate_assets_file
+from evaluators.broker_registry import resolve_broker_snapshot_evaluator
+from evaluators.broker_snapshot import empty_broker_snapshot, unknown_broker_warning
 from evaluators.evaluate_broker_obligacje import evaluate_broker_obligacje, is_obligacje_broker
-from evaluators.evaluate_broker_revolut import evaluate_broker_revolut
-from evaluators.evaluate_broker_traderepublic import (
-    evaluate_broker_traderepublic,
-    is_traderepublic_broker,
-)
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
@@ -67,14 +64,15 @@ def evaluate_assets(
                 r, broker_warnings = evaluate_broker_obligacje(
                     data_root, asset_id, assets_file_row, valuation_date
                 )
-            elif is_traderepublic_broker(assets_file_row):
-                r, broker_warnings = evaluate_broker_traderepublic(
-                    data_root, asset_id, assets_file_row, valuation_date
-                )
             else:
-                r, broker_warnings = evaluate_broker_revolut(
-                    data_root, asset_id, assets_file_row, valuation_date
-                )
+                evaluator = resolve_broker_snapshot_evaluator(assets_file_row)
+                if evaluator is None:
+                    r = empty_broker_snapshot()
+                    broker_warnings = [unknown_broker_warning(asset_id)]
+                else:
+                    r, broker_warnings = evaluator.evaluate(
+                        data_root, asset_id, assets_file_row, valuation_date
+                    )
             for warning in broker_warnings:
                 msg = f"[{asset_id}] {warning}"
                 warnings.append(msg)

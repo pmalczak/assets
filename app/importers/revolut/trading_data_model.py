@@ -3,6 +3,8 @@ __author__ = "pmalczak@gmail.com"
 
 from importers.data_model_generic import GenericStructureClass
 
+DEFAULT_REVOLUT_ROBO_ASSET_ID = "p_re_robo"
+
 
 class RevolutTradingFileCls(GenericStructureClass):
     DATE = "Date"

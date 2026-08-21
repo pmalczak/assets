@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.ui_prefs import (
+    TAB_ASSETS,
     TAB_LABELS,
     TABS_STATE_KEY,
     load_last_tab,
@@ -88,7 +89,15 @@ def render_import_wyciagow() -> None:
         f"- obligacje skarbowe: `{home / 'Downloads'}` "
         f"(`StanRachunkuRejestrowego*.xls`, `HistoriaDyspozycji.xls` "
         f"z nazwą wg zakresu dat dyspozycji) "
-        f"→ `{get_online_data_root() / 'obligacjeskarbowe'}`"
+        f"→ `{get_online_data_root() / 'obligacjeskarbowe'}`\n"
+        f"- DEGIRO: `{home / 'Downloads'}` "
+        f"(`Portfolio.csv`, `Transactions.csv`, `Account.csv` "
+        f"→ `{{portfolio,transactions,account}}_{{od}}_{{do}}.csv`) "
+        f"→ `{get_online_data_root() / 'p_degiro'}`\n"
+        f"- XTB: `{home / 'Downloads'}` "
+        f"(`55260027_{{od}}_{{do}}*.zip` → rozpakowany `xtb_{{open,closed,cash}}_55260027_{{od}}_{{do}}.xlsx`; "
+        f"identyczne `(1)`, `(2)` są pomijane) "
+        f"→ `{get_online_data_root() / 'p_xtb'}`"
     )
 
     if st.button("Przenieś pliki do ich katalogów", key="move_downloaded_button"):
@@ -221,7 +230,7 @@ def main():
         with tab:
             if label != active_tab:
                 continue
-            if label == "Raporty":
+            if label == TAB_ASSETS:
                 render_main_reports(latest, data["latest_snapshot"])
             elif label == "Wykres portfela":
                 render_portfolio_history(
@@ -238,6 +247,12 @@ def main():
                 render_roi_revolut_deposits(latest)
             elif label == "ROI obligacje":
                 render_roi_obligacje(latest)
+            elif label == "ROI DEGIRO":
+                from app_streamlit.render_roi import render_roi_degiro
+                render_roi_degiro(latest)
+            elif label == "ROI XTB":
+                from app_streamlit.render_roi import render_roi_xtb
+                render_roi_xtb(latest)
             elif label == "FX":
                 render_fx()
             elif label == "Global momentum":

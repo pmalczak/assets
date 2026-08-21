@@ -103,10 +103,21 @@ class Metadata(MetadataPrimitives):
 
     def delete(self, missing_file):
         """Usuwa wpis z rejestru i atomowo zapisuje metadata (pod flock)."""
+        self.delete_many([missing_file])
+
+    def delete_many(self, missing_files: list[str]) -> None:
+        """Jedna podmiana `_metadata.json` dla wielu wpisów (mniej wyścigów na Windowsie)."""
+        tokens = [token for token in missing_files if token]
+        if not tokens:
+            return
         with self._exclusive_metadata_lock():
             self._reload_metadata_unlocked()
-            if missing_file in self._metadata:
-                del self._metadata[missing_file]
+            changed = False
+            for token in tokens:
+                if token in self._metadata:
+                    del self._metadata[token]
+                    changed = True
+            if changed:
                 self._dump_metadata_unlocked()
 
 

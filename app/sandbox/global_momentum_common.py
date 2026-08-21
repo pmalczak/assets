@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
+import yfinance as yf
 
 from data_step.data_step import DATA_STEP
 from yahoo_finance.repository import download_yahoo as _download_yahoo
@@ -41,7 +42,8 @@ STOOQ_API_KEY_ENV = "STOOQ_API_KEY"
 MIN_WIG_DAILY_ROWS = 260
 WIG_CACHE_PATH = PLOT_DIR / "wig_pln.csv"
 WIG_CACHE_MAX_AGE_DAYS = 4
-GLOBAL_EQUITY_BENCHMARK = "ACWI"
+GLOBAL_EQUITY_INDEX_BENCHMARK = "ACWI"
+GLOBAL_EQUITY_ETF_BENCHMARK = "SSAC.AS"
 BOND_EUR_HEDGED_BENCHMARK = "EUNH.DE"
 GLOBAL_EQUITY_BACKFILL_WEIGHTS = {
     "USA": 0.55,
@@ -120,6 +122,32 @@ def download_yahoo(
 ) -> pd.DataFrame:
     DATA_STEP.init_steps(root=Path(__file__).resolve().parent.parent)
     return _download_yahoo(tickers, start=start, end=end)
+
+
+def download_yahoo_live_adjusted(
+    tickers: list[str],
+    start: str = START,
+    end: str | None = END,
+) -> pd.DataFrame:
+    data = yf.download(
+        tickers,
+        start=start,
+        end=end,
+        auto_adjust=True,
+        progress=False,
+        group_by="column",
+    )
+
+    close_data = data["Close"]
+    if isinstance(close_data, pd.Series):
+        close = close_data.to_frame(tickers[0] if len(tickers) == 1 else "Close")
+    else:
+        close = close_data.copy()
+        if len(tickers) == 1 and len(close.columns) == 1:
+            close.columns = tickers
+
+    close.index = pd.to_datetime(close.index)
+    return close
 
 
 # ------------------------------------------------
@@ -629,15 +657,15 @@ def load_monthly_prices() -> pd.DataFrame:
     # ------------------------------------------------
 
     tickers = list(ASSETS_7.values()) + [SAFE_BACKFILL_ASSET]
-    prices_usd = download_yahoo(tickers)
-    safe_eur = download_yahoo([SAFE_ASSET])
+    prices_usd = download_yahoo_live_adjusted(tickers)
+    safe_eur = download_yahoo_live_adjusted([SAFE_ASSET])
     safe_eur.columns = ["Safe"]
     wig_pln = download_wig()
 
     # FX rates
     # EURUSD = USD per EUR
     # EURPLN = PLN per EUR
-    fx = download_yahoo(["EURUSD=X", "EURPLN=X"])
+    fx = download_yahoo_live_adjusted(["EURUSD=X", "EURPLN=X"])
     fx.columns = ["EURUSD", "EURPLN"]
 
     # ------------------------------------------------
@@ -696,7 +724,13 @@ def backtest(
     monthly: pd.DataFrame,
     asset_names: list[str],
     label: str,
+    top_n: int = TOP_N,
 ) -> BacktestResult:
+    if top_n < 1:
+        raise ValueError("top_n must be at least 1.")
+    if top_n > len(asset_names):
+        raise ValueError("top_n cannot exceed the number of assets.")
+
     prices = monthly[asset_names]
     safe = monthly["Safe"]
     momentum = momentum_score(prices)
@@ -718,10 +752,10 @@ def backtest(
         investment_date = monthly.index[i + 1]
         scores = momentum.iloc[i].dropna()
         ranking = scores.sort_values(ascending=False)
-        top = ranking.head(TOP_N).index
+        top = ranking.head(top_n).index
 
         ranking_history[signal_date] = list(top)
-        weight = 1 / TOP_N
+        weight = 1 / top_n
         portfolio_return = 0.0
         safe_weight = 0.0
 
@@ -908,18 +942,23 @@ def price_index_from_returns(
 
 
 def build_benchmarks(monthly: pd.DataFrame) -> dict[str, BacktestResult]:
-    benchmark_prices = download_yahoo(
-        [GLOBAL_EQUITY_BENCHMARK, BOND_EUR_HEDGED_BENCHMARK]
+    benchmark_prices = download_yahoo_live_adjusted(
+        [
+            GLOBAL_EQUITY_INDEX_BENCHMARK,
+            GLOBAL_EQUITY_ETF_BENCHMARK,
+            BOND_EUR_HEDGED_BENCHMARK,
+        ]
     )
 
-    fx = download_yahoo(["EURUSD=X"])
+    fx = download_yahoo_live_adjusted(["EURUSD=X"])
     fx.columns = ["EURUSD"]
 
     daily = benchmark_prices.join(fx, how="inner")
     prices_eur = pd.DataFrame(index=daily.index)
-    prices_eur["Global Equity B&H"] = (
-        daily[GLOBAL_EQUITY_BENCHMARK] / daily["EURUSD"]
+    prices_eur["Global Equity index"] = (
+        daily[GLOBAL_EQUITY_INDEX_BENCHMARK] / daily["EURUSD"]
     )
+    prices_eur["Global Equity ETF"] = daily[GLOBAL_EQUITY_ETF_BENCHMARK]
     prices_eur["EUR-Hedged Bonds"] = daily[BOND_EUR_HEDGED_BENCHMARK]
     monthly_benchmarks = prices_eur.resample("ME").last().reindex(monthly.index)
 
@@ -927,9 +966,14 @@ def build_benchmarks(monthly: pd.DataFrame) -> dict[str, BacktestResult]:
         weighted_monthly_returns(monthly, GLOBAL_EQUITY_BACKFILL_WEIGHTS),
         "Global Equity proxy",
     )
-    equity_price = chain_link_prices(
+    equity_index = chain_link_prices(
         equity_proxy,
-        monthly_benchmarks["Global Equity B&H"],
+        monthly_benchmarks["Global Equity index"],
+        "Global Equity index",
+    )
+    equity_price = chain_link_prices(
+        equity_index,
+        monthly_benchmarks["Global Equity ETF"],
         "Global Equity B&H",
     )
     bond_price = chain_link_prices(
@@ -991,52 +1035,6 @@ def monthly_rebalanced_60_40_returns(
     turnover = (abs(equity_drift - 0.6) + abs(bond_drift - 0.4)) / 2
 
     return returns.rename("60/40"), turnover.rename("60/40 Turnover")
-
-
-def print_strategy_comparison(
-    results: dict[str, BacktestResult],
-    cpi: pd.Series,
-) -> None:
-    common_index = None
-    for result in results.values():
-        idx = result["returns"].dropna().index
-        common_index = idx if common_index is None else common_index.intersection(idx)
-
-    if common_index is None or common_index.empty:
-        print("\nNo common return history is available for strategy comparison.")
-        return
-
-    common_results = {
-        label: align_result_to_index(result, common_index)
-        for label, result in results.items()
-    }
-    comparison = pd.DataFrame(
-        {
-            label: extended_metrics(result, cpi)
-            for label, result in common_results.items()
-        }
-    )
-
-    print("\n")
-    print("=" * 70)
-    print("STRATEGY VS BENCHMARKS")
-    print(f"Common nominal period: {common_index.min().date()} -> {common_index.max().date()}")
-    cpi_status = cpi.index.max().date() if not cpi.empty else "unavailable"
-    print(f"Polish CPI available through: {cpi_status}")
-    print(
-        "Benchmark backfill: All-World uses "
-        f"{display_name('USA')}/{display_name('Europe')}/"
-        f"{display_name('Japan')}/{display_name('Emerging Markets')} "
-        f"proxy before {GLOBAL_EQUITY_BENCHMARK}; 60/40 bonds use "
-        f"{display_name(BOND_BACKFILL_ASSET)} "
-        f"before {BOND_EUR_HEDGED_BENCHMARK}."
-    )
-    print(
-        f"Safe backfill: {SAFE_BACKFILL_ASSET} converted to EUR before "
-        f"{display_name('Safe')}."
-    )
-    print("=" * 70)
-    print(format_metric_table(comparison))
 
 
 def align_result_to_index(

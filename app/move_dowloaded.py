@@ -7,10 +7,12 @@ import pandas as pd
 
 from app_proc.data_root import get_cash_pool_root, get_online_data_root
 from maintenance.move_downloaded_results import MoveResult
+from maintenance.move_degiro_files import move_degiro_files
 from maintenance.move_mbank_files import move_mbank_files
 from maintenance.move_obligacje_files import move_obligacje_files
 from maintenance.move_revolut_files import move_revolut_files
 from maintenance.move_traderepublic_files import move_traderepublic_files
+from maintenance.move_xtb_files import move_xtb_files
 
 pd.options.future.infer_string = True
 
@@ -35,6 +37,8 @@ def run_move_downloaded(
     # Luźne CSV mBank czasem lądują w assets/ — destynacja i tak to cash_pool.
     results.extend(move_mbank_files(cash_pool_root, assets_root))
     results.extend(move_obligacje_files(assets_root, download))
+    results.extend(move_degiro_files(assets_root, download))
+    results.extend(move_xtb_files(assets_root, download))
     return results
 
 

@@ -21,7 +21,7 @@ def read_revolut_account_transactions(input_path: Path, asset_id: str) -> pd.Dat
 
 
 def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame:
-    input_files = [f for f in source_file.rglob("account-statement_*.csv")]
+    input_files = [f for f in source_file.glob("account-statement_*.csv")]
 
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(RevolutAccountFile.expected_columns()))

@@ -5,10 +5,12 @@ __author__ = "pmalczak@gmail.com"
 
 from contextlib import contextmanager
 from pathlib import Path
+import errno
 import json
 import os
 import sys
 import tempfile
+import time
 
 from utils.get_app_path import AppFile, GetAppPathError
 
@@ -31,6 +33,36 @@ def _lock_exclusive(lock_fp) -> None:
         return
     import fcntl
     fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+
+
+_WINDOWS_REPLACE_WINERRORS = {5, 32}  # ACCESS_DENIED, SHARING_VIOLATION
+_REPLACE_ATTEMPTS = 8
+
+
+def _is_replace_retry_error(exc: OSError) -> bool:
+    winerror = getattr(exc, "winerror", None)
+    if winerror in _WINDOWS_REPLACE_WINERRORS:
+        return True
+    return exc.errno in {errno.EACCES, errno.EPERM}
+
+
+def _replace_with_retry(tmp_name: str, dest: str | Path, *, attempts: int = _REPLACE_ATTEMPTS) -> None:
+    """os.replace na Windowsie pada, gdy Defender/indexer trzyma dest — retry z backoffem."""
+    dest = os.fspath(dest)
+    delay = 0.05
+    last_exc: OSError | None = None
+    for _ in range(attempts):
+        try:
+            os.replace(tmp_name, dest)
+            return
+        except OSError as exc:
+            if not _is_replace_retry_error(exc):
+                raise
+            last_exc = exc
+            time.sleep(delay)
+            delay = min(delay * 2, 0.8)
+    assert last_exc is not None
+    raise last_exc
 
 
 def _unlock(lock_fp) -> None:
@@ -114,7 +146,7 @@ class MetadataPrimitives:
                 fp.write(dump)
                 fp.flush()
                 os.fsync(fp.fileno())
-            os.replace(tmp_name, self._metadata_file)
+            _replace_with_retry(tmp_name, self._metadata_file)
         except Exception:
             try:
                 os.unlink(tmp_name)

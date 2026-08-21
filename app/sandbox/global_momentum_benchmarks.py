@@ -1,6 +1,6 @@
 # ================================================================
 # GLOBAL MOMENTUM BENCHMARKS
-# Historical research and validation for Global Momentum U8
+# Historical research and validation for Global Momentum U7
 # ================================================================
 
 import matplotlib
@@ -10,127 +10,125 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from global_momentum_common import (
-    ASSETS_7,
     align_result_to_index,
     annual_returns,
     backtest,
+    benchmark_result,
     build_benchmarks,
     diagnose_monthly_returns,
-    display_name,
     download_polish_cpi,
     drawdown,
     extended_metrics,
+    format_metric_table,
     load_monthly_prices,
     metrics,
-    print_strategy_comparison,
     save_plot,
+    weighted_monthly_returns,
 )
 
 
+U7 = [
+    "USA",
+    "Europe",
+    "Japan",
+    "Emerging Markets",
+    "Bonds",
+    "Commodities",
+    "Poland",
+]
+GM_U7_LABEL = "GM U7"
+U7_EQUAL_WEIGHT_LABEL = "U7 Equal Weight"
+EXPECTED_U7_METRICS = {
+    "CAGR": 0.0813,
+    "Volatility": 0.1269,
+    "Max Drawdown": -0.2558,
+}
+EXPECTED_U7_TOLERANCE = {
+    "CAGR": 0.003,
+    "Volatility": 0.005,
+    "Max Drawdown": 0.01,
+}
 # ------------------------------------------------
 # RUN BACKTESTS
 # ------------------------------------------------
 
 def run_benchmarks() -> dict:
     monthly = load_monthly_prices()
-    universe7 = list(ASSETS_7.keys())
-    universe8 = universe7 + ["Poland"]
-    universe8_label = f"Universe 8 + {display_name('Poland')}"
 
-    diagnose_monthly_returns(monthly[universe8 + ["Safe"]], "strategy prices")
+    diagnose_monthly_returns(monthly[U7 + ["Safe"]], "strategy prices")
 
-    bt7 = backtest(monthly, universe7, "TOP3 - Universe 7")
-    bt8 = backtest(monthly, universe8, f"TOP3 - {universe8_label}")
-    benchmarks = build_benchmarks(monthly)
+    bt7 = backtest(monthly, U7, f"TOP3 - {GM_U7_LABEL}")
+    benchmarks = {
+        label: result
+        for label, result in build_benchmarks(monthly).items()
+        if label != "60/40"
+    }
     polish_cpi = download_polish_cpi()
 
-    m7 = metrics(bt7)
-    m8 = metrics(bt8)
-    comparison = pd.DataFrame(
+    baseline_comparison, _, _ = strategy_comparison_table(
         {
-            "Universe 7": m7,
-            universe8_label: m8,
-        }
+            GM_U7_LABEL: bt7,
+            **benchmarks,
+        },
+        polish_cpi,
     )
+    assert_expected_u7_metrics(baseline_comparison[GM_U7_LABEL].to_dict())
 
+    u7_equal_weight = build_u7_equal_weight_benchmark(monthly)
     strategy_results = {
-        "GM U8": bt8,
+        GM_U7_LABEL: bt7,
+        U7_EQUAL_WEIGHT_LABEL: u7_equal_weight,
         **benchmarks,
-        "GM U7 (diagnostic)": bt7,
     }
-    strategy_comparison, comparison_period = strategy_comparison_table(
+    strategy_comparison, comparison_period, common_results = strategy_comparison_table(
         strategy_results,
         polish_cpi,
     )
-
-    poland_top3 = [
-        date for date, ranking in bt8["ranking"].items() if "Poland" in ranking
-    ]
-    number_poland = len(poland_top3)
-    total_signals = len(bt8["ranking"])
-    frequency = number_poland / total_signals if total_signals > 0 else 0.0
-
-    replacement_counts: dict[str, int] = {}
-    for date in bt8["ranking"]:
-        r8 = bt8["ranking"][date]
-        if "Poland" not in r8 or date not in bt7["ranking"]:
-            continue
-        for asset in set(bt7["ranking"][date]) - set(r8):
-            replacement_counts[asset] = replacement_counts.get(asset, 0) + 1
-
-    displaced = pd.DataFrame(
-        [
-            {"Asset": display_name(asset), "Months": count}
-            for asset, count in sorted(
-                replacement_counts.items(),
-                key=lambda item: item[1],
-                reverse=True,
-            )
-        ]
+    comparison = pd.DataFrame(
+        {
+            GM_U7_LABEL: metrics(bt7),
+        }
     )
 
     annual = pd.DataFrame(
         {
-            "Universe 7": annual_returns(bt7),
-            universe8_label: annual_returns(bt8),
+            GM_U7_LABEL: annual_returns(common_results[GM_U7_LABEL]),
+            U7_EQUAL_WEIGHT_LABEL: annual_returns(
+                common_results[U7_EQUAL_WEIGHT_LABEL]
+            ),
         }
     )
-    annual["Difference"] = annual[universe8_label] - annual["Universe 7"]
 
     equity = pd.DataFrame(
         {
-            "Global Momentum U8": bt8["equity"],
-            "All-World Buy & Hold": benchmarks["All-World Buy & Hold"]["equity"],
-            "60/40": benchmarks["60/40"]["equity"],
-            "GM U7 diagnostic": bt7["equity"],
+            GM_U7_LABEL: common_results[GM_U7_LABEL]["equity"],
+            U7_EQUAL_WEIGHT_LABEL: common_results[U7_EQUAL_WEIGHT_LABEL]["equity"],
+            "All-World": common_results["All-World Buy & Hold"]["equity"],
         }
     )
     drawdowns = pd.DataFrame(
         {
-            "Global Momentum U8": drawdown(bt8["equity"]),
-            "All-World Buy & Hold": drawdown(
-                benchmarks["All-World Buy & Hold"]["equity"]
+            GM_U7_LABEL: drawdown(common_results[GM_U7_LABEL]["equity"]),
+            U7_EQUAL_WEIGHT_LABEL: drawdown(
+                common_results[U7_EQUAL_WEIGHT_LABEL]["equity"]
             ),
-            "60/40": drawdown(benchmarks["60/40"]["equity"]),
-            "GM U7 diagnostic": drawdown(bt7["equity"]),
+            "All-World": drawdown(common_results["All-World Buy & Hold"]["equity"]),
         }
     )
 
     return {
-        "universe8_label": universe8_label,
+        "universe7_label": GM_U7_LABEL,
+        "universe8_label": GM_U7_LABEL,
         "comparison": comparison,
         "strategy_comparison": strategy_comparison,
         "comparison_period": comparison_period,
         "cpi_through": polish_cpi.index.max().date() if not polish_cpi.empty else None,
-        "poland_in_top3": number_poland,
-        "total_signals": total_signals,
-        "poland_frequency": frequency,
-        "displaced": displaced,
         "annual": annual,
         "equity": equity,
         "drawdown": drawdowns,
         "bt7": bt7,
-        "bt8": bt8,
+        "bt8": bt7,
+        "u7_equal_weight": u7_equal_weight,
         "benchmarks": benchmarks,
         "polish_cpi": polish_cpi,
     }
@@ -139,14 +137,14 @@ def run_benchmarks() -> dict:
 def strategy_comparison_table(
     results: dict,
     cpi: pd.Series,
-) -> tuple[pd.DataFrame, tuple | None]:
+) -> tuple[pd.DataFrame, tuple | None, dict]:
     common_index = None
     for result in results.values():
         idx = result["returns"].dropna().index
         common_index = idx if common_index is None else common_index.intersection(idx)
 
     if common_index is None or common_index.empty:
-        return pd.DataFrame(), None
+        return pd.DataFrame(), None, {}
 
     common_results = {
         label: align_result_to_index(result, common_index)
@@ -158,83 +156,78 @@ def strategy_comparison_table(
             for label, result in common_results.items()
         }
     )
-    return comparison, (common_index.min().date(), common_index.max().date())
+    return comparison, (common_index.min().date(), common_index.max().date()), common_results
+
+
+def build_u7_equal_weight_benchmark(monthly: pd.DataFrame) -> dict:
+    weights = {asset: 1 / len(U7) for asset in U7}
+    returns = weighted_monthly_returns(monthly, weights).rename(U7_EQUAL_WEIGHT_LABEL)
+    weights_frame = pd.DataFrame(
+        weights,
+        index=returns.dropna().index,
+    )
+    return benchmark_result(
+        returns,
+        U7_EQUAL_WEIGHT_LABEL,
+        weights_frame,
+    )
+
+
+def assert_expected_u7_metrics(u7_metrics: dict[str, float]) -> None:
+    gm_u7_cagr = u7_metrics["CAGR"]
+    gm_u7_vol = u7_metrics["Volatility"]
+    gm_u7_max_dd = u7_metrics["Max Drawdown"]
+    assert abs(gm_u7_cagr - 0.0813) < 0.003, (
+        f"GM U7 CAGR validation failed: {gm_u7_cagr:.4%}"
+    )
+    assert abs(gm_u7_vol - 0.1269) < 0.005, (
+        f"GM U7 volatility validation failed: {gm_u7_vol:.4%}"
+    )
+    assert abs(gm_u7_max_dd - (-0.2558)) < 0.01, (
+        f"GM U7 max drawdown validation failed: {gm_u7_max_dd:.4%}"
+    )
+
+
+def format_percent_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return frame.map(lambda x: "" if pd.isna(x) else f"{x:.2%}")
 
 
 def main() -> None:
     result = run_benchmarks()
-    universe8_label = result["universe8_label"]
-    comparison = result["comparison"]
-    m7 = comparison["Universe 7"]
-    m8 = comparison[universe8_label]
 
     print("\n")
     print("=" * 70)
     print("GLOBAL MOMENTUM BACKTEST")
-    print("Primary strategy: Global Momentum U8")
+    print("Primary strategy: Global Momentum U7")
     print("=" * 70)
-    print(comparison)
+    start, end = result["comparison_period"]
+    print(f"Common nominal period: {start} -> {end}")
+    print(f"Polish CPI available through: {result['cpi_through']}")
+    print(format_metric_table(result["strategy_comparison"]).to_string())
+
     print("\n")
-
-    for metric in [
-        "Total Return",
-        "CAGR",
-        "Volatility",
-        "Max Drawdown",
-        "Worst Year",
-        "Annual Turnover",
-    ]:
-        print(
-            f"{metric:20s}",
-            f"U7: {m7[metric]:8.2%}",
-            f"U8: {m8[metric]:8.2%}",
-        )
-
-    print_strategy_comparison(
-        {
-            "GM U8": result["bt8"],
-            **result["benchmarks"],
-            "GM U7 (diagnostic)": result["bt7"],
-        },
-        result["polish_cpi"],
+    print("=" * 70)
+    print("U7 PORTFOLIO BENCHMARK")
+    print("=" * 70)
+    top_n_columns = [
+        GM_U7_LABEL,
+        U7_EQUAL_WEIGHT_LABEL,
+    ]
+    print(
+        format_metric_table(result["strategy_comparison"][top_n_columns]).to_string()
     )
-
-    print("\n")
-    print("=" * 70)
-    print("POLAND / WIG ANALYSIS")
-    print("=" * 70)
-    print(f"{display_name('Poland')} in TOP3: {result['poland_in_top3']} months")
-    print(f"All signals: {result['total_signals']}")
-    print(f"Frequency: {result['poland_frequency']:.1%}")
-
-    displaced = result["displaced"]
-    print(f"\nAssets most often displaced by {display_name('Poland')}:")
-    if displaced.empty:
-        print("(none)")
-    else:
-        replacement_width = max(32, *(len(str(name)) for name in displaced["Asset"]))
-        for row in displaced.to_dict("records"):
-            print(f"{row['Asset']:{replacement_width}s}: {row['Months']}")
 
     annual = result["annual"]
     print("\n")
     print("=" * 70)
     print("ANNUAL RETURNS")
     print("=" * 70)
-    print(annual.drop(columns=["Difference"]).map(lambda x: f"{x:.2%}"))
-
-    print(f"\nBest years for adding {display_name('Poland')}:")
-    print(annual.sort_values("Difference", ascending=False).head())
-
-    print(f"\nWorst years for adding {display_name('Poland')}:")
-    print(annual.sort_values("Difference").head())
+    print(format_percent_frame(annual).to_string())
 
     plt.figure(figsize=(12, 6))
     for column in result["equity"].columns:
-        style = "--" if column == "GM U7 diagnostic" else "-"
-        alpha = 0.7 if column == "GM U7 diagnostic" else 1.0
-        plt.plot(result["equity"][column], label=column, linestyle=style, alpha=alpha)
-    plt.title("Global Momentum U8 vs All-World and 60/40")
+        plt.plot(result["equity"][column], label=column)
+    plt.title("Global Momentum U7, U7 Equal Weight, and All-World")
     plt.ylabel("Portfolio value (EUR)")
     plt.xlabel("Date")
     plt.grid(alpha=0.3)
@@ -244,10 +237,8 @@ def main() -> None:
 
     plt.figure(figsize=(12, 5))
     for column in result["drawdown"].columns:
-        style = "--" if column == "GM U7 diagnostic" else "-"
-        alpha = 0.7 if column == "GM U7 diagnostic" else 1.0
-        plt.plot(result["drawdown"][column], label=column, linestyle=style, alpha=alpha)
-    plt.title("Drawdown - Global Momentum U8 vs All-World and 60/40")
+        plt.plot(result["drawdown"][column], label=column)
+    plt.title("Drawdown - Global Momentum U7, U7 Equal Weight, and All-World")
     plt.ylabel("Drawdown")
     plt.xlabel("Date")
     plt.grid(alpha=0.3)

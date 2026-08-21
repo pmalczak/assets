@@ -71,10 +71,11 @@ def _delete_outdated_as_of(ticker: str, keep_as_of: date) -> None:
     ticker_dir = keep_path.parent
     if not ticker_dir.is_dir():
         return
+    stale: list[str] = []
     for path in ticker_dir.glob("*.parquet"):
         if path.name == keep_path.name:
             continue
         path.unlink(missing_ok=True)
-        DATA_STEP.metadata.delete(
-            yahoo_ticker_resource(ticker, date.fromisoformat(path.stem))
-        )
+        stale.append(yahoo_ticker_resource(ticker, date.fromisoformat(path.stem)))
+    if stale:
+        DATA_STEP.metadata.delete_many(stale)
