@@ -17,7 +17,7 @@ def main():
 
     assets = calculate_assets(valuation_date=valuation_date, force_read_all_data=False)
     print(assets)
-    print(s)
+    # print(s)
 
     rap2(assets)
     rap1_prn(assets)
