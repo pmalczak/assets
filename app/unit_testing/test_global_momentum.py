@@ -1,16 +1,11 @@
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-_SANDBOX = Path(__file__).resolve().parents[1] / "sandbox"
-if str(_SANDBOX) not in sys.path:
-    sys.path.insert(0, str(_SANDBOX))
-
-from global_momentum_common import last_completed_month_end
-from global_momentum_u8_ranking import (
+from sandbox.global_momentum_benchmarks import GM_U7_LABEL, prepare_strategy_comparison
+from sandbox.global_momentum_common import last_completed_month_end
+from sandbox.global_momentum_u8_ranking import (
     RANKING_TICKERS,
     annotate_asset_top3_drift,
     compute_current_universe7_ranking,
@@ -141,6 +136,24 @@ class Top3DriftMarkerTests(unittest.TestCase):
             list(annotated["Asset"]),
             ["* USA", "- Europe", "+ Bonds", "- Japan", "Gold"],
         )
+
+
+class StrategyComparisonPrepareTests(unittest.TestCase):
+    def test_keeps_gm_u7_column(self):
+        raw = pd.DataFrame({GM_U7_LABEL: {"CAGR": 0.08}})
+        prepared = prepare_strategy_comparison(raw)
+        self.assertIn(GM_U7_LABEL, prepared.columns)
+        self.assertAlmostEqual(prepared.loc["CAGR", GM_U7_LABEL], 0.08)
+
+    def test_transposes_when_gm_u7_is_index(self):
+        raw = pd.DataFrame({"CAGR": {GM_U7_LABEL: 0.08}})
+        prepared = prepare_strategy_comparison(raw)
+        self.assertIn(GM_U7_LABEL, prepared.columns)
+        self.assertAlmostEqual(prepared.loc["CAGR", GM_U7_LABEL], 0.08)
+
+    def test_empty_frame_stays_empty(self):
+        prepared = prepare_strategy_comparison(pd.DataFrame())
+        self.assertTrue(prepared.empty)
 
 
 if __name__ == "__main__":

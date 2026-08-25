@@ -3,6 +3,8 @@
 # Historical research and validation for Global Momentum U7
 # ================================================================
 
+from __future__ import annotations
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -84,6 +86,11 @@ def run_benchmarks() -> dict:
         strategy_results,
         polish_cpi,
     )
+    if GM_U7_LABEL not in strategy_comparison.columns:
+        raise ValueError(
+            "Strategy comparison is missing GM U7 "
+            f"(columns={list(strategy_comparison.columns)})."
+        )
     comparison = pd.DataFrame(
         {
             GM_U7_LABEL: metrics(bt7),
@@ -157,6 +164,18 @@ def strategy_comparison_table(
         }
     )
     return comparison, (common_index.min().date(), common_index.max().date()), common_results
+
+
+def prepare_strategy_comparison(strategy: pd.DataFrame | None) -> pd.DataFrame:
+    if strategy is None or strategy.empty:
+        return pd.DataFrame()
+    out = strategy.copy()
+    out.columns = [str(column).strip() for column in out.columns]
+    out.index = [str(index).strip() for index in out.index]
+    if GM_U7_LABEL not in out.columns and GM_U7_LABEL in out.index and "CAGR" in out.columns:
+        out = out.T
+        out.columns = [str(column).strip() for column in out.columns]
+    return out
 
 
 def build_u7_equal_weight_benchmark(monthly: pd.DataFrame) -> dict:

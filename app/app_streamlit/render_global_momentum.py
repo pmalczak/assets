@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pandas as pd
 import streamlit as st
 
-_SANDBOX = Path(__file__).resolve().parents[1] / "sandbox"
-if str(_SANDBOX) not in sys.path:
-    sys.path.insert(0, str(_SANDBOX))
-
-from global_momentum_benchmarks import run_benchmarks
-from global_momentum_common import format_metric_table
-from global_momentum_u8_ranking import run_u7_ranking
+from sandbox.global_momentum_benchmarks import (
+    GM_U7_LABEL,
+    U7_EQUAL_WEIGHT_LABEL,
+    prepare_strategy_comparison,
+    run_benchmarks,
+)
+from sandbox.global_momentum_common import format_metric_table
+from sandbox.global_momentum_u8_ranking import run_u7_ranking
 
 _RANKING_SCHEMA = 4
 _RANKING_AS_TODAY_SCHEMA = 3
-_BENCHMARK_SCHEMA = 8
+_BENCHMARK_SCHEMA = 9
+_ALL_WORLD_LABEL = "All-World Buy & Hold"
 _SECTION_RANKING = "Ranking U7"
 _SECTION_RANKING_AS_TODAY = "Ranking U7 as_today"
 _SECTION_BENCHMARK = "Benchmark"
@@ -34,7 +33,7 @@ def _load_u7_ranking_as_today(_schema: int = _RANKING_AS_TODAY_SCHEMA) -> dict:
 
 
 @st.cache_data(show_spinner=False)
-def _load_benchmarks(_schema: int = _BENCHMARK_SCHEMA) -> dict:
+def _load_benchmarks(schema: int = _BENCHMARK_SCHEMA) -> dict:
     raw = run_benchmarks()
     return {
         key: value
@@ -161,22 +160,30 @@ def _render_benchmarks() -> None:
         st.exception(exc)
         return
 
-    strategy = result["strategy_comparison"]
+    strategy = prepare_strategy_comparison(result.get("strategy_comparison"))
+    u7 = result.get("universe7_label", GM_U7_LABEL)
+    if strategy.empty or u7 not in strategy.columns:
+        st.error("Brak kompletnego porównania strategii (kolumna GM U7).")
+        raw = result.get("strategy_comparison")
+        if isinstance(raw, pd.DataFrame) and not raw.empty:
+            st.dataframe(raw, width="stretch")
+        return
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("CAGR U7", f"{strategy.loc['CAGR', 'GM U7']:.2%}")
+    c1.metric("CAGR U7", f"{strategy.loc['CAGR', u7]:.2%}")
     c2.metric(
         "CAGR U7 EW",
-        f"{strategy.loc['CAGR', 'U7 Equal Weight']:.2%}",
-        f"{strategy.loc['CAGR', 'U7 Equal Weight'] - strategy.loc['CAGR', 'GM U7']:.2%}",
+        f"{strategy.loc['CAGR', U7_EQUAL_WEIGHT_LABEL]:.2%}",
+        f"{strategy.loc['CAGR', U7_EQUAL_WEIGHT_LABEL] - strategy.loc['CAGR', u7]:.2%}",
     )
     c3.metric(
         "CAGR All-World",
-        f"{strategy.loc['CAGR', 'All-World Buy & Hold']:.2%}",
-        f"{strategy.loc['CAGR', 'All-World Buy & Hold'] - strategy.loc['CAGR', 'GM U7']:.2%}",
+        f"{strategy.loc['CAGR', _ALL_WORLD_LABEL]:.2%}",
+        f"{strategy.loc['CAGR', _ALL_WORLD_LABEL] - strategy.loc['CAGR', u7]:.2%}",
     )
     c4.metric(
         "Max DD U7",
-        f"{strategy.loc['Max Drawdown', 'GM U7']:.2%}",
+        f"{strategy.loc['Max Drawdown', u7]:.2%}",
     )
 
     period = result["comparison_period"]
