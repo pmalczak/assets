@@ -16,7 +16,7 @@ from global_momentum_common import format_metric_table
 from global_momentum_u8_ranking import run_u7_ranking
 
 _RANKING_SCHEMA = 4
-_RANKING_AS_TODAY_SCHEMA = 2
+_RANKING_AS_TODAY_SCHEMA = 3
 _BENCHMARK_SCHEMA = 8
 _SECTION_RANKING = "Ranking U7"
 _SECTION_RANKING_AS_TODAY = "Ranking U7 as_today"
@@ -101,7 +101,7 @@ def _render_ranking(*, as_today: bool = False) -> None:
         st.caption(
             "Nowcast MTD: ten sam ranking 3/6/12M + SMA10, ostatnia obserwacja = "
             "ostatni wspólny close ETF. To nie jest sygnał rebalance na nowy miesiąc. "
-            "Przy nazwie vs Ranking U7: * zostaje w TOP3, + weszło, - wypadło, . poza TOP3."
+            "Przy nazwie vs Ranking U7: * zostaje w TOP3, + weszło, - wypadło."
         )
 
     if not result["ready"]:

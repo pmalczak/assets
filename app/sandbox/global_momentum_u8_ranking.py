@@ -390,7 +390,7 @@ def top3_drift_marker(*, was_top: bool, is_top: bool) -> str:
         return "+"
     if was_top and not is_top:
         return "-"
-    return "."
+    return ""
 
 
 def annotate_asset_top3_drift(
@@ -406,7 +406,8 @@ def annotate_asset_top3_drift(
         for row in annotated.to_dict("records")
     ]
     annotated["Asset"] = [
-        f"{marker} {name}" for marker, name in zip(markers, annotated["Asset"])
+        f"{marker} {name}" if marker else name
+        for marker, name in zip(markers, annotated["Asset"])
     ]
     return annotated
 

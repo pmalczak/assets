@@ -121,7 +121,7 @@ class Top3DriftMarkerTests(unittest.TestCase):
         self.assertEqual(top3_drift_marker(was_top=True, is_top=True), "*")
         self.assertEqual(top3_drift_marker(was_top=False, is_top=True), "+")
         self.assertEqual(top3_drift_marker(was_top=True, is_top=False), "-")
-        self.assertEqual(top3_drift_marker(was_top=False, is_top=False), ".")
+        self.assertEqual(top3_drift_marker(was_top=False, is_top=False), "")
 
     def test_annotate_prefixes_asset_names(self):
         previous = pd.DataFrame(
@@ -139,7 +139,7 @@ class Top3DriftMarkerTests(unittest.TestCase):
         annotated = annotate_asset_top3_drift(current, previous)
         self.assertEqual(
             list(annotated["Asset"]),
-            ["* USA", "- Europe", "+ Bonds", "- Japan", ". Gold"],
+            ["* USA", "- Europe", "+ Bonds", "- Japan", "Gold"],
         )
 
 
