@@ -15,15 +15,22 @@ from global_momentum_benchmarks import run_benchmarks
 from global_momentum_common import format_metric_table
 from global_momentum_u8_ranking import run_u7_ranking
 
-_RANKING_SCHEMA = 3
+_RANKING_SCHEMA = 4
+_RANKING_AS_TODAY_SCHEMA = 2
 _BENCHMARK_SCHEMA = 8
 _SECTION_RANKING = "Ranking U7"
+_SECTION_RANKING_AS_TODAY = "Ranking U7 as_today"
 _SECTION_BENCHMARK = "Benchmark"
 
 
 @st.cache_data(show_spinner=False)
 def _load_u7_ranking(_schema: int = _RANKING_SCHEMA) -> dict:
     return run_u7_ranking()
+
+
+@st.cache_data(show_spinner=False)
+def _load_u7_ranking_as_today(_schema: int = _RANKING_AS_TODAY_SCHEMA) -> dict:
+    return run_u7_ranking(include_partial_month=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -45,42 +52,69 @@ def _load_benchmarks(_schema: int = _BENCHMARK_SCHEMA) -> dict:
 def render_global_momentum() -> None:
     st.subheader("Global momentum")
     st.caption(
-        "Ranking operacyjny Universe 7 oraz historyczny backtest / benchmarki. "
+        "Ranking operacyjny Universe 7 (koniec minionego miesiąca), "
+        "nowcast as_today na ostatnim wspólnym close, "
+        "oraz historyczny backtest / benchmarki. "
         "Ranking korzysta z DATA_STEP; backtest używa walidowanych adjusted close z yfinance."
     )
 
-    section = st.radio(
-        "Widok",
-        options=[_SECTION_RANKING, _SECTION_BENCHMARK],
-        horizontal=True,
-        key="global_momentum_section",
-    )
     if st.button("Odśwież dane", key="global_momentum_refresh"):
         _load_u7_ranking.clear()
+        _load_u7_ranking_as_today.clear()
         _load_benchmarks.clear()
         st.rerun()
 
+    section = st.pills(
+        "Widok",
+        options=[_SECTION_RANKING, _SECTION_RANKING_AS_TODAY, _SECTION_BENCHMARK],
+        default=_SECTION_RANKING,
+        required=True,
+        key="global_momentum_view",
+        width="stretch",
+    )
+
     if section == _SECTION_RANKING:
-        _render_ranking()
+        _render_ranking(as_today=False)
+    elif section == _SECTION_RANKING_AS_TODAY:
+        _render_ranking(as_today=True)
     else:
         _render_benchmarks()
 
 
-def _render_ranking() -> None:
+def _render_ranking(*, as_today: bool = False) -> None:
+    loader = _load_u7_ranking_as_today if as_today else _load_u7_ranking
     try:
-        with st.spinner("Liczenie rankingu U7..."):
-            result = _load_u7_ranking()
+        with st.spinner(
+            "Liczenie rankingu U7 as_today..." if as_today else "Liczenie rankingu U7..."
+        ):
+            result = loader()
     except Exception as exc:
-        st.error("Nie udało się policzyć rankingu U7.")
+        st.error(
+            "Nie udało się policzyć rankingu U7 as_today."
+            if as_today
+            else "Nie udało się policzyć rankingu U7."
+        )
         st.exception(exc)
         return
 
-    if not result["ready"]:
-        st.warning(
-            "Brak kompletnej daty sygnału Universe 7 na cenach ETF wykonania. "
-            f"Ostatni zakończony miesiąc: {result['latest_full_month']}. "
-            f"Minimum obserwacji: {result['min_observations']}."
+    if as_today:
+        st.caption(
+            "Nowcast MTD: ten sam ranking 3/6/12M + SMA10, ostatnia obserwacja = "
+            "ostatni wspólny close ETF. To nie jest sygnał rebalance na nowy miesiąc. "
+            "Przy nazwie vs Ranking U7: * zostaje w TOP3, + weszło, - wypadło, . poza TOP3."
         )
+
+    if not result["ready"]:
+        if result.get("no_common_close"):
+            st.warning(
+                "Brak wspólnej daty close dla wszystkich ETF-ów Universe 7."
+            )
+        else:
+            st.warning(
+                "Brak kompletnej daty sygnału Universe 7 na cenach ETF wykonania. "
+                f"Ostatni zakończony miesiąc: {result['latest_full_month']}. "
+                f"Minimum obserwacji: {result['min_observations']}."
+            )
         availability = result["availability"].copy()
         for column in ("First", "Last", "Ready Through"):
             availability[column] = availability[column].map(
@@ -89,7 +123,10 @@ def _render_ranking() -> None:
         st.dataframe(availability, width="stretch", hide_index=True)
         return
 
-    st.markdown(f"**Data sygnału:** {result['signal_date']}")
+    if as_today:
+        st.markdown(f"**Ostatni close:** {result['signal_date']}")
+    else:
+        st.markdown(f"**Data sygnału:** {result['signal_date']}")
     ranking = result["ranking"].copy()
     st.dataframe(
         ranking,

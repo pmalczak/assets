@@ -42,7 +42,39 @@ POLAND_PROXY_BIZNESRADAR_SYMBOLS = {
 }
 
 
-def load_current_ranking_prices(_start) -> pd.DataFrame:
+def last_common_close_date(daily: pd.DataFrame) -> pd.Timestamp | None:
+    if daily.empty or daily.shape[1] == 0:
+        return None
+    complete = daily.dropna(how="any")
+    if complete.empty:
+        return None
+    return pd.Timestamp(complete.index.max())
+
+
+def with_partial_month_stub(
+    completed_monthly: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.Timestamp | None]:
+    columns = list(completed_monthly.columns)
+    as_of = last_common_close_date(daily[columns])
+    if as_of is None:
+        return completed_monthly.iloc[0:0], None
+    month_end = last_completed_month_end()
+    as_of_day = pd.Timestamp(as_of).normalize()
+    if as_of_day <= pd.Timestamp(month_end).normalize():
+        return completed_monthly, as_of_day
+    row = daily.loc[as_of, columns]
+    if isinstance(row, pd.DataFrame):
+        row = row.iloc[-1]
+    stub = row.to_frame().T
+    stub.index = pd.DatetimeIndex([as_of_day])
+    return pd.concat([completed_monthly, stub]), as_of_day
+
+
+def load_current_ranking_prices(
+    _start,
+    include_partial_month: bool = False,
+) -> pd.DataFrame:
     tickers = list(RANKING_TICKERS.values())
     daily = download_yahoo(tickers, start=_start)
     missing_tickers = [
@@ -64,7 +96,11 @@ def load_current_ranking_prices(_start) -> pd.DataFrame:
     )
     monthly = prices.resample("ME").last()
     monthly["Poland"] = build_poland_execution_series(monthly["Poland"])
-    return monthly.loc[monthly.index <= last_completed_month_end()]
+    completed = monthly.loc[monthly.index <= last_completed_month_end()]
+    if not include_partial_month:
+        return completed
+    stubbed, _as_of = with_partial_month_stub(completed, prices)
+    return stubbed
 
 
 def build_poland_execution_series(etf_monthly: pd.Series) -> pd.Series:
@@ -248,6 +284,7 @@ def download_biznesradar_index(
 def compute_current_universe7_ranking(
     monthly: pd.DataFrame,
     universe7: list[str],
+    as_of_limit: pd.Timestamp | None = None,
 ) -> dict:
     prices = monthly[universe7]
     returns_by_period = {
@@ -266,8 +303,9 @@ def compute_current_universe7_ranking(
         axis=1,
     )
     latest_full_month = last_completed_month_end()
+    signal_cutoff = as_of_limit if as_of_limit is not None else latest_full_month
     signal_dates = required[required.all(axis=1)].index
-    signal_dates = signal_dates[signal_dates <= latest_full_month]
+    signal_dates = signal_dates[signal_dates <= signal_cutoff]
     if signal_dates.empty:
         availability_rows = []
         for asset in universe7:
@@ -278,7 +316,7 @@ def compute_current_universe7_ranking(
                 & sma[asset].notna()
             )
             ready_dates = ready_dates[ready_dates].index
-            ready_dates = ready_dates[ready_dates <= latest_full_month]
+            ready_dates = ready_dates[ready_dates <= signal_cutoff]
             availability_rows.append(
                 {
                     "Asset": display_name(asset),
@@ -345,16 +383,77 @@ def compute_current_universe7_ranking(
     }
 
 
+def top3_drift_marker(*, was_top: bool, is_top: bool) -> str:
+    if is_top and was_top:
+        return "*"
+    if is_top and not was_top:
+        return "+"
+    if was_top and not is_top:
+        return "-"
+    return "."
+
+
+def annotate_asset_top3_drift(
+    ranking: pd.DataFrame,
+    previous_ranking: pd.DataFrame,
+) -> pd.DataFrame:
+    previous_top = set(
+        previous_ranking.loc[previous_ranking["TOP3"].astype(bool), "Asset"]
+    )
+    annotated = ranking.copy()
+    markers = [
+        top3_drift_marker(was_top=row["Asset"] in previous_top, is_top=bool(row["TOP3"]))
+        for row in annotated.to_dict("records")
+    ]
+    annotated["Asset"] = [
+        f"{marker} {name}" for marker, name in zip(markers, annotated["Asset"])
+    ]
+    return annotated
+
+
 def compute_current_universe8_ranking(
     monthly: pd.DataFrame,
     universe8: list[str],
+    as_of_limit: pd.Timestamp | None = None,
 ) -> dict:
-    return compute_current_universe7_ranking(monthly, universe8)
+    return compute_current_universe7_ranking(
+        monthly,
+        universe8,
+        as_of_limit=as_of_limit,
+    )
 
 
-def run_u7_ranking() -> dict:
-    monthly = load_current_ranking_prices(START)
-    return compute_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
+def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
+    monthly = load_current_ranking_prices(
+        START,
+        include_partial_month=include_partial_month,
+    )
+    no_common_close = include_partial_month and monthly.empty
+    as_of_limit = (
+        monthly.index.max()
+        if not monthly.empty
+        else last_completed_month_end()
+    )
+    universe = list(RANKING_TICKERS.keys())
+    result = compute_current_universe7_ranking(
+        monthly,
+        universe,
+        as_of_limit=as_of_limit,
+    )
+    result["is_nowcast"] = include_partial_month
+    result["no_common_close"] = no_common_close
+    if include_partial_month and result["ready"]:
+        official = compute_current_universe7_ranking(
+            monthly.loc[monthly.index <= last_completed_month_end()],
+            universe,
+            as_of_limit=last_completed_month_end(),
+        )
+        if official["ready"]:
+            result["ranking"] = annotate_asset_top3_drift(
+                result["ranking"],
+                official["ranking"],
+            )
+    return result
 
 
 def run_u8_ranking() -> dict:
