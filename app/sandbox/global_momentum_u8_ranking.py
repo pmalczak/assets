@@ -8,7 +8,7 @@ import io
 import pandas as pd
 import requests
 
-from global_momentum_common import (
+from sandbox.global_momentum_common import (
     BROWSER_HEADERS,
     MOMENTUM_PERIODS,
     SMA_MONTHS,
