@@ -25,7 +25,7 @@ from sandbox.global_momentum_common import (
     load_monthly_prices,
     metrics,
     save_plot,
-    weighted_monthly_returns,
+    weighted_monthly_returns, BacktestResult,
 )
 
 
@@ -178,18 +178,19 @@ def prepare_strategy_comparison(strategy: pd.DataFrame | None) -> pd.DataFrame:
     return out
 
 
-def build_u7_equal_weight_benchmark(monthly: pd.DataFrame) -> dict:
+def build_u7_equal_weight_benchmark(monthly: pd.DataFrame) -> BacktestResult:
     weights = {asset: 1 / len(U7) for asset in U7}
     returns = weighted_monthly_returns(monthly, weights).rename(U7_EQUAL_WEIGHT_LABEL)
     weights_frame = pd.DataFrame(
         weights,
         index=returns.dropna().index,
     )
-    return benchmark_result(
+    result = benchmark_result(
         returns,
         U7_EQUAL_WEIGHT_LABEL,
         weights_frame,
     )
+    return result
 
 
 def assert_expected_u7_metrics(u7_metrics: dict[str, float]) -> None:

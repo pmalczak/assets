@@ -38,6 +38,8 @@ from importers.xtb.read_xtb import (
     _read_xtb_open,
     inspect_xtb_export,
     period_gap_warnings,
+    xtb_open_position_rows,
+    xtb_open_positions_value,
 )
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_XTB
 from maintenance.move_xtb_files import move_xtb_files, xtb_target_name
@@ -162,7 +164,37 @@ class ReadXtbTests(unittest.TestCase):
         self.assertEqual(len(positions), 1)
         self.assertEqual(len(cash), 1)
         self.assertAlmostEqual(float(positions.iloc[0][XtbOpenPositionsFile.VALUE]), 21429.44)
+        self.assertEqual(str(positions.iloc[0][XtbOpenPositionsFile.TYPE]), "BUY")
         self.assertAlmostEqual(float(cash.iloc[0][XtbOpenPositionsFile.VALUE]), 263.88)
+
+    def test_open_drops_instrument_aggregate_when_buy_lot_exists(self):
+        df = pd.DataFrame(
+            [
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    value=21429.44,
+                    instrument="WIG20TR + mWIG40TR",
+                ),
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    value=21429.44,
+                    instrument="2761661939",
+                    type_="BUY",
+                ),
+            ]
+        )
+        rows = xtb_open_position_rows(df)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(str(rows.iloc[0][XtbOpenPositionsFile.TYPE]), "BUY")
+        self.assertAlmostEqual(xtb_open_positions_value(rows), 21429.44)
+
+    def test_open_keeps_instrument_row_when_no_lot(self):
+        df = pd.DataFrame(
+            [_open_row(ticker="ETFPZUW20M40.PL", value=21429.44, instrument="WIG20TR + mWIG40TR")]
+        )
+        rows = xtb_open_position_rows(df)
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(float(rows.iloc[0][XtbOpenPositionsFile.VALUE]), 21429.44)
 
     def test_merges_cash_operations_from_multiple_reports(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -273,6 +305,13 @@ class EvaluateXtbTests(unittest.TestCase):
         open_df = pd.DataFrame(
             [
                 _open_row(ticker="ETFPZUW20M40.PL", volume=167, value=21429.44, instrument="WIG20TR + mWIG40TR"),
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    volume=167,
+                    value=21429.44,
+                    instrument="2761661939",
+                    type_="BUY",
+                ),
                 _open_row(product="Cash", instrument="Free funds", ticker="", value=263.88, volume=None, type_="CASH"),
             ]
         )
@@ -307,7 +346,19 @@ class XtbRoiTests(unittest.TestCase):
     def test_compute_roi_from_cash_operations_and_open_positions_terminal(self):
         open_df = pd.DataFrame(
             [
-                _open_row(ticker="ETFPZUW20M40.PL", volume=167, value=21429.44),
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    volume=167,
+                    value=21429.44,
+                    instrument="WIG20TR + mWIG40TR",
+                ),
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    volume=167,
+                    value=21429.44,
+                    instrument="2761661939",
+                    type_="BUY",
+                ),
                 _open_row(product="Cash", instrument="Free funds", ticker="", value=263.88, type_="CASH"),
             ]
         )
@@ -554,8 +605,9 @@ def _xtb_workbook_bytes(
                 ["My Trades", "Profit", -6.68, "PLN", None],
                 summary_cash,
                 ["Note", "Summary values and open positions are shown as of the report generation time", None, None, None],
-                ["Product", "Instrument/Position", "Ticker", "Volume", "Value"],
-                ["My Trades", "WIG20TR + mWIG40TR", "ETFPZUW20M40.PL", 167, 21429.44],
+                ["Product", "Instrument/Position", "Ticker", "Category", "Type", "Volume", "Value"],
+                ["My Trades", "WIG20TR + mWIG40TR", "ETFPZUW20M40.PL", "ETF", None, 167, 21429.44],
+                ["My Trades", "2761661939", "ETFPZUW20M40.PL", None, "BUY", 167, 21429.44],
             ]
         )
     else:

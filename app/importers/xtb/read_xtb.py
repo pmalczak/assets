@@ -81,9 +81,9 @@ def _inspect_zip(path: Path) -> list[XtbExportSheetInfo]:
     return inspect_xtb_export_bytes(data, suffix, source_name=Path(export_name).stem)
 
 
-def _inspect_excel(path: Path) -> list[XtbExportSheetInfo]:
+def _inspect_excel(buffer: BytesIO) -> list[XtbExportSheetInfo]:
     result = []
-    with pd.ExcelFile(path) as workbook:
+    with pd.ExcelFile(buffer) as workbook:
         for sheet_name in workbook.sheet_names:
             header_row = detect_xtb_header_row(workbook, sheet_name)
             if header_row is None:
@@ -197,7 +197,38 @@ def xtb_open_position_rows(open_positions: pd.DataFrame) -> pd.DataFrame:
     if XtbOpenPositionsFile.TICKER not in open_positions.columns:
         return pd.DataFrame(columns=list(XtbOpenPositionsFile.expected_columns()))
     ticker = open_positions[XtbOpenPositionsFile.TICKER]
-    return open_positions.loc[ticker.notna() & ticker.astype(str).str.strip().ne("")].copy()
+    rows = open_positions.loc[ticker.notna() & ticker.astype(str).str.strip().ne("")].copy()
+    return drop_xtb_instrument_aggregates(rows)
+
+
+def drop_xtb_instrument_aggregates(rows: pd.DataFrame) -> pd.DataFrame:
+    """Open Positions: wiersz instrumentu (Type puste) + loty (Type=BUY/SELL).
+
+    Agregat powiela Value/Volume lotów — zostawiamy loty; wiersz instrumentu tylko
+    gdy dla tickera nie ma lotu (uproszczone eksporty / testy).
+    """
+    if rows is None or rows.empty or XtbOpenPositionsFile.TYPE not in rows.columns:
+        return rows
+    is_lot = rows[XtbOpenPositionsFile.TYPE].map(_is_xtb_open_lot_type)
+    if not bool(is_lot.any()):
+        return rows
+    ticker = rows[XtbOpenPositionsFile.TICKER].map(lambda value: str(value or "").strip())
+    lot_tickers = set(ticker[is_lot])
+    return rows.loc[is_lot | ~ticker.isin(lot_tickers)].copy()
+
+
+def _is_xtb_open_lot_type(value) -> bool:
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip().lower()
+    if not text or text in {"nan", "none"}:
+        return False
+    return text.startswith("buy") or text.startswith("sell")
 
 
 def xtb_cash_rows(open_positions: pd.DataFrame) -> pd.DataFrame:
@@ -310,7 +341,7 @@ def _normalize_open(df: pd.DataFrame) -> pd.DataFrame:
     out = out.loc[ticker.ne("") & ticker.str.lower().ne("nan")].copy()
     for col in (XtbOpenPositionsFile.VOLUME, XtbOpenPositionsFile.VALUE):
         out[col] = out[col].map(parse_xtb_number)
-    return out
+    return drop_xtb_instrument_aggregates(out)
 
 
 def _normalize_closed(df: pd.DataFrame) -> pd.DataFrame:
