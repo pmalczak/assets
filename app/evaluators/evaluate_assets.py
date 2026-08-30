@@ -17,6 +17,7 @@ from evaluators.evaluate_revolut import evaluate_revolut
 from evaluators.evaluate_zloto_monety import evaluate_zloto_monety
 from evaluators.valuation_date import format_date_columns
 from fx.get_last_fx import get_fx_as_of
+from portfolios.assignment import attach_portfolio_column
 
 
 def evaluate_assets(
@@ -116,6 +117,8 @@ def evaluate_assets(
 
     result_fx[AssetsDef.VALUE_PLN] = result_fx[AssetsDef.VALUE] * result_fx[LastFx.FX]
     result_fx[AssetsDef.VALUE_PLN] = result_fx[AssetsDef.VALUE_PLN].round().astype('int')
+
+    result_fx = attach_portfolio_column(result_fx)
 
     value_date = pd.to_datetime(result_fx[AssetsDef.VALUE_DATE], format="%Y-%m-%d")
     evaluation_date = pd.to_datetime(result_fx[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")

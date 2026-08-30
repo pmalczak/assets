@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import io
-from contextlib import redirect_stdout
-
 from datetime import date
 
 import pandas as pd
@@ -13,7 +10,7 @@ from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
 from app_streamlit.safe_download import dataframe_for_streamlit
-from importers.assets.data_model import AssetsDef
+from portfolios.assignment import investments_by_portfolio, rows_with_portfolio
 
 
 @st.cache_data(show_spinner=False)
@@ -30,7 +27,7 @@ def _clear_reports_related_cache() -> None:
 
 
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
-    from asset_reports import rap1, rap2
+    from asset_reports import format_rap_table, rap1, rap2
 
     st.subheader("Wartość aktywów")
 
@@ -107,21 +104,28 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
 
     st.caption(f"Zrodlo: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`")
 
-    typ = assets[AssetsDef.TYPE].astype(str)
-    cash_pool = assets[typ.str.startswith("cash_pool.")]
-    investments = assets[typ.str.startswith("investment.")]
+    cash_pool = rows_with_portfolio(assets, "cash_pool.")
+
+    rap1_col, rap2_col = st.columns(2)
+    with rap1_col:
+        st.markdown("**RAP 1**")
+        st.code(format_rap_table(rap1(assets)), language=None)
+    with rap2_col:
+        st.markdown("**RAP 2**")
+        st.code(format_rap_table(rap2(assets)), language=None)
 
     st.markdown("**Cash pool**")
     st.dataframe(dataframe_for_streamlit(cash_pool), width="stretch", hide_index=True, height=360)
 
     st.markdown("**Inwestycje**")
-    st.dataframe(dataframe_for_streamlit(investments), width="stretch", hide_index=True, height=360)
-
-    st.markdown("**RAP 2**")
-    rap2_buffer = io.StringIO()
-    with redirect_stdout(rap2_buffer):
-        rap2(assets)
-    st.code(rap2_buffer.getvalue().strip(), language=None)
-
-    st.markdown("**RAP 1**")
-    st.code(rap1(assets).to_string(col_space=15), language=None)
+    for name, table in investments_by_portfolio(assets):
+        st.markdown(f"**{name}**")
+        n_rows = 0 if table is None or table.empty else len(table)
+        height = min(360, 38 + max(n_rows, 1) * 35)
+        st.dataframe(
+            dataframe_for_streamlit(table),
+            width="stretch",
+            hide_index=True,
+            height=height,
+            key=f"investments_{name}",
+        )

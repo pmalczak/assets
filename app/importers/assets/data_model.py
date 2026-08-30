@@ -49,6 +49,8 @@ class AssetsCls(AssetsFileCls):
     VALUE_DATE = 'data-waluty'
     DAYS_AFTER_VALUATION = 'liczba dni od wyceny'
     IBAN = 'IBAN'
+    # Runtime snapshot / UI — nie kolumna Excela `assets` (v1).
+    PORTFOLIO = 'portfel'
 
     def __init__(self):
         super().__init__()

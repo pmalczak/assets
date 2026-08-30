@@ -32,12 +32,7 @@ from app_streamlit.render_fx import render_fx
 from app_streamlit.render_global_momentum import render_global_momentum
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
-from app_streamlit.render_roi import (
-    render_roi,
-    render_roi_obligacje,
-    render_roi_revolut_deposits,
-    render_roi_revolut_robo,
-)
+from app_streamlit.render_roi import render_roi
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
@@ -241,18 +236,6 @@ def main():
                 render_diagnostics(data)
             elif label == "ROI":
                 render_roi(latest)
-            elif label == "ROI Revolut robo":
-                render_roi_revolut_robo(latest)
-            elif label == "ROI Revolut depozyty":
-                render_roi_revolut_deposits(latest)
-            elif label == "ROI obligacje":
-                render_roi_obligacje(latest)
-            elif label == "ROI DEGIRO":
-                from app_streamlit.render_roi import render_roi_degiro
-                render_roi_degiro(latest)
-            elif label == "ROI XTB":
-                from app_streamlit.render_roi import render_roi_xtb
-                render_roi_xtb(latest)
             elif label == "FX":
                 render_fx()
             elif label == "Global momentum":

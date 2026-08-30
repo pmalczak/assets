@@ -141,8 +141,41 @@ def latest_portfolio_as_of(portfolio_df: pd.DataFrame, valuation_date: date) -> 
     eligible = portfolio_df.loc[end_dates <= valuation_date].copy()
     if eligible.empty:
         return eligible
-    latest_end = eligible[DegiroPortfolioFile.PERIOD_END].max()
-    return eligible.loc[eligible[DegiroPortfolioFile.PERIOD_END] == latest_end].copy()
+    latest_end = pd.to_datetime(eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce").max()
+    latest = eligible.loc[
+        pd.to_datetime(eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce") == latest_end
+    ].copy()
+    return _one_portfolio_snapshot_per_end(latest)
+
+
+def _one_portfolio_snapshot_per_end(df: pd.DataFrame) -> pd.DataFrame:
+    """Portfolio.csv is a point-in-time snapshot, not a ledger.
+
+    Overlapping exports can share the same PERIOD_END (Account.csv booking window).
+    Concatenating them would double MTM. Keep one package per PERIOD_END — the one
+    with the latest PERIOD_START — then one row per ISIN (empty ISIN = cash, keyed
+    by product).
+    """
+    if df.empty or DegiroPortfolioFile.PERIOD_END not in df.columns:
+        return df
+    out = df.copy()
+    start = pd.to_datetime(out[DegiroPortfolioFile.PERIOD_START], errors="coerce")
+    end = pd.to_datetime(out[DegiroPortfolioFile.PERIOD_END], errors="coerce")
+    keep_start = start.groupby(end).transform("max")
+    out = out.loc[start.eq(keep_start)].copy()
+    isin = out[DegiroPortfolioFile.ISIN].fillna("").astype(str).str.strip()
+    product = (
+        out[DegiroPortfolioFile.PRODUCT].fillna("").astype(str).str.strip()
+        if DegiroPortfolioFile.PRODUCT in out.columns
+        else pd.Series("", index=out.index)
+    )
+    identity = isin.where(isin.ne(""), product)
+    row_key = (
+        pd.to_datetime(out[DegiroPortfolioFile.PERIOD_END], errors="coerce").astype(str)
+        + "|"
+        + identity
+    )
+    return out.loc[~row_key.duplicated(keep="last")].reset_index(drop=True)
 
 
 def period_gap_warnings(periods: list[tuple[date, date]], label: str) -> list[str]:
@@ -161,7 +194,8 @@ def period_gap_warnings(periods: list[tuple[date, date]], label: str) -> list[st
 
 
 def _read_degiro_portfolio(source_file: Path = None) -> pd.DataFrame:
-    return _read_many(source_file, PORTFOLIO_PREFIX, read_portfolio_csv, DegiroPortfolioFile)
+    result = _read_many(source_file, PORTFOLIO_PREFIX, read_portfolio_csv, DegiroPortfolioFile)
+    return _one_portfolio_snapshot_per_end(result)
 
 
 def _read_degiro_transactions(source_file: Path = None) -> pd.DataFrame:

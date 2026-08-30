@@ -11,11 +11,6 @@ TAB_LABELS = [
     TAB_ASSETS,
     "Wykres portfela",
     "ROI",
-    "ROI Revolut robo",
-    "ROI Revolut depozyty",
-    "ROI obligacje",
-    "ROI DEGIRO",
-    "ROI XTB",
     "FX",
     "Global momentum",
     "Import wyciągów",
@@ -30,17 +25,19 @@ SLUG_TO_LABEL = {
     "raporty": TAB_ASSETS,
     "szukaj": "Wyszukiwanie transakcji",
     "roi": "ROI",
-    "roi-robo": "ROI Revolut robo",
-    "roi-depozyty": "ROI Revolut depozyty",
-    "roi-obligacje": "ROI obligacje",
-    "roi-degiro": "ROI DEGIRO",
-    "roi-xtb": "ROI XTB",
+    "roi-robo": "ROI",
+    "roi-depozyty": "ROI",
+    "roi-obligacje": "ROI",
+    "roi-degiro": "ROI",
+    "roi-xtb": "ROI",
     "fx": "FX",
     "global-momentum": "Global momentum",
     "import": "Import wyciągów",
     "waliduj": "Waliduj",
 }
-LABEL_TO_SLUG = {label: slug for slug, label in SLUG_TO_LABEL.items()}
+LABEL_TO_SLUG = {}
+for _slug, _label in SLUG_TO_LABEL.items():
+    LABEL_TO_SLUG.setdefault(_label, _slug)
 
 LAST_TAB_FILE = "last_tab.txt"
 

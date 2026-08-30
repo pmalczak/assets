@@ -5,11 +5,10 @@ from datetime import date
 
 import pandas as pd
 
-from asset_reports import rap1, rap2
+from asset_reports import format_rap_table, rap1, rap2
 from app_proc.calculate_assets import calculate_assets
 
 s = '________________________________________________\n'
-col_space=15
 
 
 def main():
@@ -19,7 +18,7 @@ def main():
     print(assets)
     # print(s)
 
-    rap2(assets)
+    print(format_rap_table(rap2(assets)))
     rap1_prn(assets)
     return
 
@@ -27,8 +26,7 @@ def main():
 def rap1_prn(assets):
     msg = 'RAP 1'
     print(msg)
-    g1 = rap1(assets)
-    print(g1.to_string(col_space=col_space))
+    print(format_rap_table(rap1(assets)))
     # print(s)
 
 

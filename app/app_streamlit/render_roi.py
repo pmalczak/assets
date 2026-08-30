@@ -43,7 +43,52 @@ ROI_FLOW_DISPLAY_COLUMNS = {
 }
 
 
+ROI_VENUE_CATALOG = "Katalog"
+ROI_VENUE_ROBO = "Revolut robo"
+ROI_VENUE_DEPOSITS = "Revolut depozyty"
+ROI_VENUE_BONDS = "Obligacje"
+ROI_VENUE_DEGIRO = "DEGIRO"
+ROI_VENUE_XTB = "XTB"
+ROI_VENUES = [
+    ROI_VENUE_CATALOG,
+    ROI_VENUE_ROBO,
+    ROI_VENUE_DEPOSITS,
+    ROI_VENUE_BONDS,
+    ROI_VENUE_DEGIRO,
+    ROI_VENUE_XTB,
+]
+
+
 def render_roi(default_valuation_date: date | None) -> None:
+    st.subheader("ROI")
+    st.caption(
+        "Per miejsce inwestycji — operacje na koncie (XIRR tickera / aktywa). "
+        "Wynik strategii GM (DEGIRO + XTB + złoto) jest w Global momentum → Mój GM; "
+        "nie sumuj tych XIRR."
+    )
+    venue = st.pills(
+        "Miejsce",
+        options=ROI_VENUES,
+        default=ROI_VENUE_CATALOG,
+        required=True,
+        key="roi_venue",
+        width="stretch",
+    )
+    if venue == ROI_VENUE_CATALOG:
+        _render_roi_catalog(default_valuation_date)
+    elif venue == ROI_VENUE_ROBO:
+        render_roi_revolut_robo(default_valuation_date)
+    elif venue == ROI_VENUE_DEPOSITS:
+        render_roi_revolut_deposits(default_valuation_date)
+    elif venue == ROI_VENUE_BONDS:
+        render_roi_obligacje(default_valuation_date)
+    elif venue == ROI_VENUE_DEGIRO:
+        render_roi_degiro(default_valuation_date)
+    else:
+        render_roi_xtb(default_valuation_date)
+
+
+def _render_roi_catalog(default_valuation_date: date | None) -> None:
     st.subheader("ROI (nieruchomosci + cash + rocky-iv + zloto)")
 
     valuation_date = st.date_input(
@@ -159,9 +204,7 @@ def render_roi(default_valuation_date: date | None) -> None:
     if events.empty:
         st.info("Brak zarejestrowanych przeplywow dla tego aktywa.")
     else:
-        events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
-        flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
-        flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
+        flow_display = _prepare_flow_display(events, valuation_date)
         st.dataframe(
             dataframe_for_streamlit(flow_display),
             width="stretch",
@@ -386,6 +429,21 @@ def _asset_selectbox(label: str, asset_ids: list[str], key: str) -> str:
     return st.selectbox(label, options=asset_ids, key=key)
 
 
+def _prepare_flow_display(events: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
+    events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
+    if not events_display.empty and CashFlowEvent.DATE in events_display.columns:
+        events_display = events_display.copy()
+        events_display["_sort"] = pd.to_datetime(events_display[CashFlowEvent.DATE], errors="coerce")
+        events_display = events_display.sort_values(
+            "_sort",
+            ascending=False,
+            na_position="last",
+            kind="mergesort",
+        ).drop(columns=["_sort"])
+    flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
+    return events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
+
+
 def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
     display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
     for col in ROI_DISPLAY_COLUMNS.values():
@@ -416,10 +474,8 @@ def _render_flow_details(
     if events.empty:
         st.info(empty_msg)
         return
-    events_display = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
-    flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
-    flow_display = events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
-    st.dataframe(flow_display, width="stretch", hide_index=True, height=220)
+    events_display = _prepare_flow_display(events, valuation_date)
+    st.dataframe(events_display, width="stretch", hide_index=True, height=220)
 
 
 def _render_product_excel_downloads(valuation_date: date) -> None:

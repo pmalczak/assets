@@ -13,14 +13,17 @@ from importers.degiro.data_model import (
     DEFAULT_DEGIRO_ASSET_ID,
     PORTFOLIO_SOURCE,
     TRANSACTIONS_SOURCE,
+    DegiroPortfolioFile,
 )
 from importers.degiro.read_degiro import (
     dated_filename,
+    latest_portfolio_as_of,
     parse_degiro_number,
     period_from_account_file,
     read_account_csv,
     read_portfolio_csv,
     read_transactions_csv,
+    _read_degiro_portfolio,
 )
 from maintenance.move_degiro_files import move_degiro_files
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_DEGIRO
@@ -74,6 +77,27 @@ class DegiroReadTests(unittest.TestCase):
             self.assertEqual(len(account), 3)
             self.assertAlmostEqual(float(portfolio["Wartość w EUR"].sum()), 432.40)
             self.assertAlmostEqual(float(transactions.iloc[0]["Wartość EUR"]), -635.97)
+
+    def test_overlapping_packages_same_end_do_not_double_portfolio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            long_start, short_start, end = date(2026, 1, 8), date(2026, 8, 13), date(2026, 8, 17)
+            (root / dated_filename("portfolio", long_start, end)).write_text(PORTFOLIO, encoding="utf-8")
+            (root / dated_filename("portfolio", short_start, end)).write_text(PORTFOLIO, encoding="utf-8")
+
+            combined = _read_degiro_portfolio(root)
+            latest = latest_portfolio_as_of(combined, date(2026, 8, 20))
+            isin = latest[DegiroPortfolioFile.ISIN]
+            has_isin = isin.notna() & isin.astype(str).str.strip().ne("")
+            positions = latest.loc[has_isin]
+            cash = latest.loc[~has_isin]
+
+            self.assertEqual(len(combined), 2)
+            self.assertEqual(len(positions), 1)
+            self.assertEqual(len(cash), 1)
+            self.assertAlmostEqual(float(positions.iloc[0][DegiroPortfolioFile.VALUE_EUR]), 402.28)
+            self.assertAlmostEqual(float(latest[DegiroPortfolioFile.VALUE_EUR].sum()), 432.40)
+            self.assertEqual(str(latest[DegiroPortfolioFile.PERIOD_START].iloc[0]), short_start.isoformat())
 
 
 class MoveDegiroTests(unittest.TestCase):
@@ -147,6 +171,43 @@ class DegiroRoiTests(unittest.TestCase):
             self.assertAlmostEqual(float(row["roi_nominal"]), -229.0)
             cats = events["p_degiro:LT0000128621"][CashFlowEvent.CATEGORY].tolist()
             self.assertEqual(cats, [CAPEX, REVENUES])
+
+    def test_roi_terminal_not_doubled_when_two_portfolios_share_period_end(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            long_start, short_start, end = date(2026, 1, 8), date(2026, 8, 13), date(2026, 8, 17)
+            frames = []
+            for start in (long_start, short_start):
+                path = root / dated_filename("portfolio", start, end)
+                path.write_text(PORTFOLIO, encoding="utf-8")
+                df = read_portfolio_csv(path)
+                df["period_start"] = start.isoformat()
+                df["period_end"] = end.isoformat()
+                df["ref_date"] = end.isoformat()
+                frames.append(df)
+            portfolio = pd.concat(frames, ignore_index=True)
+
+            tx_path = root / dated_filename("transactions", long_start, end)
+            acc_path = root / dated_filename("account", long_start, end)
+            tx_path.write_text(TRANSACTIONS, encoding="utf-8")
+            acc_path.write_text(ACCOUNT, encoding="utf-8")
+            transactions = read_transactions_csv(tx_path)
+            account = read_account_csv(acc_path)
+            for df in (transactions, account):
+                df["period_start"] = long_start.isoformat()
+                df["period_end"] = end.isoformat()
+                df["ref_date"] = end.isoformat()
+
+            summary, _, warnings = compute_degiro_ticker_roi(
+                date(2026, 8, 20),
+                portfolio_df=portfolio,
+                transactions_df=transactions,
+                account_df=account,
+            )
+            self.assertEqual(warnings, [])
+            self.assertEqual(len(summary), 1)
+            self.assertAlmostEqual(float(summary.iloc[0]["terminal_unrealized"]), 402.0)
+            self.assertAlmostEqual(float(summary.iloc[0]["capex"]), -636.0)
 
 
 if __name__ == "__main__":

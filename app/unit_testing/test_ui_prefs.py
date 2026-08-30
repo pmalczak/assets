@@ -10,6 +10,7 @@ from app_proc.ui_prefs import (
     SOLD_FILTER_ACTIVE,
     SOLD_FILTER_ALL,
     SOLD_FILTER_SOLD,
+    TAB_LABELS,
     filter_by_sold,
     load_last_tab,
     load_sold_filter,
@@ -20,6 +21,18 @@ from app_proc.ui_prefs import (
 
 
 class UiPrefsTests(unittest.TestCase):
+    def test_roi_venues_are_not_top_level_tabs(self):
+        self.assertIn("ROI", TAB_LABELS)
+        self.assertEqual(TAB_LABELS.count("ROI"), 1)
+        for label in (
+            "ROI Revolut robo",
+            "ROI Revolut depozyty",
+            "ROI obligacje",
+            "ROI DEGIRO",
+            "ROI XTB",
+        ):
+            self.assertNotIn(label, TAB_LABELS)
+
     def test_load_last_tab_returns_default_when_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(load_last_tab(Path(tmp)), DEFAULT_TAB)
@@ -56,15 +69,15 @@ class UiPrefsTests(unittest.TestCase):
             save_last_tab("Waliduj", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")
 
-    def test_save_and_load_broker_roi_tabs(self):
+    def test_roi_tab_roundtrip_and_legacy_venue_slugs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            save_last_tab("ROI Revolut robo", prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut robo")
-            save_last_tab("ROI Revolut depozyty", prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), "ROI Revolut depozyty")
-            save_last_tab("ROI obligacje", prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), "ROI obligacje")
+            save_last_tab("ROI", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "ROI")
+            self.assertEqual((root / "last_tab.txt").read_text(encoding="utf-8").strip(), "roi")
+            for slug in ("roi-robo", "roi-depozyty", "roi-obligacje", "roi-degiro", "roi-xtb"):
+                (root / "last_tab.txt").write_text(slug, encoding="utf-8")
+                self.assertEqual(load_last_tab(prefs_root=root), "ROI")
             save_last_tab("Global momentum", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Global momentum")
 

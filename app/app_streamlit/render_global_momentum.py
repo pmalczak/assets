@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 import streamlit as st
 
+from gm_segment.segment import (
+    ROLE_EXECUTION,
+    ROLE_OVERLAY,
+    compose_gm_segment_table,
+    load_gm_broker_holdings,
+    load_gm_segment_nav_history,
+    nav_path_metrics,
+    rebased_overlap,
+)
+from portfolios.assignment import PORTFOLIO_GM
 from sandbox.global_momentum_benchmarks import (
     GM_U7_LABEL,
     U7_EQUAL_WEIGHT_LABEL,
@@ -16,9 +28,11 @@ from sandbox.global_momentum_u8_ranking import run_u7_ranking
 _RANKING_SCHEMA = 4
 _RANKING_AS_TODAY_SCHEMA = 3
 _BENCHMARK_SCHEMA = 9
+_SEGMENT_NAV_SCHEMA = 4
 _ALL_WORLD_LABEL = "All-World Buy & Hold"
 _SECTION_RANKING = "Ranking U7"
-_SECTION_RANKING_AS_TODAY = "Ranking U7 as_today"
+_SECTION_RANKING_AS_TODAY = "as_today"
+_SECTION_MY_GM = "Mój GM"
 _SECTION_BENCHMARK = "Benchmark"
 
 
@@ -48,11 +62,25 @@ def _load_benchmarks(schema: int = _BENCHMARK_SCHEMA) -> dict:
     }
 
 
+@st.cache_data(show_spinner=False)
+def _load_gm_nav_history(_schema: int = _SEGMENT_NAV_SCHEMA) -> pd.Series:
+    return load_gm_segment_nav_history()
+
+
 def render_global_momentum() -> None:
+    from app_streamlit.build_data import build_data
+
+    data = build_data()
+    latest_snapshot = data["latest_snapshot"]
+    latest_snapshot_date = data["latest_snapshot_date"]
+    if not isinstance(latest_snapshot, pd.DataFrame):
+        latest_snapshot = pd.DataFrame()
+
     st.subheader("Global momentum")
     st.caption(
         "Ranking operacyjny Universe 7 (koniec minionego miesiąca), "
         "nowcast as_today na ostatnim wspólnym close, "
+        f"Mój GM (portfel {PORTFOLIO_GM}: DEGIRO + XTB, overlay: złoto) "
         "oraz historyczny backtest / benchmarki. "
         "Ranking korzysta z DATA_STEP; backtest używa walidowanych adjusted close z yfinance."
     )
@@ -61,14 +89,23 @@ def render_global_momentum() -> None:
         _load_u7_ranking.clear()
         _load_u7_ranking_as_today.clear()
         _load_benchmarks.clear()
+        _load_gm_nav_history.clear()
         st.rerun()
+
+    if "global_momentum_view" in st.session_state:
+        del st.session_state["global_momentum_view"]
 
     section = st.pills(
         "Widok",
-        options=[_SECTION_RANKING, _SECTION_RANKING_AS_TODAY, _SECTION_BENCHMARK],
+        options=[
+            _SECTION_RANKING,
+            _SECTION_MY_GM,
+            _SECTION_RANKING_AS_TODAY,
+            _SECTION_BENCHMARK,
+        ],
         default=_SECTION_RANKING,
         required=True,
-        key="global_momentum_view",
+        key="global_momentum_section",
         width="stretch",
     )
 
@@ -76,6 +113,8 @@ def render_global_momentum() -> None:
         _render_ranking(as_today=False)
     elif section == _SECTION_RANKING_AS_TODAY:
         _render_ranking(as_today=True)
+    elif section == _SECTION_MY_GM:
+        _render_my_gm(latest_snapshot, latest_snapshot_date)
     else:
         _render_benchmarks()
 
@@ -123,7 +162,9 @@ def _render_ranking(*, as_today: bool = False) -> None:
         return
 
     if as_today:
-        st.markdown(f"**Ostatni close:** {result['signal_date']}")
+        st.markdown(
+            f"**Data ostatniej wspólnej sesji wszystkich ETF:** {result['signal_date']}"
+        )
     else:
         st.markdown(f"**Data sygnału:** {result['signal_date']}")
     ranking = result["ranking"].copy()
@@ -149,6 +190,114 @@ def _render_ranking(*, as_today: bool = False) -> None:
         hide_index=True,
         column_config={"Weight": st.column_config.NumberColumn(format="percent")},
     )
+
+
+def _render_my_gm(
+    latest_snapshot: pd.DataFrame | None,
+    latest_snapshot_date: date | None,
+) -> None:
+    st.caption(
+        f"Wykonanie strategii: DEGIRO + XTB. Złoto jest overlay w NAV portfela {PORTFOLIO_GM}, "
+        "nie nogą rankingu U7. Data snapshotu ≠ data sygnału U7. "
+        "To nie jest XIRR per ticker."
+    )
+    snapshot = latest_snapshot if isinstance(latest_snapshot, pd.DataFrame) else pd.DataFrame()
+    if snapshot.empty or latest_snapshot_date is None:
+        st.warning("Brak snapshotu portfela — wygeneruj snapshot w Wartość aktywów.")
+        return
+
+    st.markdown(f"**Snapshot:** {latest_snapshot_date.isoformat()}")
+
+    holdings: dict = {}
+    holdings_warnings: list[str] = []
+    try:
+        with st.spinner("Rozbicie pozycji / gotówki brokerów..."):
+            holdings, holdings_warnings = load_gm_broker_holdings(
+                latest_snapshot_date
+            )
+    except Exception as exc:
+        holdings_warnings = [f"Nie udało się wczytać holdings: {exc}"]
+
+    for msg in holdings_warnings:
+        st.warning(msg)
+
+    table = compose_gm_segment_table(snapshot, holdings)
+    total_nav = float(table["NAV PLN"].sum())
+    execution_nav = float(table.loc[table["Rola"] == ROLE_EXECUTION, "NAV PLN"].sum())
+    overlay_nav = float(table.loc[table["Rola"] == ROLE_OVERLAY, "NAV PLN"].sum())
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric(f"NAV {PORTFOLIO_GM}", f"{total_nav:,.0f} PLN".replace(",", " "))
+    c2.metric("Wykonanie (DEGIRO+XTB)", f"{execution_nav:,.0f} PLN".replace(",", " "))
+    c3.metric("Overlay (złoto)", f"{overlay_nav:,.0f} PLN".replace(",", " "))
+
+    missing = table.loc[~table["w_snapshocie"], "Składnik"].tolist()
+    if missing:
+        st.info("Brak w tym snapshocie: " + ", ".join(missing))
+
+    display = table.drop(columns=["id", "w_snapshocie"])
+    st.dataframe(
+        display,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "NAV PLN": st.column_config.NumberColumn(format="%.0f"),
+            "Udział": st.column_config.NumberColumn(format="percent"),
+            "Pozycje PLN": st.column_config.NumberColumn(format="%.0f"),
+            "Gotówka PLN": st.column_config.NumberColumn(format="%.0f"),
+        },
+    )
+
+    st.markdown("**Ścieżka NAV vs backtest U7**")
+    st.caption(
+        f"NAV portfela {PORTFOLIO_GM} ze snapshotów (PLN) zawiera dopłaty — to nie XIRR i nie czysty TWR bez CF. "
+        "Porównanie: obie serie = 100 na wspólnym starcie. Backtest U7 to stały kapitał (EUR)."
+    )
+    try:
+        with st.spinner(f"Ładowanie historii NAV {PORTFOLIO_GM}..."):
+            segment_nav = _load_gm_nav_history()
+    except Exception as exc:
+        st.error(f"Nie udało się złożyć ścieżki NAV portfela {PORTFOLIO_GM}.")
+        st.exception(exc)
+        return
+
+    segment_nav = segment_nav.rename(f"Portfel {PORTFOLIO_GM} NAV")
+    metrics = nav_path_metrics(segment_nav)
+    if metrics:
+        m1, m2, m3 = st.columns(3)
+        m1.metric(
+            "CAGR NAV",
+            f"{metrics['CAGR']:.2%}" if "CAGR" in metrics else "—",
+        )
+        m2.metric("Max DD NAV", f"{metrics['Max Drawdown']:.2%}")
+        m3.metric("Zmiana NAV", f"{metrics['Total Return']:.2%}")
+    elif segment_nav.empty:
+        st.info(f"Brak historii snapshotów dla portfela {PORTFOLIO_GM}.")
+        return
+    else:
+        st.info("Za mało dodatnich punktów NAV, żeby policzyć CAGR / DD.")
+
+    try:
+        with st.spinner("Ładowanie backtestu U7 do porównania..."):
+            benchmarks = _load_benchmarks()
+    except Exception as exc:
+        st.warning("Backtest U7 niedostępny — pokazuję samą ścieżkę NAV.")
+        st.exception(exc)
+        if not segment_nav.empty:
+            st.line_chart(segment_nav, width="stretch")
+        return
+
+    u7_equity = pd.Series(dtype=float)
+    equity = benchmarks.get("equity")
+    if isinstance(equity, pd.DataFrame) and GM_U7_LABEL in equity.columns:
+        u7_equity = equity[GM_U7_LABEL].copy()
+        u7_equity.name = GM_U7_LABEL
+    comparison = rebased_overlap(segment_nav, u7_equity)
+    if comparison.empty:
+        st.info(f"Brak wspólnego okresu NAV portfela {PORTFOLIO_GM} i backtestu U7.")
+        st.line_chart(segment_nav, width="stretch")
+        return
+    st.line_chart(comparison, width="stretch")
 
 
 def _render_benchmarks() -> None:
@@ -219,5 +368,3 @@ def _render_benchmarks() -> None:
     drawdowns.index = pd.to_datetime(drawdowns.index)
     st.markdown("**Drawdown**")
     st.line_chart(drawdowns, width="stretch")
-
-
