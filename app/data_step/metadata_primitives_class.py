@@ -17,6 +17,7 @@ from utils.get_app_path import AppFile, GetAppPathError
 HOME_PATH = '$HOME_PATH'
 DIR_TOKEN = 'DIR:'
 DEPENDENCIES = 'dependencies'
+DEPENDENCY_DIGESTS = 'dependency_digests'
 METADATA_FILE_NAME = '_metadata.json'
 METADATA_LOCK_NAME = '_metadata.lock'
 

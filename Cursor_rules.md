@@ -112,6 +112,14 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 
 mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
 
+### ROI lokat mBank
+
+- Osobna venue ROI (nie `roi_def`).
+- Snapshot **Wartość aktywów**: 1 wiersz `investment.depozyt` na konto mBank (`id` = konto ROR); `VALUE` = Σ kapitał otwartych lokat (−CAPEX). Zamknięte lokaty nie wchodzą. Szczegóły per NR są w zakładce ROI.
+- Klucz ROI: `{account_id}:{NR 15 cyfr}` z `#Tytuł` (`\bNR \d{15}\b`). `#Opis operacji` mapuje CF.
+- `OTW. LOKATY NR …` (przelew wychodzący) → `CAPEX`; `ZERWANIE` / `WYGAŚNIĘCIE` → `DIVESTMENT` (sam kapitał, **pełne zamknięcie**); `ODSETKI LOKAT TERMINOWYCH` → `REVENUES`; `PODATEK OD ODSETEK…` **z NR** → `OPEX`. Podatek ROR bez NR i przelewy bez `OTW. LOKATY` poza ROI.
+- Terminal otwartej = −Σ CAPEX (kapitał; odsetki już na ROR). Po DIVESTMENT: `is_sold`, terminal 0. `roi_nominal` = odsetki netto (REVENUES+OPEX).
+
 Trade Republic (PM): `Eksport transakcji.csv` z `download/pm` → `assets/p_traderepublic/eksport-transakcji_{od}_{do}.csv` (min/max kolumny `date`). Merge wielu plików: **luka okresów → twardy błąd**; overlap → dedupe po `transaction_id`. W katalogu: `id=p_traderepublic`, `RODZAJ*=BROKER`, `typ=investment.udziały`, `waluta=PLN`; bez `roi_def`. Snapshot na start: 1 wiersz NAV=0 (mapowanie BUY/SELL / ROI per instrument — osobna decyzja).
 
 Obligacje skarbowe (PKO BP): `StanRachunkuRejestrowego*.xls` oraz `HistoriaDyspozycji.xls` z `~/Downloads` → `assets/obligacjeskarbowe`. Przy przenoszeniu historia dostaje nazwę `{YYYY-MM-DD} {YYYY-MM-DD} HistoriaDyspozycji.xls` (min/max `DATA DYSPOZYCJI`). Jeśli w katalogu jest już plik zawierający wszystkie transakcje z nowego — nowy jest usuwany (pominięty); nadpisanie tej samej nazwy/zawartości nie jest błędem.
@@ -164,6 +172,7 @@ Market Data --> GMS Ranking --> Target --------+
 - Do snapshotu / ROI terminal: najnowszy `period_end <= data wyceny`, jeden snapshot jak wyżej.
 - **Snapshot:** 1 wiersz — Σ `Wartość w EUR` z `Portfolio.csv` dla gotówki i pozycji. To MTM, nie koszt FIFO.
 - **ROI:** per ISIN (`p_degiro:LT0000128621`); BUY → `CAPEX`; SELL → `DIVESTMENT`; `Dywidenda` → `REVENUES`; `is_sold` ⇔ qty≈0 / brak pozycji w najnowszym `Portfolio.csv`.
+- `portfolio` / `transactions` / `account` z jednego katalogu muszą się przebudowywać razem. Nowy `Portfolio.csv` + stary `Transactions.csv` daje **Wycena ~2× Inwestycja** (dokupienie w MTM, brak w CAPEX).
 - Terminal otwartych = `Wartość w EUR` z `Portfolio.csv` per ISIN; dla zamkniętych terminal = 0.
 - Do ROI transakcji używać `Wartość EUR`, a nie `Razem EUR`; opłaty, podatki, FX, cash sweep, depozyty/wypłaty i odsetki są poza XIRR per instrument w v1.
 - Implementacja: dedykowany importer DEGIRO, nie parser Revolut; źródła przez DATA_STEP (`01 source`), bez osobnego cache; testy obok istniejących testów brokerów.
@@ -220,7 +229,7 @@ Pozostaje:
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
 - Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele ROI wg `is_sold`. Preferencja w `_ui/sold_filter.txt`. Snapshoty i tak pomijają `VALUE=0`.
 - Zakładka **Waliduj**: walidacja ROI (`roi_def`/`roi_rules`/`roi_manual`) + ewaluacja katalogu `assets` w `a_config.xlsx` (dry-run, bez zapisu snapshotu).
-- Zakładka **ROI**: jedno miejsce z pills (Katalog / Revolut robo / depozyty / obligacje / DEGIRO / XTB) — soczewka operacji na koncie; bez zmiany semantyki XIRR. Tabele przepływów per ticker/aktywo: od najnowszej do najstarszej.
+- Zakładka **ROI**: jedno miejsce z pills (Katalog / Revolut robo / depozyty Revolut / depozyty mBank / obligacje / DEGIRO / XTB) — soczewka operacji na koncie; bez zmiany semantyki XIRR. Tabele przepływów per ticker/aktywo: od najnowszej do najstarszej.
 - Zakładka **Global momentum**: ranking operacyjny U7 (sygnał na koniec minionego miesiąca) + **as_today** (nieoficjalny nowcast na ostatnim wspólnym close ETF, nie sygnał rebalance; przy nazwie dryf TOP3 vs U7: `*` zostaje, `+` weszło, `-` wypadło) + **Mój GM** (wykonanie) + backtest/benchmarki z sandboxu; ceny Yahoo przez DATA_STEP. **Poland** = `ETFPZUW20M40` (50% WIG20TR + 50% mWIG40TR); bez sWIG80 / pełnego WIG — brak lepszego jednego ETF-a wykonania, zostaje ten ticker.
 - Zakładka **Wartość aktywów**: RAP 1 | RAP 2, potem Cash pool (jedna tabela), potem **Inwestycje** jako trzy tabele — `0 OGÓLNY`, `1 REVOLUT-ROBO`, `2 G-MOMENTUM`.
 - **Portfel** — każde `investment.*` i `cash_pool.*` należy do dokładnie jednego: **`0 OGÓLNY`** (reszta, w tym cash pool; default nowego aktywa), **`1 REVOLUT-ROBO`** (`p_re_robo`), **`2 G-MOMENTUM`** (`p_degiro` + `p_xtb` + `zloto-monety`; złoto = overlay poza U7). Przypisanie w kodzie (v1); nie kolumna Excela. RAP 1 = portfel × `grupa`; RAP 2 = portfel × `typ` (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`). Widok **Mój GM** = portfel `2 G-MOMENTUM`. Snapshot brokerów zostaje 1 wierszem (pozycje + gotówka). Ścieżka NAV ze snapshotów (PLN) vs backtest U7 (serie = 100 na wspólnym starcie) **nie** jest sumą XIRR tickerów i zawiera dopłaty; czysty TWR po CF oraz XIRR całego portfela G-MOMENTUM — później.

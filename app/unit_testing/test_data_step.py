@@ -1,5 +1,6 @@
 import errno
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -254,6 +255,47 @@ class DataStepIntegrationTests(unittest.TestCase):
         self.assertEqual(second.get_status(), CACHED)
         self.assertEqual(calls["n"], 1)
         pd.testing.assert_frame_equal(first.data_frame(), second.data_frame())
+
+    def test_sibling_dir_products_rebuild_after_source_dir_changes(self):
+        """Dwa produkty z tego samego DIR: nowy plik nie może zostawić drugiego na starym cache.
+
+        obtain_dependent po odświeżeniu A aktualizuje digest katalogu, więc B wyglądał
+        na aktualny (swój parquet bez zmian, DIR już „świeży”). ROI DEGIRO brał wtedy
+        nowy Portfolio (terminal) i stary Transactions (CAPEX) → Wycena ~2× Inwestycja.
+        """
+        self.step.init_steps(root=self.start_file)
+        source_dir = Path(self.step.metadata._home) / "data_step_sibling_dir_test"
+        if source_dir.exists():
+            shutil.rmtree(source_dir)
+        source_dir.mkdir()
+        self.addCleanup(lambda: shutil.rmtree(source_dir, ignore_errors=True))
+        (source_dir / "a.csv").write_text("1", encoding="utf-8")
+
+        calls = {"a": 0, "b": 0}
+
+        def collect_a(source_file=None, **kwargs):
+            calls["a"] += 1
+            return pd.DataFrame({"n": [len(list(source_file.glob("*.csv")))]})
+
+        def collect_b(source_file=None, **kwargs):
+            calls["b"] += 1
+            return pd.DataFrame({"n": [len(list(source_file.glob("*.csv")))]})
+
+        self.step.obtain_dependent("01 source/a.parquet", collect_a, source_dir)
+        self.step.obtain_dependent("01 source/b.parquet", collect_b, source_dir)
+        self.assertEqual(calls, {"a": 1, "b": 1})
+
+        self.step.obtain_dependent("01 source/a.parquet", collect_a, source_dir)
+        self.step.obtain_dependent("01 source/b.parquet", collect_b, source_dir)
+        self.assertEqual(calls, {"a": 1, "b": 1})
+
+        (source_dir / "b.csv").write_text("2", encoding="utf-8")
+        refreshed_a = self.step.obtain_dependent("01 source/a.parquet", collect_a, source_dir)
+        refreshed_b = self.step.obtain_dependent("01 source/b.parquet", collect_b, source_dir)
+        self.assertEqual(refreshed_a.get_status(), REFRESHED)
+        self.assertEqual(refreshed_b.get_status(), REFRESHED)
+        self.assertEqual(calls, {"a": 2, "b": 2})
+        self.assertEqual(int(refreshed_b.data_frame()["n"].iloc[0]), 2)
 
     def test_obtain_dependent_links_source_and_product(self):
         self.step.init_steps(root=self.start_file)

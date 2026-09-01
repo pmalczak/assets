@@ -5,7 +5,11 @@ import hashlib
 import os
 from pathlib import Path
 
-from data_step.metadata_primitives_class import MetadataPrimitives, DEPENDENCIES
+from data_step.metadata_primitives_class import (
+    DEPENDENCIES,
+    DEPENDENCY_DIGESTS,
+    MetadataPrimitives,
+)
 
 DATA_FRAME_ROWS = 'data_frame_rows'
 MTIME = 'mtime'
@@ -73,6 +77,11 @@ class Metadata(MetadataPrimitives):
         dependencies = [dep for dep in (dependencies or []) if dep != token]
         item_descriptor[DEPENDENCIES] = dependencies
         assert token not in dependencies
+        dir_dep_digests = self._dir_dependency_digests(dependencies)
+        if dir_dep_digests:
+            item_descriptor[DEPENDENCY_DIGESTS] = dir_dep_digests
+        else:
+            item_descriptor.pop(DEPENDENCY_DIGESTS, None)
         if method == DIGEST:
 
             if self.is_dir_token(token):
@@ -163,27 +172,57 @@ class Metadata(MetadataPrimitives):
 
     def _cached_token_still_valid(self, token: str) -> bool:
         try:
-            self.get_items_descriptor(token)
+            descriptor = self.get_items_descriptor(token)
         except KeyError:
             return False
 
         item_path = self.token_as_path(token)
         if self.is_dir_token(token):
-            return item_path.is_dir()
-        return item_path.is_file()
+            if not item_path.is_dir():
+                return False
+            return descriptor.get(DIGEST) == self._calc_dir_token_digest(item_path)
+        if not item_path.is_file():
+            return False
+        dir_deps = [d for d in (descriptor.get(DEPENDENCIES) or []) if self.is_dir_token(d)]
+        stored = descriptor.get(DEPENDENCY_DIGESTS) or {}
+        if dir_deps and not stored:
+            return False
+        for dep, stored_digest in stored.items():
+            try:
+                if stored_digest != self._current_token_digest(dep):
+                    return False
+            except MetadataUpdateError:
+                return False
+        return True
+
+    def _dir_dependency_digests(self, dependencies: list) -> dict:
+        result = {}
+        for dep in dependencies or []:
+            if self.is_dir_token(dep):
+                result[dep] = self._current_token_digest(dep)
+        return result
+
+    def _current_token_digest(self, token: str) -> str:
+        item_path = self.token_as_path(token)
+        if self.is_dir_token(token):
+            if not item_path.is_dir():
+                raise MetadataUpdateError(f"dir doesn't exists {token}")
+            return self._calc_dir_token_digest(item_path)
+        if not item_path.is_file():
+            raise MetadataUpdateError(f"file doesn't exists {token}")
+        return self._calc_file_digest(item_path)
 
     @staticmethod
     def _calc_dir_token_digest(item_path: Path) -> str:
         assert item_path.is_dir()
-        l = list(item_path.glob('*.*'))
-        l = list(map(lambda x: str(x), l))
-        l = ''.join(l)
-        content = l.encode('utf-8')
-
+        parts = []
+        for path in sorted(item_path.glob('*.*'), key=lambda p: p.name.lower()):
+            if path.is_file():
+                parts.append(f"{path.name}:{path.stat().st_size}")
+        content = "\n".join(parts).encode("utf-8")
         md5hash = hashlib.md5()
         md5hash.update(content)
-        digest = md5hash.hexdigest()
-        return digest
+        return md5hash.hexdigest()
 
     @staticmethod
     def _calc_file_digest(item_path: Path) -> str:
@@ -221,8 +260,16 @@ class Metadata(MetadataPrimitives):
             raise MetadataUpdateError(msg)
 
         self.check_cycles(item, dependencies)
+        stored_dir_digests = self.get_items_descriptor(item).get(DEPENDENCY_DIGESTS) or {}
         for dep in dependencies:
             self.is_updated(dep)
+            if not self.is_dir_token(dep):
+                continue
+            current = self._current_token_digest(dep)
+            if stored_dir_digests.get(dep) != current:
+                raise MetadataUpdateError(
+                    f"dir dependency changed {resource} <- {dep}"
+                )
 
     @staticmethod
     def check_cycles(resource, dependencies):

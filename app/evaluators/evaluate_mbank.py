@@ -11,6 +11,7 @@ from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.mbank.data_model import MBankFile
 from importers.mbank.read_m_transactions import read_m_transactions
+from roi.mbank_deposit_roi import build_mbank_lokata_cashflows, compute_lokata_roi
 
 
 def evaluate_mbank(
@@ -39,7 +40,9 @@ def evaluate_mbank(
     data = [assets_row]
 
     if assets_file_row[AssetsDef.KIND].startswith('mbank.'):
-        r = _evaluate_deposits_mbank(df, assets_file_row, assets_row)
+        r = _evaluate_deposits_mbank(
+            df, assets_file_row, assets_row, asset_id, valuation_date
+        )
         if r:
             data += r
 
@@ -48,30 +51,37 @@ def evaluate_mbank(
     return format_date_columns(result, AssetsDef.EVALUATION_DATE)
 
 
-def _evaluate_deposits_mbank(df: pd.DataFrame, assets_file_row: pd.Series, master_asset: pd.Series) -> list:
-    KOL_LOKATA = 'lokata'
+def _evaluate_deposits_mbank(
+    df: pd.DataFrame,
+    assets_file_row: pd.Series,
+    master_asset: pd.Series,
+    account_id: str,
+    valuation_date: date,
+) -> list:
+    events, _warnings = build_mbank_lokata_cashflows(df, account_id)
+    total = 0.0
+    n_open = 0
+    for asset_id, cashflows in events.items():
+        summary = compute_lokata_roi(asset_id, cashflows, valuation_date)
+        if summary.is_sold:
+            continue
+        total += float(summary.terminal_unrealized)
+        n_open += 1
+    if n_open == 0 or abs(total) < 1e-9:
+        return []
 
-    pattern = r"(NR \d{15})"
-    df[KOL_LOKATA] = df[MBankFile.MBANK_TITLE].str.extract(pattern, expand=False)
+    assets_row = AssetsDef.as_assets_row(assets_file_row)
+    assets_row[AssetsDef.GROUP] = GroupDomain.DEPOSIT
+    assets_row[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
+    assets_row[AssetsDef.TYPE] = TypeDomain.DEPOSIT
+    assets_row[AssetsDef.DESCR] = _deposit_descr(n_open)
+    assets_row[AssetsDef.VALUE] = total
+    return [assets_row]
 
-    r = df[df[KOL_LOKATA].notnull()]
 
-    active_deposits = r[[KOL_LOKATA, MBankFile.MBANK_AMOUNT]]
-    active_deposits = active_deposits.groupby(KOL_LOKATA).sum()
-    active_deposits = active_deposits[active_deposits[MBankFile.MBANK_AMOUNT] < 0.0]
-    active_deposits = active_deposits.reset_index()
-    active_deposits = active_deposits[[KOL_LOKATA]]
-
-    r = r.merge(active_deposits, on=KOL_LOKATA)
-
-    result = []
-    for _, _row in r.iterrows():
-        assets_row = AssetsDef.as_assets_row(assets_file_row)
-        assets_row[AssetsDef.GROUP] = GroupDomain.DEPOSIT
-        assets_row[AssetsDef.EVALUATION_DATE] = master_asset[AssetsDef.EVALUATION_DATE]
-        assets_row[AssetsDef.TYPE] = TypeDomain.DEPOSIT
-        assets_row[AssetsDef.DESCR] = _row[KOL_LOKATA]
-        assets_row[AssetsDef.VALUE] = - _row[MBankFile.MBANK_AMOUNT]
-        result += [assets_row]
-
-    return result
+def _deposit_descr(n_open: int) -> str:
+    if n_open == 1:
+        return "depozyty (1 lokata)"
+    if 2 <= n_open <= 4:
+        return f"depozyty ({n_open} lokaty)"
+    return f"depozyty ({n_open} lokat)"

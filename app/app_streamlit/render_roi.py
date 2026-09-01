@@ -17,6 +17,7 @@ from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
 from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
 from roi.degiro_roi import compute_degiro_ticker_roi
+from roi.mbank_deposit_roi import compute_mbank_deposit_roi
 from roi.revolut_deposit_roi import compute_revolut_deposit_roi
 from roi.xtb_roi import compute_xtb_ticker_roi
 
@@ -46,6 +47,7 @@ ROI_FLOW_DISPLAY_COLUMNS = {
 ROI_VENUE_CATALOG = "Katalog"
 ROI_VENUE_ROBO = "Revolut robo"
 ROI_VENUE_DEPOSITS = "Revolut depozyty"
+ROI_VENUE_MBANK_DEPOSITS = "mBank depozyty"
 ROI_VENUE_BONDS = "Obligacje"
 ROI_VENUE_DEGIRO = "DEGIRO"
 ROI_VENUE_XTB = "XTB"
@@ -53,6 +55,7 @@ ROI_VENUES = [
     ROI_VENUE_CATALOG,
     ROI_VENUE_ROBO,
     ROI_VENUE_DEPOSITS,
+    ROI_VENUE_MBANK_DEPOSITS,
     ROI_VENUE_BONDS,
     ROI_VENUE_DEGIRO,
     ROI_VENUE_XTB,
@@ -80,6 +83,8 @@ def render_roi(default_valuation_date: date | None) -> None:
         render_roi_revolut_robo(default_valuation_date)
     elif venue == ROI_VENUE_DEPOSITS:
         render_roi_revolut_deposits(default_valuation_date)
+    elif venue == ROI_VENUE_MBANK_DEPOSITS:
+        render_roi_mbank_deposits(default_valuation_date)
     elif venue == ROI_VENUE_BONDS:
         render_roi_obligacje(default_valuation_date)
     elif venue == ROI_VENUE_DEGIRO:
@@ -293,6 +298,51 @@ def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
         selected,
         valuation_date,
         empty_msg="Brak przepływów dla depozytu.",
+    )
+
+
+def render_roi_mbank_deposits(default_valuation_date: date | None) -> None:
+    st.subheader("ROI mBank depozyty (per NR)")
+    valuation_date = st.date_input(
+        "Data wyceny ROI lokat mBank",
+        value=default_valuation_date or date.today(),
+        key="roi_mbank_deposits_valuation_date",
+    )
+    st.caption(
+        "Cashflow z wyciągu ROR per `NR` w tytule: `OTW. LOKATY` → CAPEX; "
+        "zerwanie/wygaśnięcie → DIVESTMENT (kapitał); odsetki → REVENUES; "
+        "podatek z NR → OPEX. Terminal otwartej = kapitał (−CAPEX); "
+        "DIVESTMENT zamyka lokatę (terminal 0). Snapshot NAV bez zmian w v1."
+    )
+    try:
+        with st.spinner("Liczenie ROI lokat mBank..."):
+            summary, events_by_asset, warnings = compute_mbank_deposit_roi(valuation_date)
+    except Exception as exc:
+        st.warning("Nie udało się policzyć ROI lokat mBank.")
+        st.exception(exc)
+        return
+
+    if warnings:
+        for msg in warnings:
+            st.warning(msg)
+
+    if summary.empty:
+        st.info("Brak lokat mBank (`OTW. LOKATY NR` / operacje lokat z NR) w wyciągach.")
+        return
+
+    summary = _apply_sold_filter(summary)
+    if summary is None:
+        return
+
+    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+
+    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
+    selected = _asset_selectbox("Lokata (NR)", asset_ids, "roi_mbank_deposits_selected_asset")
+    _render_flow_details(
+        events_by_asset,
+        selected,
+        valuation_date,
+        empty_msg="Brak przepływów dla lokaty.",
     )
 
 

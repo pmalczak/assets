@@ -27,6 +27,7 @@ SLUG_TO_LABEL = {
     "roi": "ROI",
     "roi-robo": "ROI",
     "roi-depozyty": "ROI",
+    "roi-mbank-depozyty": "ROI",
     "roi-obligacje": "ROI",
     "roi-degiro": "ROI",
     "roi-xtb": "ROI",
