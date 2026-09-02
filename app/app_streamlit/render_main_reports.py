@@ -27,7 +27,15 @@ def _clear_reports_related_cache() -> None:
 
 
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
-    from asset_reports import format_rap_table, rap1, rap2
+    from asset_reports import rap1, rap2, rap_display_frame, style_rap_table
+
+    def _rap_column_config(frame: pd.DataFrame, label_cols: list[str]) -> dict:
+        label_set = set(label_cols)
+        config: dict = {}
+        for col in frame.columns:
+            align = "left" if col in label_set else "right"
+            config[col] = st.column_config.TextColumn(str(col), alignment=align)
+        return config
 
     st.subheader("Wartość aktywów")
 
@@ -109,10 +117,26 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     rap1_col, rap2_col = st.columns(2)
     with rap1_col:
         st.markdown("**RAP 1**")
-        st.code(format_rap_table(rap1(assets)), language=None)
+        rap1_table = rap1(assets)
+        rap1_display, rap1_labels, _ = rap_display_frame(rap1_table)
+        st.dataframe(
+            style_rap_table(rap1_table),
+            width="stretch",
+            hide_index=True,
+            height=min(420, 38 + max(len(rap1_display), 1) * 35),
+            column_config=_rap_column_config(rap1_display, rap1_labels),
+        )
     with rap2_col:
         st.markdown("**RAP 2**")
-        st.code(format_rap_table(rap2(assets)), language=None)
+        rap2_table = rap2(assets)
+        rap2_display, rap2_labels, _ = rap_display_frame(rap2_table)
+        st.dataframe(
+            style_rap_table(rap2_table),
+            width="stretch",
+            hide_index=True,
+            height=min(420, 38 + max(len(rap2_display), 1) * 35),
+            column_config=_rap_column_config(rap2_display, rap2_labels),
+        )
 
     st.markdown("**Cash pool**")
     st.dataframe(dataframe_for_streamlit(cash_pool), width="stretch", hide_index=True, height=360)

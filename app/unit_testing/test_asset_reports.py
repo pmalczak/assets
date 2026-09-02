@@ -5,7 +5,7 @@ import unittest
 
 import pandas as pd
 
-from asset_reports import format_rap_table, rap1, rap2
+from asset_reports import format_rap_table, rap1, rap2, rap_display_frame, style_rap_table
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from portfolios.assignment import PORTFOLIO_GM, PORTFOLIO_OGOLNY, PORTFOLIO_REVOLUT_ROBO
@@ -107,3 +107,29 @@ class RapPortfolioIndexTests(unittest.TestCase):
             header_end = header.rfind(col) + len(col)
             value_end = data.rfind(value) + len(value)
             self.assertEqual(header_end, value_end, f"{col!r} vs {value!r}\n{header}\n{data}")
+
+    def test_style_rap_table_colors_portfolios_and_totals(self):
+        table = rap1(self.snapshot)
+        html = style_rap_table(table).to_html()
+        self.assertIn("#1565C0", html)  # 0 OGÓLNY / EUR
+        self.assertIn("#6A1B9A", html)  # 1 REVOLUT-ROBO
+        self.assertIn("#2E7D32", html)  # 2 G-MOMENTUM
+        self.assertIn("#B71C1C", html)  # Z RAZEM
+        self.assertIn("#AD1457", html)  # PLN
+
+    def test_rap_display_blanks_repeated_portfolio_labels(self):
+        table = rap1(self.snapshot)
+        display, label_cols, full_keys = rap_display_frame(table)
+        self.assertEqual(label_cols[0], AssetsDef.PORTFOLIO)
+        portfel = display[AssetsDef.PORTFOLIO].tolist()
+        # Pierwsze wystąpienie każdego portfela widoczne, kolejne puste.
+        seen: set[str] = set()
+        for shown, full in zip(portfel, full_keys):
+            portfolio = full[0]
+            if portfolio in seen:
+                self.assertEqual(shown, "")
+            else:
+                self.assertEqual(shown, portfolio)
+                seen.add(portfolio)
+        self.assertGreater(portfel.count(""), 0)
+        self.assertIn(PORTFOLIO_OGOLNY, portfel)
