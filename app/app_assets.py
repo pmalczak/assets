@@ -18,6 +18,7 @@ import streamlit as st
 from app_proc.ui_prefs import (
     TAB_ASSETS,
     TAB_LABELS,
+    TAB_PORTFOLIOS,
     TABS_STATE_KEY,
     load_last_tab,
     on_tab_changed,
@@ -32,6 +33,7 @@ from app_streamlit.render_fx import render_fx
 from app_streamlit.render_global_momentum import render_global_momentum
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
 from app_streamlit.render_portfolio_history import render_portfolio_history
+from app_streamlit.render_portfolios import render_portfolios
 from app_streamlit.render_roi import render_roi
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
@@ -227,6 +229,8 @@ def main():
                 continue
             if label == TAB_ASSETS:
                 render_main_reports(latest, data["latest_snapshot"])
+            elif label == TAB_PORTFOLIOS:
+                render_portfolios()
             elif label == "Wykres portfela":
                 render_portfolio_history(
                     data["history"],

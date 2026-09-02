@@ -2,6 +2,8 @@
 """Przypisanie aktywów do portfela (0 OGÓLNY / 1 REVOLUT-ROBO / 2 G-MOMENTUM)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 
 from importers.assets.data_model import AssetsDef
@@ -130,3 +132,54 @@ def portfolio_nav_pln(assets: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     return summary
+
+
+def nav_pln_for_portfolio(assets: pd.DataFrame, portfolio_name: str) -> float:
+    summary = portfolio_nav_pln(assets)
+    if summary is None or summary.empty:
+        return 0.0
+    matched = summary.loc[summary[AssetsDef.PORTFOLIO].astype(str) == str(portfolio_name)]
+    if matched.empty:
+        return 0.0
+    return float(pd.to_numeric(matched[AssetsDef.VALUE_PLN], errors="coerce").fillna(0).iloc[0])
+
+
+def assets_in_portfolio(assets: pd.DataFrame, portfolio_name: str) -> pd.DataFrame:
+    """Wiersze snapshotu przypisane do nazwanego portfela (inwestycje i cash pool)."""
+    work = rows_with_portfolio(assets)
+    if work is None or work.empty or AssetsDef.PORTFOLIO not in work.columns:
+        return pd.DataFrame()
+    part = work.loc[work[AssetsDef.PORTFOLIO].astype(str) == str(portfolio_name)].copy()
+    return part
+
+
+def load_portfolio_nav_history(
+    portfolio_name: str,
+    snapshots_dir: Path | None = None,
+) -> pd.Series:
+    """Suma VALUE_PLN ze snapshotów `09 assets` dla jednego nazwanego portfela."""
+    from app_proc.snapshots import list_snapshot_files, load_snapshot, snapshots_directory
+
+    directory = snapshots_dir if snapshots_dir is not None else snapshots_directory()
+    dates: list[pd.Timestamp] = []
+    values: list[float] = []
+    preferred = [AssetsDef.ID, AssetsDef.TYPE, AssetsDef.VALUE_PLN]
+    fallback = [AssetsDef.ID, AssetsDef.VALUE_PLN]
+    for snapshot_date, path in list_snapshot_files(directory):
+        try:
+            assets = pd.read_parquet(path, columns=preferred)
+        except Exception:
+            try:
+                assets = pd.read_parquet(path, columns=fallback)
+            except Exception:
+                assets = load_snapshot(path)
+        dates.append(pd.Timestamp(snapshot_date))
+        values.append(nav_pln_for_portfolio(assets, portfolio_name))
+    series = pd.Series(
+        values,
+        index=pd.DatetimeIndex(dates),
+        name=f"Portfel {portfolio_name} NAV",
+    )
+    if series.empty:
+        return series
+    return series.sort_index()

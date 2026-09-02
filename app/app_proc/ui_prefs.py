@@ -6,9 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 TAB_ASSETS = "Wartość aktywów"
+TAB_PORTFOLIOS = "Portfele"
 
 TAB_LABELS = [
     TAB_ASSETS,
+    TAB_PORTFOLIOS,
     "Wykres portfela",
     "ROI",
     "FX",
@@ -22,6 +24,7 @@ TABS_STATE_KEY = "app_assets_tab"
 
 SLUG_TO_LABEL = {
     "wykres": "Wykres portfela",
+    "portfele": TAB_PORTFOLIOS,
     "raporty": TAB_ASSETS,
     "szukaj": "Wyszukiwanie transakcji",
     "roi": "ROI",

@@ -127,28 +127,9 @@ def compose_gm_segment_table(
 
 
 def load_gm_segment_nav_history(snapshots_dir: Path | None = None) -> pd.Series:
-    from app_proc.snapshots import list_snapshot_files, load_snapshot
+    from portfolios.assignment import load_portfolio_nav_history
 
-    directory = snapshots_dir
-    if directory is None:
-        from app_proc.snapshots import snapshots_directory
-
-        directory = snapshots_directory()
-
-    dates: list[pd.Timestamp] = []
-    values: list[float] = []
-    columns = [AssetsDef.ID, AssetsDef.VALUE_PLN]
-    for snapshot_date, path in list_snapshot_files(directory):
-        try:
-            assets = pd.read_parquet(path, columns=columns)
-        except (ValueError, KeyError, OSError):
-            assets = load_snapshot(path)
-        dates.append(pd.Timestamp(snapshot_date))
-        values.append(gm_segment_nav_pln(assets))
-    series = pd.Series(values, index=pd.DatetimeIndex(dates), name=_NAV_SERIES_NAME)
-    if series.empty:
-        return series
-    return series.sort_index()
+    return load_portfolio_nav_history(PORTFOLIO_GM, snapshots_dir).rename(_NAV_SERIES_NAME)
 
 
 def _drawdown(equity: pd.Series) -> pd.Series:

@@ -10,7 +10,9 @@ from app_proc.ui_prefs import (
     SOLD_FILTER_ACTIVE,
     SOLD_FILTER_ALL,
     SOLD_FILTER_SOLD,
+    TAB_ASSETS,
     TAB_LABELS,
+    TAB_PORTFOLIOS,
     filter_by_sold,
     load_last_tab,
     load_sold_filter,
@@ -21,6 +23,24 @@ from app_proc.ui_prefs import (
 
 
 class UiPrefsTests(unittest.TestCase):
+    def test_portfele_tab_is_after_assets(self):
+        self.assertIn(TAB_PORTFOLIOS, TAB_LABELS)
+        self.assertEqual(TAB_LABELS[TAB_LABELS.index(TAB_ASSETS) + 1], TAB_PORTFOLIOS)
+        self.assertEqual(
+            TAB_LABELS[TAB_LABELS.index(TAB_PORTFOLIOS) + 1],
+            "Wykres portfela",
+        )
+
+    def test_portfele_slug_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab(TAB_PORTFOLIOS, prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIOS)
+            self.assertEqual(
+                (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
+                "portfele",
+            )
+
     def test_roi_venues_are_not_top_level_tabs(self):
         self.assertIn("ROI", TAB_LABELS)
         self.assertEqual(TAB_LABELS.count("ROI"), 1)
