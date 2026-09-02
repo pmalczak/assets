@@ -7,7 +7,6 @@ import pandas as pd
 
 from importers.assets.property_lifecycle import (
     earliest_divestment_dates,
-    investment_property_ids,
     is_property_closed,
     latest_valuation_on_date,
     load_property_close_dates,
@@ -55,14 +54,16 @@ def is_asset_sold(
     del valuations
     asset_key = str(asset_id)
 
-    # investment.property: DIVESTMENT = pełne wyjście (inaczej niż obligacje / ticker).
+    # Catalog ROI: DIVESTMENT w CF tego aktywa = pełne wyjście.
+    # ID nieruchomości (horbaczewskiego) jest w roi_def, nie jako wiersz assets.
+    # Brokerzy nie idą przez compute_roi (tam is_sold ⇔ qty≈0).
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
     close_date = earliest_divestment_dates(filtered).get(asset_key)
-    if close_date is not None and asset_key in investment_property_ids():
+    if close_date is not None:
         return valuation_date >= close_date
 
     config = read_analyse_config()
-    close_dates = load_property_close_dates(config["manual"], config["catalog"])
+    close_dates = load_property_close_dates(config["manual"], config["catalog"], events=filtered)
     return is_property_closed(asset_id, valuation_date, close_dates)
 
 

@@ -43,11 +43,7 @@ def _open_property_sheet(asset_id: str, value: float, valuation: str) -> pd.Data
 class ComputeRoiTests(unittest.TestCase):
     def test_sold_property_roi_is_sum_of_realized_cashflows(self):
         events = _kiemliczow_1_events()
-        with patch(
-            "roi.terminal_value.investment_property_ids",
-            return_value={"kiemliczow_1"},
-        ):
-            summary = compute_roi("kiemliczow_1", events, None, date(2026, 1, 1))
+        summary = compute_roi("kiemliczow_1", events, None, date(2026, 1, 1))
 
         self.assertTrue(summary.is_sold)
         self.assertEqual(summary.terminal_realized, 156600.0)
@@ -73,10 +69,7 @@ class ComputeRoiTests(unittest.TestCase):
             ]
         )
         props = _open_property_sheet("kiemliczow_3", 450000.0, "2024-06-01")
-        with patch(
-            "roi.terminal_value.investment_property_ids",
-            return_value={"kiemliczow_3"},
-        ), patch("roi.terminal_value.load_property_close_dates", return_value={}):
+        with patch("roi.terminal_value.load_property_close_dates", return_value={}):
             summary = compute_roi("kiemliczow_3", events, props, date(2026, 1, 1))
 
         self.assertFalse(summary.is_sold)
@@ -114,22 +107,50 @@ class ComputeRoiTests(unittest.TestCase):
             ]
         )
         props = _open_property_sheet("horbaczewskiego", 80000.0, "2025-01-01")
-        with patch(
-            "roi.terminal_value.investment_property_ids",
-            return_value={"horbaczewskiego"},
-        ):
-            summary = compute_roi("horbaczewskiego", events, props, date(2026, 1, 1))
+        summary = compute_roi("horbaczewskiego", events, props, date(2026, 1, 1))
 
         self.assertTrue(summary.is_sold)
         self.assertEqual(summary.terminal_realized, 650000.0)
         self.assertEqual(summary.terminal_unrealized, 0.0)
 
+    def test_property_divestment_sold_when_id_missing_from_assets_sheet(self):
+        """roi_def ID (horbaczewskiego) nie jest wierszem assets — rodzic to `properties`."""
+        events = pd.DataFrame(
+            [
+                {
+                    CashFlowEvent.ASSET_ID: "horbaczewskiego",
+                    CashFlowEvent.DATE: "2025-04-02",
+                    CashFlowEvent.AMOUNT: 65000.0,
+                    CashFlowEvent.CATEGORY: DIVESTMENT,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "zaliczka",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "horbaczewskiego",
+                    CashFlowEvent.DATE: "2025-04-23",
+                    CashFlowEvent.AMOUNT: 585000.0,
+                    CashFlowEvent.CATEGORY: DIVESTMENT,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "depozyt notarialny",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+            ]
+        )
+        summary = compute_roi("horbaczewskiego", events, None, date(2026, 9, 1))
+
+        self.assertTrue(summary.is_sold)
+        self.assertEqual(summary.terminal_realized, 650000.0)
+        self.assertEqual(summary.terminal_unrealized, 0.0)
+        self.assertFalse(summary.warnings)
+
     def test_valuation_date_filters_future_cashflows(self):
         events = _kiemliczow_1_events()
-        with patch(
-            "roi.terminal_value.investment_property_ids",
-            return_value={"kiemliczow_1"},
-        ):
+        with patch("roi.terminal_value.load_property_close_dates", return_value={}):
             summary = compute_roi("kiemliczow_1", events, None, date(1999, 12, 31))
 
         self.assertFalse(summary.is_sold)

@@ -39,7 +39,7 @@ def investment_property_ids(assets_catalog: pd.DataFrame | None = None) -> set[s
 
 def earliest_divestment_dates(events: pd.DataFrame) -> dict[str, date]:
     """Najwcześniejsza data DIVESTMENT per asset_id z cashflowów ROI."""
-    from roi.categories import DIVESTMENT
+    from roi.categories import DIVESTMENT, normalize_roi_category
     from roi.data_model import CashFlowEvent
 
     if events is None or events.empty:
@@ -47,7 +47,7 @@ def earliest_divestment_dates(events: pd.DataFrame) -> dict[str, date]:
     if CashFlowEvent.CATEGORY not in events.columns or CashFlowEvent.DATE not in events.columns:
         return {}
 
-    mask = events[CashFlowEvent.CATEGORY].astype(str) == DIVESTMENT
+    mask = events[CashFlowEvent.CATEGORY].astype(str).map(normalize_roi_category) == DIVESTMENT
     closing = events.loc[mask].copy()
     if closing.empty:
         return {}
@@ -83,16 +83,13 @@ def load_property_close_dates(
                 by_asset_id[str(asset_id)] = group[AnalyseAssetsManual.DATE].min().date()
 
     # Nieruchomość: DIVESTMENT (bank lub manual w events) = zamknięcie pozycji.
+    # ID z roi_def (np. horbaczewskiego) nie musi być wierszem assets (tam rodzic `properties`).
     if events is not None and not events.empty:
-        property_ids = investment_property_ids()
-        if property_ids:
-            for asset_id, close_date in earliest_divestment_dates(events).items():
-                if asset_id not in property_ids:
-                    continue
-                previous = by_asset_id.get(asset_id)
-                by_asset_id[asset_id] = (
-                    close_date if previous is None else min(previous, close_date)
-                )
+        for asset_id, close_date in earliest_divestment_dates(events).items():
+            previous = by_asset_id.get(asset_id)
+            by_asset_id[asset_id] = (
+                close_date if previous is None else min(previous, close_date)
+            )
 
     return by_asset_id
 

@@ -18,7 +18,6 @@ from importers.assets.property_lifecycle import (
 )
 from roi.categories import DIVESTMENT
 from roi.data_model import CashFlowEvent
-from unittest.mock import patch
 
 
 def _valuations_frame() -> pd.DataFrame:
@@ -193,15 +192,11 @@ class PropertyLifecycleTests(unittest.TestCase):
                 },
             ]
         )
-        with patch(
-            "importers.assets.property_lifecycle.investment_property_ids",
-            return_value={"horbaczewskiego"},
-        ):
-            close_dates = load_property_close_dates(
-                pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns())),
-                None,
-                events=events,
-            )
+        close_dates = load_property_close_dates(
+            pd.DataFrame(columns=list(AnalyseAssetsManual.expected_columns())),
+            None,
+            events=events,
+        )
         self.assertEqual(close_dates["horbaczewskiego"], date(2025, 4, 2))
 
 

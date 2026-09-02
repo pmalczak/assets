@@ -42,7 +42,7 @@ Arkusze `a_config.xlsx`:
 
 1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`. Brak osobnej zakładki `cash` w `a_config.xlsx`.
 2. **DIVESTMENT a is_sold** — zależy od `typ`:
-   - **`investment.property`**: DIVESTMENT (bank lub manual) **=** sprzedaż / `is_sold` (nieruchomość nie ma częściowego „zmniejszenia zaangażowania” jak obligacje)
+   - **`investment.property`**: DIVESTMENT (bank lub manual) **=** sprzedaż / `is_sold` (nieruchomość nie ma częściowego „zmniejszenia zaangażowania” jak obligacje). ID w ROI.Katalog (`roi_def`, np. `horbaczewskiego`) **nie musi** być wierszem w arkuszu `assets` (tam rodzic `id=properties`, `RODZAJ*=assets.properties`); `is_sold` z DIVESTMENT w CF, nawet jednokrotnego.
    - **brokerzy / obligacje / depozyty**: DIVESTMENT może być częściowy; `is_sold` ⇔ `qty≈0`
    - **`investment.cash`**: `is_sold` z daty zamknięcia w `roi_manual` (DIVESTMENT/CLOSING)
    - Arkusz wycen / `operacja=sprzedane` nie ustawia flagi sprzedaży.
