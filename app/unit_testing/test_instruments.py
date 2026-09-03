@@ -22,8 +22,8 @@ from maintenance.ensure_instruments_sheet import (
     ensure_instruments_sheet,
     upgrade_instruments_table,
 )
-from sandbox.global_momentum_common import display_name
-from sandbox.global_momentum_u8_ranking import (
+from global_momentum.global_momentum_common import display_name
+from global_momentum.global_momentum_u8_ranking import (
     POLAND_XTB_TICKER,
     RANKING_TICKERS,
     SAFE_RANKING_TICKER,

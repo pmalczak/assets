@@ -9,14 +9,14 @@ from importers.assets.instruments import (
     apply_gm_instrument_names,
     load_instrument_map,
 )
-from sandbox.global_momentum_benchmarks import (
+from global_momentum.global_momentum_benchmarks import (
     GM_U7_LABEL,
     U7_EQUAL_WEIGHT_LABEL,
     prepare_strategy_comparison,
     run_benchmarks,
 )
-from sandbox.global_momentum_common import format_metric_table
-from sandbox.global_momentum_u8_ranking import run_u7_ranking
+from global_momentum.global_momentum_common import format_metric_table
+from global_momentum.global_momentum_u8_ranking import run_u7_ranking
 
 _RANKING_SCHEMA = 5
 _RANKING_AS_TODAY_SCHEMA = 4

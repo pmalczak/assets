@@ -4,7 +4,7 @@
 # global_momentum_benchmarks.py after the refactor.
 # ================================================================
 
-from global_momentum_benchmarks import main
+from global_momentum.global_momentum_benchmarks import main
 
 
 if __name__ == "__main__":

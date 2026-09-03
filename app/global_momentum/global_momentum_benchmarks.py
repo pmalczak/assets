@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from sandbox.global_momentum_common import (
+from global_momentum.global_momentum_common import (
     align_result_to_index,
     annual_returns,
     backtest,

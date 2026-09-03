@@ -158,7 +158,7 @@ def load_instrument_map(config_path: Path | None = None) -> InstrumentMap:
 
 def apply_gm_instrument_names(result: dict, mapping: InstrumentMap) -> dict:
     """Podmień kolumnę Asset w tabelach rankingu U7 na instruments.instrument."""
-    from sandbox.global_momentum_u8_ranking import RANKING_TICKERS
+    from global_momentum.global_momentum_u8_ranking import RANKING_TICKERS
 
     mapping.require_gm(RANKING_TICKERS.values())
     out = dict(result)

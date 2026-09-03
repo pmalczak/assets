@@ -17,8 +17,11 @@ from portfolios.assignment import (
     PORTFOLIO_GM,
     PORTFOLIO_OGOLNY,
     PORTFOLIO_REVOLUT_ROBO,
+    ROLE_EXECUTION,
+    ROLE_OVERLAY,
     assets_in_portfolio,
     attach_portfolio_column,
+    gm_asset_role,
     investments_by_portfolio,
     investments_with_portfolio,
     load_portfolio_nav_history,
@@ -26,6 +29,7 @@ from portfolios.assignment import (
     portfolio_for_row,
     portfolio_nav_pln,
 )
+from portfolios.nav_path import nav_path_metrics, rebased_overlap
 from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
 
 
@@ -41,6 +45,13 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_OGOLNY)
         self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_OGOLNY)
         self.assertEqual(portfolio_for_asset_id("nowe-aktywo"), DEFAULT_PORTFOLIO)
+
+    def test_gm_roles_execution_vs_overlay(self):
+        self.assertEqual(gm_asset_role(GOLD_COINS_ROI_ASSET_ID), ROLE_OVERLAY)
+        self.assertEqual(gm_asset_role(DEFAULT_DEGIRO_ASSET_ID), ROLE_EXECUTION)
+        self.assertEqual(gm_asset_role(DEFAULT_XTB_ASSET_ID), ROLE_EXECUTION)
+        self.assertIsNone(gm_asset_role("obligacjeskarbowe"))
+        self.assertIsNone(gm_asset_role(DEFAULT_REVOLUT_ROBO_ASSET_ID))
 
     def test_cash_pool_defaults_to_ogolny(self):
         self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_OGOLNY)
@@ -240,6 +251,28 @@ class PortfolioNavHistoryTests(unittest.TestCase):
         self.assertEqual(list(gm.values), [100.0])
         self.assertEqual(list(ogolny.values), [20.0])
         self.assertEqual(list(robo.values), [800.0])
+
+
+class PortfolioNavPathTests(unittest.TestCase):
+    def test_metrics_and_rebase(self):
+        nav = pd.Series(
+            [100.0, 110.0, 105.0],
+            index=pd.to_datetime(["2026-01-31", "2026-02-28", "2026-03-31"]),
+            name=f"Portfel {PORTFOLIO_GM} NAV",
+        )
+        metrics = nav_path_metrics(nav)
+        self.assertAlmostEqual(metrics["Total Return"], 0.05)
+        self.assertLess(metrics["Max Drawdown"], 0)
+        u7 = pd.Series(
+            [10_000.0, 10_500.0, 11_000.0],
+            index=pd.to_datetime(["2026-01-31", "2026-02-28", "2026-03-31"]),
+            name="GM U7",
+        )
+        rebased = rebased_overlap(nav, u7)
+        self.assertAlmostEqual(float(rebased.iloc[0, 0]), 100.0)
+        self.assertAlmostEqual(float(rebased.iloc[0, 1]), 100.0)
+        self.assertAlmostEqual(float(rebased.iloc[-1][f"Portfel {PORTFOLIO_GM} NAV"]), 105.0)
+        self.assertAlmostEqual(float(rebased.iloc[-1]["GM U7"]), 110.0)
 
 
 def _history_row(asset_id: str, typ: str, value_pln: float) -> dict:

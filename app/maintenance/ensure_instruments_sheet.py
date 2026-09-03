@@ -14,21 +14,21 @@ Użycie:
 from __future__ import annotations
 
 import argparse
-import sys
+# import sys
 from pathlib import Path
 
 import pandas as pd
 
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
+# APP_ROOT = Path(__file__).resolve().parent.parent
+# if str(APP_ROOT) not in sys.path:
+#     sys.path.insert(0, str(APP_ROOT))
 
 from importers.assets.data_model import INSTRUMENTS_SHEET, Instruments
 from importers.assets.instruments import empty_instruments_table
 from importers.assets.read_assets import get_assets_file
 from importers.degiro.data_model import DegiroPortfolioFile, DegiroTransactionsFile
 from importers.xtb.data_model import XtbCashOperationsFile, XtbOpenPositionsFile
-from sandbox.global_momentum_u8_ranking import POLAND_XTB_TICKER, RANKING_TICKERS
+from global_momentum.global_momentum_u8_ranking import POLAND_XTB_TICKER, RANKING_TICKERS
 
 
 def _cell(value) -> str:

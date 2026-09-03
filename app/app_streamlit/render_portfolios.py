@@ -8,23 +8,19 @@ import streamlit as st
 
 from app_streamlit.render_global_momentum import _load_benchmarks
 from app_streamlit.safe_download import dataframe_for_streamlit
-from gm_segment.segment import (
-    ROLE_EXECUTION,
-    ROLE_OVERLAY,
-    compose_gm_segment_table,
-    load_gm_broker_holdings,
-    nav_path_metrics,
-    rebased_overlap,
-)
+from global_momentum.global_momentum_benchmarks import GM_U7_LABEL
 from importers.assets.data_model import AssetsDef
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_GM,
+    ROLE_EXECUTION,
+    ROLE_OVERLAY,
     assets_in_portfolio,
     load_portfolio_nav_history,
     nav_pln_for_portfolio,
 )
-from sandbox.global_momentum_benchmarks import GM_U7_LABEL
+from portfolios.composition import compose_gm_composition, load_gm_broker_holdings
+from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 1
 _COMPOSITION_COLUMNS = (
@@ -136,7 +132,7 @@ def _render_gm_composition(
     for msg in holdings_warnings:
         st.warning(msg)
 
-    table = compose_gm_segment_table(latest_snapshot, holdings)
+    table = compose_gm_composition(latest_snapshot, holdings)
     total_nav = float(table["NAV PLN"].sum())
     execution_nav = float(table.loc[table["Rola"] == ROLE_EXECUTION, "NAV PLN"].sum())
     overlay_nav = float(table.loc[table["Rola"] == ROLE_OVERLAY, "NAV PLN"].sum())
@@ -180,14 +176,14 @@ def _render_nav_path(portfolio_name: str) -> None:
 
     try:
         with st.spinner(f"Ładowanie historii NAV {portfolio_name}..."):
-            segment_nav = _load_portfolio_nav(portfolio_name)
+            portfolio_nav = _load_portfolio_nav(portfolio_name)
     except Exception as exc:
         st.error(f"Nie udało się złożyć ścieżki NAV portfela {portfolio_name}.")
         st.exception(exc)
         return
 
-    segment_nav = segment_nav.rename(f"Portfel {portfolio_name} NAV")
-    metrics = nav_path_metrics(segment_nav)
+    portfolio_nav = portfolio_nav.rename(f"Portfel {portfolio_name} NAV")
+    metrics = nav_path_metrics(portfolio_nav)
     if metrics:
         m1, m2, m3 = st.columns(3)
         m1.metric(
@@ -196,15 +192,15 @@ def _render_nav_path(portfolio_name: str) -> None:
         )
         m2.metric("Max DD NAV", f"{metrics['Max Drawdown']:.2%}")
         m3.metric("Zmiana NAV", f"{metrics['Total Return']:.2%}")
-    elif segment_nav.empty:
+    elif portfolio_nav.empty:
         st.info(f"Brak historii snapshotów dla portfela {portfolio_name}.")
         return
     else:
         st.info("Za mało dodatnich punktów NAV, żeby policzyć CAGR / DD.")
 
     if not compare_u7:
-        if not segment_nav.empty:
-            st.line_chart(segment_nav, width="stretch")
+        if not portfolio_nav.empty:
+            st.line_chart(portfolio_nav, width="stretch")
         return
 
     try:
@@ -213,8 +209,8 @@ def _render_nav_path(portfolio_name: str) -> None:
     except Exception as exc:
         st.warning("Backtest U7 niedostępny — pokazuję samą ścieżkę NAV.")
         st.exception(exc)
-        if not segment_nav.empty:
-            st.line_chart(segment_nav, width="stretch")
+        if not portfolio_nav.empty:
+            st.line_chart(portfolio_nav, width="stretch")
         return
 
     u7_equity = pd.Series(dtype=float)
@@ -222,9 +218,9 @@ def _render_nav_path(portfolio_name: str) -> None:
     if isinstance(equity, pd.DataFrame) and GM_U7_LABEL in equity.columns:
         u7_equity = equity[GM_U7_LABEL].copy()
         u7_equity.name = GM_U7_LABEL
-    comparison = rebased_overlap(segment_nav, u7_equity)
+    comparison = rebased_overlap(portfolio_nav, u7_equity)
     if comparison.empty:
         st.info(f"Brak wspólnego okresu NAV portfela {PORTFOLIO_GM} i backtestu U7.")
-        st.line_chart(segment_nav, width="stretch")
+        st.line_chart(portfolio_nav, width="stretch")
         return
     st.line_chart(comparison, width="stretch")

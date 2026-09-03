@@ -23,7 +23,12 @@ PORTFOLIO_GM_ORDER: tuple[str, ...] = (
     GOLD_COINS_ROI_ASSET_ID,
 )
 PORTFOLIO_GM_ASSET_IDS = frozenset(PORTFOLIO_GM_ORDER)
+PORTFOLIO_GM_BROKER_ASSET_IDS = frozenset({DEFAULT_DEGIRO_ASSET_ID, DEFAULT_XTB_ASSET_ID})
+PORTFOLIO_GM_OVERLAY_ASSET_IDS = frozenset({GOLD_COINS_ROI_ASSET_ID})
 PORTFOLIO_REVOLUT_ROBO_ASSET_IDS = frozenset({DEFAULT_REVOLUT_ROBO_ASSET_ID})
+
+ROLE_EXECUTION = "wykonanie"
+ROLE_OVERLAY = "overlay"
 
 KNOWN_PORTFOLIOS: tuple[str, ...] = (
     PORTFOLIO_OGOLNY,
@@ -39,6 +44,16 @@ def portfolio_for_asset_id(asset_id: str | None) -> str:
     if key in PORTFOLIO_REVOLUT_ROBO_ASSET_IDS:
         return PORTFOLIO_REVOLUT_ROBO
     return DEFAULT_PORTFOLIO
+
+
+def gm_asset_role(asset_id: str | None) -> str | None:
+    """Rola składnika w portfelu 2 G-MOMENTUM: wykonanie U7 vs overlay (złoto)."""
+    key = str(asset_id or "").strip()
+    if key in PORTFOLIO_GM_OVERLAY_ASSET_IDS:
+        return ROLE_OVERLAY
+    if key in PORTFOLIO_GM_BROKER_ASSET_IDS:
+        return ROLE_EXECUTION
+    return None
 
 
 def portfolio_for_row(asset_id: str | None, typ: str | None) -> str:

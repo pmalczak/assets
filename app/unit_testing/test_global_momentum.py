@@ -3,9 +3,9 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from sandbox.global_momentum_benchmarks import GM_U7_LABEL, prepare_strategy_comparison
-from sandbox.global_momentum_common import display_name, last_completed_month_end
-from sandbox.global_momentum_u8_ranking import (
+from global_momentum.global_momentum_benchmarks import GM_U7_LABEL, prepare_strategy_comparison
+from global_momentum.global_momentum_common import display_name, last_completed_month_end
+from global_momentum.global_momentum_u8_ranking import (
     RANKING_TICKERS,
     SAFE_RANKING_TICKER,
     annotate_asset_top3_drift,
