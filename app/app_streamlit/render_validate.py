@@ -35,7 +35,7 @@ def render_validate() -> None:
 
 
 def _render_analyse_config_section() -> None:
-    st.markdown(f"#### ROI w `{A_CONFIG_FILE_NAME}` (roi_def / roi_rules / roi_manual)")
+    st.markdown(f"#### ROI w `{A_CONFIG_FILE_NAME}` (roi_def / roi_rules / roi_manual / instruments)")
     config_path = get_config_file()
     st.caption(f"Plik: `{config_path}`")
 

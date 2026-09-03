@@ -214,12 +214,33 @@ class UnitPriceEvaluationCls(GenericStructureClass):
         }
 
 
+class InstrumentsCls(GenericStructureClass):
+    """Arkusz instruments: kanoniczna nazwa + identyfikatory z wyciągów (degiro/xtb/gm)."""
+
+    INSTRUMENT = InventoryCls.INSTRUMENT
+    DEGIRO = "degiro"
+    XTB = "xtb"
+    GM = "gm"
+
+    def expected_columns(self) -> set:
+        return {self.INSTRUMENT, self.DEGIRO, self.XTB, self.GM}
+
+    def check_structure(self, df: pd.DataFrame, file=None):
+        """Wymaga instrument/degiro/xtb/gm; dalsze kolumny (np. monety) opcjonalne."""
+        del file
+        missing = self.expected_columns() - set(df.columns)
+        if missing:
+            raise ValueError(missing)
+
+
 Inventory = InventoryCls()
+Instruments = InstrumentsCls()
 PurchaseRules = PurchaseRulesCls()
 UnitPriceEvaluation = UnitPriceEvaluationCls()
 TitleMatchDomain = TitleMatchDomainCls(PurchaseRules.TITLE_MATCH)
 
 INVENTORY_SHEET = 'inventory'
+INSTRUMENTS_SHEET = 'instruments'
 UNIT_PRICE_EVALUATION_SHEET = 'unit-price-evaluation'
 ASSET_EVALUATION_SHEET = 'asset-evaluation'
 LEGACY_INVENTORY_SHEET = 'zloto-monety-zakupy'

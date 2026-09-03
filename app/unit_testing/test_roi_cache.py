@@ -102,10 +102,19 @@ class LoadRoiSummaryTests(unittest.TestCase):
 
         result = load_roi_summary(assets_date, config)
 
-        data_step_mock.obtain_dependent.assert_called_once()
-        args, kwargs = data_step_mock.obtain_dependent.call_args
-        self.assertEqual(args[0], roi_summary_resource(assets_date))
-        self.assertEqual(kwargs["assets_date"], assets_date)
+        self.assertEqual(data_step_mock.obtain_dependent.call_count, 2)
+        data_step_mock.init_steps.assert_not_called()
+        catalog_args, catalog_kwargs = data_step_mock.obtain_dependent.call_args_list[0]
+        summary_args, summary_kwargs = data_step_mock.obtain_dependent.call_args_list[1]
+        self.assertEqual(catalog_args[1].__name__, "_build_catalog_events")
+        self.assertEqual(summary_args[1].__name__, "_build_roi_summary")
+        self.assertEqual(catalog_args[0], roi_catalog_resource(assets_date))
+        self.assertEqual(catalog_args[2], Path("a_config.xlsx"))
+        self.assertEqual(catalog_kwargs["assets_date"], assets_date)
+        self.assertEqual(summary_args[0], roi_summary_resource(assets_date))
+        self.assertEqual(summary_args[2], Path("a_config.xlsx"))
+        self.assertEqual(summary_kwargs["assets_date"], assets_date)
+        self.assertIs(summary_kwargs["catalog_events"], frame_mock)
         self.assertEqual(len(result), 1)
         self.assertEqual(result.loc[0, "asset_id"], "kiemliczow_1")
 
@@ -173,6 +182,84 @@ class BuildCatalogEventsExportTests(unittest.TestCase):
         self.assertEqual(args[1], unallocated)
         self.assertEqual(args[3], assets_date)
         self.assertEqual(len(result), 1)
+
+
+class BuildRoiSummaryTests(unittest.TestCase):
+    @patch("roi.roi_products.export_roi_summary_excel")
+    @patch("roi.compute_roi.roi_summary_to_row")
+    @patch("roi.compute_roi.compute_roi")
+    @patch("importers.assets.read_assets.read_property_valuations")
+    @patch("roi.roi_products.read_analyse_config")
+    @patch("roi.roi_products.load_catalog_events")
+    def test_build_roi_summary_uses_passed_catalog_events_not_obtain(
+        self,
+        load_catalog_mock,
+        read_config_mock,
+        read_valuations_mock,
+        compute_roi_mock,
+        summary_to_row_mock,
+        export_mock,
+    ):
+        from roi.roi_products import _build_roi_summary
+
+        assets_date = date(2026, 7, 16)
+        catalog = pd.DataFrame(
+            [
+                {
+                    AnalyseAssetsCatalog.ASSET_ID: "kiemliczow_1",
+                    AnalyseAssetsCatalog.ENABLED: True,
+                    AnalyseAssetsCatalog.ORDER: 1,
+                }
+            ]
+        )
+        read_config_mock.return_value = {
+            "catalog": catalog,
+            "rules": pd.DataFrame(),
+            "manual": pd.DataFrame(),
+        }
+        read_valuations_mock.return_value = pd.DataFrame()
+        events = pd.DataFrame(
+            [
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_1",
+                    CashFlowEvent.DATE: "2026-01-01",
+                    CashFlowEvent.AMOUNT: -100.0,
+                    CashFlowEvent.CATEGORY: "CAPEX",
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "test",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                }
+            ]
+        )
+        compute_roi_mock.return_value = MagicMock()
+        summary_to_row_mock.return_value = {
+            "asset_id": "kiemliczow_1",
+            "capex": -100,
+            "opex": 0,
+            "revenue": 0,
+            "terminal_realized": 0,
+            "terminal_unrealized": 0,
+            "roi_nominal": 0,
+            "xirr": None,
+            "is_sold": False,
+            "warnings": "",
+        }
+
+        result = _build_roi_summary(
+            Path("cfg.xlsx"),
+            assets_date=assets_date,
+            catalog_events=events,
+        )
+
+        load_catalog_mock.assert_not_called()
+        export_mock.assert_called_once()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.loc[0, "asset_id"], "kiemliczow_1")
+        compute_args = compute_roi_mock.call_args[0]
+        self.assertEqual(compute_args[0], "kiemliczow_1")
+        self.assertEqual(len(compute_args[1]), 1)
 
 
 class ExportRoiProductExcelsTests(unittest.TestCase):

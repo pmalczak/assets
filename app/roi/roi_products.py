@@ -21,6 +21,7 @@ from app_proc.export_product_excel import (
     unallocated_excel_filename,
 )
 from data_step.data_step import DATA_STEP
+from data_step.data_step_frame import DataStepFrame
 from importers.assets.pool_id import POOL_IDS
 from roi.allocate import allocate_catalog, collect_pool_ids_from_rules
 from roi.config import get_config_file, read_analyse_config
@@ -42,6 +43,20 @@ def add_account_tx_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:
     return add_ymd_columns(df.copy())
 
 
+def _obtain_catalog_events(
+    assets_date: date,
+    *,
+    config_path: Path | None = None,
+) -> DataStepFrame:
+    config_file = get_config_file(config_path)
+    return DATA_STEP.obtain_dependent(
+        roi_catalog_resource(assets_date),
+        _build_catalog_events,
+        config_file,
+        assets_date=assets_date,
+    )
+
+
 def load_catalog_events(
     assets_date: date,
     config: dict[str, pd.DataFrame] | None = None,
@@ -51,13 +66,7 @@ def load_catalog_events(
     if config is None:
         config = read_analyse_config(config_path)
 
-    config_file = get_config_file(config_path)
-    r = DATA_STEP.obtain_dependent(
-        roi_catalog_resource(assets_date),
-        _build_catalog_events,
-        config_file,
-        assets_date=assets_date,
-    )
+    r = _obtain_catalog_events(assets_date, config_path=config_path)
     return _split_by_asset(r.data_frame(), config["catalog"])
 
 
@@ -72,11 +81,15 @@ def load_roi_summary(
         config = read_analyse_config(config_path)
 
     config_file = get_config_file(config_path)
+    # Sibling obtain, then DataStepFrame kwarg — do not obtain(catalog) from inside
+    # the summary collector (nested obtain of catalog while summary is on the stack).
+    catalog_events = _obtain_catalog_events(assets_date, config_path=config_path)
     r = DATA_STEP.obtain_dependent(
         roi_summary_resource(assets_date),
         _build_roi_summary,
         config_file,
         assets_date=assets_date,
+        catalog_events=catalog_events,
     )
     return r.data_frame()
 
@@ -219,10 +232,17 @@ def _build_catalog_events(
     return result
 
 
+def _events_dataframe(catalog_events: DataStepFrame | pd.DataFrame) -> pd.DataFrame:
+    if isinstance(catalog_events, pd.DataFrame):
+        return catalog_events
+    return catalog_events.data_frame()
+
+
 def _build_roi_summary(
     source_file: Path | None = None,
     *,
     assets_date: date,
+    catalog_events: DataStepFrame | pd.DataFrame,
     **_kwargs,
 ) -> pd.DataFrame:
     from importers.assets.read_assets import read_property_valuations
@@ -232,7 +252,7 @@ def _build_roi_summary(
     catalog = config["catalog"]
     catalog = catalog[catalog["enabled"].astype(bool)].sort_values("order")
 
-    events_by_asset = load_catalog_events(assets_date, config, config_path=source_file)
+    events_by_asset = _split_by_asset(_events_dataframe(catalog_events), config["catalog"])
     properties_sheet = read_property_valuations()
 
     summaries = []

@@ -4,6 +4,11 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from importers.assets.instruments import (
+    InstrumentMapError,
+    apply_gm_instrument_names,
+    load_instrument_map,
+)
 from sandbox.global_momentum_benchmarks import (
     GM_U7_LABEL,
     U7_EQUAL_WEIGHT_LABEL,
@@ -13,8 +18,8 @@ from sandbox.global_momentum_benchmarks import (
 from sandbox.global_momentum_common import format_metric_table
 from sandbox.global_momentum_u8_ranking import run_u7_ranking
 
-_RANKING_SCHEMA = 4
-_RANKING_AS_TODAY_SCHEMA = 3
+_RANKING_SCHEMA = 5
+_RANKING_AS_TODAY_SCHEMA = 4
 _BENCHMARK_SCHEMA = 9
 _ALL_WORLD_LABEL = "All-World Buy & Hold"
 _SECTION_RANKING = "Ranking U7"
@@ -96,6 +101,10 @@ def _render_ranking(*, as_today: bool = False) -> None:
             "Liczenie rankingu U7 as_today..." if as_today else "Liczenie rankingu U7..."
         ):
             result = loader()
+        result = apply_gm_instrument_names(result, load_instrument_map())
+    except InstrumentMapError as exc:
+        st.error(str(exc))
+        return
     except Exception as exc:
         st.error(
             "Nie udało się policzyć rankingu U7 as_today."

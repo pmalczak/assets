@@ -20,6 +20,7 @@ import pandas as pd
 from importers.assets.data_model import (
     AssetsFile,
     INVENTORY_SHEET,
+    INSTRUMENTS_SHEET,
     Inventory,
     LEGACY_INVENTORY_SHEET,
     LEGACY_UNIT_PRICE_EVALUATION_SHEET,
@@ -29,6 +30,7 @@ from importers.assets.data_model import (
     KindDomain,
     TypeDomain,
 )
+from importers.assets.instruments import empty_instruments_table
 from importers.assets.read_assets import ASSETS_FILE_NAME
 from app_proc.data_root import get_online_data_root
 
@@ -87,6 +89,7 @@ def build_inventory_sheets() -> dict[str, pd.DataFrame]:
     return {
         "assets": assets_row,
         INVENTORY_SHEET: inventory,
+        INSTRUMENTS_SHEET: empty_instruments_table(),
         UNIT_PRICE_EVALUATION_SHEET: unit_prices,
     }
 
@@ -109,6 +112,8 @@ def build_workbook(source_file: Path | None) -> dict[str, pd.DataFrame]:
         sheets["assets"] = pd.concat([assets, template_sheets["assets"]], ignore_index=True)
 
     sheets[INVENTORY_SHEET] = template_sheets[INVENTORY_SHEET]
+    if INSTRUMENTS_SHEET not in sheets:
+        sheets[INSTRUMENTS_SHEET] = template_sheets[INSTRUMENTS_SHEET]
     if UNIT_PRICE_EVALUATION_SHEET not in sheets:
         sheets[UNIT_PRICE_EVALUATION_SHEET] = template_sheets[UNIT_PRICE_EVALUATION_SHEET]
     return sheets

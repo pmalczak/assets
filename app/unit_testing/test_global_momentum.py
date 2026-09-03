@@ -4,9 +4,10 @@ import numpy as np
 import pandas as pd
 
 from sandbox.global_momentum_benchmarks import GM_U7_LABEL, prepare_strategy_comparison
-from sandbox.global_momentum_common import last_completed_month_end
+from sandbox.global_momentum_common import display_name, last_completed_month_end
 from sandbox.global_momentum_u8_ranking import (
     RANKING_TICKERS,
+    SAFE_RANKING_TICKER,
     annotate_asset_top3_drift,
     compute_current_universe7_ranking,
     last_common_close_date,
@@ -42,6 +43,16 @@ class GlobalMomentumRankingTests(unittest.TestCase):
         )
         self.assertEqual(len(result["allocation"]), 4)
         self.assertAlmostEqual(float(result["allocation"]["Weight"].sum()), 1.0)
+        ranking = result["ranking"]
+        self.assertIn("Ticker", ranking.columns)
+        for asset, ticker in RANKING_TICKERS.items():
+            match = ranking.loc[ranking["Asset"] == display_name(asset)]
+            self.assertEqual(len(match), 1)
+            self.assertEqual(match["Ticker"].iloc[0], ticker)
+        allocation = result["allocation"]
+        self.assertIn("Ticker", allocation.columns)
+        self.assertEqual(allocation.iloc[-1]["Asset"], display_name("Safe"))
+        self.assertEqual(allocation.iloc[-1]["Ticker"], SAFE_RANKING_TICKER)
 
     def test_unavailable_signal_returns_availability(self):
         short = _monthly_prices(months=4)

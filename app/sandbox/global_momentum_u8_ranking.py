@@ -32,6 +32,8 @@ RANKING_TICKERS = {
     # Yahoo Finance uses the Warsaw suffix .WA for this GPW-listed ETF.
     "Poland": "ETFPZUW20M40.WA",
 }
+SAFE_RANKING_TICKER = "EXVM.DE"
+POLAND_XTB_TICKER = "ETFPZUW20M40.PL"
 POLAND_PROXY_WEIGHTS = {
     "WIG20TR": 0.5,
     "MWIG40TR": 0.5,
@@ -359,6 +361,7 @@ def compute_current_universe7_ranking(
             {
                 "Rank": rank,
                 "Asset": display_name(asset),
+                "Ticker": RANKING_TICKERS[asset],
                 "3M": returns_by_period["3M"].loc[signal_date, asset],
                 "6M": returns_by_period["6M"].loc[signal_date, asset],
                 "12M": returns_by_period["12M"].loc[signal_date, asset],
@@ -371,10 +374,20 @@ def compute_current_universe7_ranking(
         )
 
     allocation_rows = [
-        {"Asset": display_name(asset), "Weight": allocation.get(asset, 0.0)}
+        {
+            "Asset": display_name(asset),
+            "Ticker": RANKING_TICKERS[asset],
+            "Weight": allocation.get(asset, 0.0),
+        }
         for asset in top_assets
     ]
-    allocation_rows.append({"Asset": display_name("Safe"), "Weight": safe_weight})
+    allocation_rows.append(
+        {
+            "Asset": display_name("Safe"),
+            "Ticker": SAFE_RANKING_TICKER,
+            "Weight": safe_weight,
+        }
+    )
     return {
         "ready": True,
         "signal_date": signal_date.date(),

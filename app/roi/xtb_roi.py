@@ -9,6 +9,7 @@ import pandas as pd
 from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsDef
+from importers.assets.instruments import InstrumentMap, load_instrument_map
 from importers.assets.read_assets import read_assets
 from importers.xtb.data_model import (
     CASH_OP_PURCHASE,
@@ -43,6 +44,7 @@ def compute_xtb_ticker_roi(
     cash_operations_df: pd.DataFrame | None = None,
     open_positions_df: pd.DataFrame | None = None,
     closed_positions_df: pd.DataFrame | None = None,
+    instruments: InstrumentMap | None = None,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], list[str]]:
     warnings: list[str] = []
     if cash_operations_df is None or open_positions_df is None:
@@ -73,6 +75,8 @@ def compute_xtb_ticker_roi(
         | set(terminal_by_ticker)
         | set(_closed_instruments(closed_positions_df))
     )
+    mapping = instruments if instruments is not None else load_instrument_map()
+    mapping.require_xtb(all_tickers)
 
     rows = []
     for ticker in sorted(t for t in all_tickers if t):
@@ -88,7 +92,9 @@ def compute_xtb_ticker_roi(
             open_qty=open_qty,
             last_price=terminal if open_qty else 0.0,
         )
-        rows.append(roi_summary_to_row(summary))
+        row = roi_summary_to_row(summary)
+        row["instrument"] = mapping.instrument_for_xtb(ticker)
+        rows.append(row)
 
     return pd.DataFrame(rows), events_by_asset, warnings
 

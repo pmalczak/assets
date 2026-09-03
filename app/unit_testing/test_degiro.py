@@ -27,6 +27,8 @@ from importers.degiro.read_degiro import (
 )
 from maintenance.move_degiro_files import move_degiro_files
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_DEGIRO
+from importers.assets.data_model import Instruments
+from importers.assets.instruments import instrument_map_from_frame, instrument_table_from_rows
 from roi.categories import CAPEX, REVENUES
 from roi.data_model import CashFlowEvent
 from roi.degiro_roi import compute_degiro_ticker_roi
@@ -46,6 +48,14 @@ ACCOUNT = """Data,Czas,Data,Produkt,ISIN,Opis,Kurs,Zmiana,,Saldo,,Identyfikator 
 28-07-2021,09:42,28-07-2021,INTER RAO LIETUVA AB,LT0000128621,"Kupno 150 Inter RAO Lietuva AB@19,5 PLN (LT0000128621)",,EUR,"-635,97",EUR,"30,12",order-1
 01-09-2021,10:00,01-09-2021,INTER RAO LIETUVA AB,LT0000128621,Dywidenda,,EUR,"5,00",EUR,"35,12",
 """
+
+
+def _degiro_instruments(*pairs: tuple[str, str]):
+    rows = [
+        {Instruments.INSTRUMENT: name, Instruments.DEGIRO: isin, Instruments.XTB: ""}
+        for name, isin in pairs
+    ]
+    return instrument_map_from_frame(instrument_table_from_rows(rows))
 
 
 def _write_package(root: Path) -> None:
@@ -159,11 +169,13 @@ class DegiroRoiTests(unittest.TestCase):
                 portfolio_df=portfolio,
                 transactions_df=transactions,
                 account_df=account,
+                instruments=_degiro_instruments(("Inter RAO", "LT0000128621")),
             )
             self.assertEqual(warnings, [])
             self.assertEqual(len(summary), 1)
             row = summary.iloc[0]
             self.assertEqual(row["asset_id"], "p_degiro:LT0000128621")
+            self.assertEqual(row["instrument"], "Inter RAO")
             self.assertFalse(bool(row["is_sold"]))
             self.assertAlmostEqual(float(row["capex"]), -636.0)
             self.assertAlmostEqual(float(row["revenue"]), 5.0)
@@ -203,6 +215,7 @@ class DegiroRoiTests(unittest.TestCase):
                 portfolio_df=portfolio,
                 transactions_df=transactions,
                 account_df=account,
+                instruments=_degiro_instruments(("Inter RAO", "LT0000128621")),
             )
             self.assertEqual(warnings, [])
             self.assertEqual(len(summary), 1)

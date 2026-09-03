@@ -15,6 +15,8 @@ from analyse_assets.config_model import (
     AnalyseAssetsRules,
 )
 from analyse_assets.validate_config import _is_plausible_account_number, validate_analyse_config
+from importers.assets.data_model import INSTRUMENTS_SHEET
+from importers.assets.instruments import empty_instruments_table
 from importers.mbank.data_model import MbankOperationType
 
 
@@ -25,6 +27,7 @@ class ValidateAnalyseConfigTests(unittest.TestCase):
             catalog.to_excel(writer, sheet_name=CATALOG_SHEET, index=False)
             rules.to_excel(writer, sheet_name=RULES_SHEET, index=False)
             manual.to_excel(writer, sheet_name=MANUAL_SHEET, index=False)
+            empty_instruments_table().to_excel(writer, sheet_name=INSTRUMENTS_SHEET, index=False)
         return path
 
     def _minimal_catalog(self, **overrides) -> pd.DataFrame:

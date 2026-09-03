@@ -387,7 +387,7 @@ def render_roi_obligacje(default_valuation_date: date | None) -> None:
 
 
 def render_roi_degiro(default_valuation_date: date | None) -> None:
-    st.subheader("ROI DEGIRO (per ISIN)")
+    st.subheader("ROI DEGIRO")
     valuation_date = st.date_input(
         "Data wyceny ROI DEGIRO",
         value=default_valuation_date or date.today(),
@@ -396,7 +396,8 @@ def render_roi_degiro(default_valuation_date: date | None) -> None:
     st.caption(
         "Analityka z pakietów DEGIRO: Transactions → CAPEX/DIVESTMENT, "
         "Account: Dywidenda → REVENUES. Terminal otwartych = Wartość w EUR "
-        "z najnowszego Portfolio <= data wyceny; opłaty/podatki/FX poza XIRR v1."
+        "z najnowszego Portfolio <= data wyceny; opłaty/podatki/FX poza XIRR v1. "
+        "Nazwa instrumentu z arkusza instruments (kolumna degiro = ISIN)."
     )
     try:
         with st.spinner("Liczenie ROI DEGIRO..."):
@@ -420,13 +421,12 @@ def render_roi_degiro(default_valuation_date: date | None) -> None:
 
     st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
 
-    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected = _asset_selectbox("ISIN (DEGIRO)", asset_ids, "roi_degiro_selected_isin")
-    _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla ISIN.")
+    selected = _roi_instrument_picker(summary, "roi_degiro_selected_isin", "ISIN (DEGIRO)")
+    _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla instrumentu.")
 
 
 def render_roi_xtb(default_valuation_date: date | None) -> None:
-    st.subheader("ROI XTB (per ticker)")
+    st.subheader("ROI XTB")
     valuation_date = st.date_input(
         "Data wyceny ROI XTB",
         value=default_valuation_date or date.today(),
@@ -435,7 +435,8 @@ def render_roi_xtb(default_valuation_date: date | None) -> None:
     st.caption(
         "Analityka z DATA_STEP (`p_xtb-cash`): Cash Operations → CAPEX/DIVESTMENT/REVENUES. "
         "Terminal otwartych = Value z najnowszego Open Positions <= data wyceny. "
-        "Wpłaty/wypłaty/prowizje/podatki/FX poza XIRR per instrument (jak DEGIRO v1)."
+        "Wpłaty/wypłaty/prowizje/podatki/FX poza XIRR per instrument (jak DEGIRO v1). "
+        "Nazwa instrumentu z arkusza instruments (kolumna xtb = ticker)."
     )
     try:
         with st.spinner("Liczenie ROI XTB..."):
@@ -459,9 +460,8 @@ def render_roi_xtb(default_valuation_date: date | None) -> None:
 
     st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
 
-    asset_ids = sorted(summary["asset_id"].astype(str).tolist())
-    selected = _asset_selectbox("Ticker (XTB)", asset_ids, "roi_xtb_selected_ticker")
-    _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla tickera.")
+    selected = _roi_instrument_picker(summary, "roi_xtb_selected_ticker", "Ticker (XTB)")
+    _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla instrumentu.")
 
 
 def _apply_sold_filter(summary: pd.DataFrame) -> pd.DataFrame | None:
@@ -471,6 +471,18 @@ def _apply_sold_filter(summary: pd.DataFrame) -> pd.DataFrame | None:
         st.info(f"Brak pozycji dla filtra: {mode}.")
         return None
     return filtered
+
+
+def _roi_instrument_picker(summary: pd.DataFrame, key: str, fallback_label: str) -> str:
+    ids = summary["asset_id"].astype(str).tolist()
+    if "instrument" in summary.columns:
+        labels = summary["instrument"].astype(str).tolist()
+        selected_label = _asset_selectbox("Instrument", labels, key)
+        for asset_id, label in zip(ids, labels):
+            if label == selected_label:
+                return asset_id
+        return ids[0]
+    return _asset_selectbox(fallback_label, ids, key)
 
 
 def _asset_selectbox(label: str, asset_ids: list[str], key: str) -> str:
@@ -496,6 +508,8 @@ def _prepare_flow_display(events: pd.DataFrame, valuation_date: date) -> pd.Data
 
 def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
     display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
+    if "instrument" in summary.columns:
+        display["Aktywo"] = summary["instrument"].astype(str)
     for col in ROI_DISPLAY_COLUMNS.values():
         if col in ("Sprzedane", "XIRR"):
             continue

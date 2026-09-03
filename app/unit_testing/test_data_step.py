@@ -395,6 +395,53 @@ class DataStepIntegrationTests(unittest.TestCase):
         meta = json.loads((self.data_steps / "_metadata.json").read_text(encoding="utf-8"))
         self.assertNotIn("broken.parquet", meta)
 
+    def test_nested_obtain_of_different_product_under_force_read(self):
+        """Zagnieżdżone obtain innego produktu (force_read) nie psuje stosu."""
+        self.step.init_steps(root=self.start_file)
+        calls = {"child": 0, "parent": 0}
+
+        def collect_child(**kwargs):
+            calls["child"] += 1
+            return pd.DataFrame({"v": [1]})
+
+        def collect_parent(**kwargs):
+            calls["parent"] += 1
+            child = self.step.obtain("child.parquet", collect_child)
+            return pd.DataFrame({"v": [int(child.data_frame()["v"].iloc[0]) + 1]})
+
+        self.step.obtain("parent.parquet", collect_parent)
+        self.step.force_read_data()
+        refreshed = self.step.obtain("parent.parquet", collect_parent)
+
+        self.assertEqual(refreshed.get_status(), REFRESHED)
+        self.assertEqual(calls, {"child": 2, "parent": 2})
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
+    def test_parent_obtains_child_as_dataframe_kwarg_not_nested(self):
+        """Rodzic dostaje dziecko jako DataStepFrame — bez zagnieżdżonego obtain w collectorze."""
+        self.step.init_steps(root=self.start_file)
+        calls = {"child": 0, "parent": 0}
+
+        def collect_child(**kwargs):
+            calls["child"] += 1
+            return pd.DataFrame({"n": [1]})
+
+        def collect_parent(child=None, **kwargs):
+            calls["parent"] += 1
+            self.assertIsInstance(child, DataStepFrame)
+            return pd.DataFrame({"n": [int(child.data_frame()["n"].iloc[0]) + 1]})
+
+        child = self.step.obtain("child.parquet", collect_child)
+        parent = self.step.obtain("parent.parquet", collect_parent, child=child)
+        self.step.force_read_data()
+        child = self.step.obtain("child.parquet", collect_child)
+        parent = self.step.obtain("parent.parquet", collect_parent, child=child)
+
+        self.assertEqual(parent.get_status(), REFRESHED)
+        self.assertEqual(int(parent.data_frame()["n"].iloc[0]), 2)
+        self.assertEqual(calls, {"child": 2, "parent": 2})
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
     def test_data_step_frame_as_collector_result_is_unwrapped(self):
         self.step.init_steps(root=self.start_file)
 

@@ -43,9 +43,19 @@ from importers.xtb.read_xtb import (
 )
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_XTB
 from maintenance.move_xtb_files import move_xtb_files, xtb_target_name
+from importers.assets.data_model import Instruments
+from importers.assets.instruments import instrument_map_from_frame, instrument_table_from_rows
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.data_model import CashFlowEvent
 from roi.xtb_roi import compute_xtb_ticker_roi
+
+
+def _xtb_instruments(*pairs: tuple[str, str]):
+    rows = [
+        {Instruments.INSTRUMENT: name, Instruments.DEGIRO: "", Instruments.XTB: ticker}
+        for name, ticker in pairs
+    ]
+    return instrument_map_from_frame(instrument_table_from_rows(rows))
 
 
 class XtbInspectTests(unittest.TestCase):
@@ -374,11 +384,13 @@ class XtbRoiTests(unittest.TestCase):
             cash_operations_df=cash_df,
             open_positions_df=open_df,
             closed_positions_df=pd.DataFrame(columns=list(XtbClosedPositionsFile.expected_columns())),
+            instruments=_xtb_instruments(("Poland ETF", "ETFPZUW20M40.PL")),
         )
         self.assertEqual(warnings, [])
         self.assertEqual(len(summary), 1)
         row = summary.iloc[0]
         self.assertEqual(row["asset_id"], "p_xtb:ETFPZUW20M40.PL")
+        self.assertEqual(row["instrument"], "Poland ETF")
         self.assertAlmostEqual(float(row["capex"]), -21436.0)
         self.assertAlmostEqual(float(row["terminal_unrealized"]), 21429.0)
         self.assertAlmostEqual(float(row["roi_nominal"]), -7.0)
@@ -407,6 +419,7 @@ class XtbRoiTests(unittest.TestCase):
             cash_operations_df=cash_df,
             open_positions_df=open_df,
             closed_positions_df=closed_df,
+            instruments=_xtb_instruments(("Keep", "KEEP.PL"), ("Gone", "GONE.PL")),
         )
         self.assertTrue(any("Loyalty bonus" in msg for msg in warnings))
         self.assertFalse(any("Total" in msg for msg in warnings))

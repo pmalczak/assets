@@ -223,6 +223,43 @@ def _validate_raw_schema(config_path: Path, report: ValidationReport) -> None:
         _validate_raw_incomplete_rules(raw_rules, report)
 
 
+def _validate_instruments_sheet(config_path: Path, report: ValidationReport) -> None:
+    from importers.assets.data_model import INSTRUMENTS_SHEET
+    from importers.assets.instruments import InstrumentMapError, load_instrument_map
+
+    try:
+        names = set(pd.ExcelFile(config_path).sheet_names)
+    except Exception as exc:  # noqa: BLE001
+        report.add(
+            "error",
+            INSTRUMENTS_SHEET,
+            str(config_path),
+            "instruments_unreadable",
+            f"Nie udało się odczytać arkuszy: {exc}",
+        )
+        return
+    if INSTRUMENTS_SHEET not in names:
+        report.add(
+            "error",
+            INSTRUMENTS_SHEET,
+            str(config_path),
+            "missing_sheet",
+            "Brak wymaganego arkusza instruments "
+            "(klucz = instrument; kolumny degiro / xtb / gm)",
+        )
+        return
+    try:
+        load_instrument_map(config_path)
+    except InstrumentMapError as exc:
+        report.add(
+            "error",
+            INSTRUMENTS_SHEET,
+            str(config_path),
+            "invalid_sheet",
+            str(exc),
+        )
+
+
 def _validate_catalog(catalog: pd.DataFrame, report: ValidationReport) -> set[str]:
     asset_ids: list[str] = []
     for idx, row in catalog.iterrows():
@@ -887,7 +924,7 @@ def validate_analyse_config(
     check_pool: bool = False,
 ) -> ValidationReport:
     """
-    Waliduje arkusze ROI w a_config.xlsx (roi_def / roi_rules / roi_manual).
+    Waliduje arkusze ROI w a_config.xlsx (roi_def / roi_rules / roi_manual / instruments).
 
     Stare kody pól (MBANK_*, SOURCE) i kolumna ``source`` są błędami.
 
@@ -909,6 +946,7 @@ def validate_analyse_config(
         return report
 
     _validate_raw_schema(path, report)
+    _validate_instruments_sheet(path, report)
 
     try:
         config = read_analyse_config(path)

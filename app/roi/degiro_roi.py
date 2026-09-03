@@ -9,6 +9,7 @@ import pandas as pd
 from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsDef
+from importers.assets.instruments import InstrumentMap, load_instrument_map
 from importers.assets.read_assets import read_assets
 from importers.degiro.data_model import (
     DEFAULT_DEGIRO_ASSET_ID,
@@ -53,6 +54,7 @@ def compute_degiro_ticker_roi(
     portfolio_df: pd.DataFrame | None = None,
     transactions_df: pd.DataFrame | None = None,
     account_df: pd.DataFrame | None = None,
+    instruments: InstrumentMap | None = None,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], list[str]]:
     warnings: list[str] = []
     if portfolio_df is None or transactions_df is None or account_df is None:
@@ -74,6 +76,8 @@ def compute_degiro_ticker_roi(
     terminal_by_isin = _terminal_by_isin(portfolio)
     qty_by_isin = _qty_by_isin(portfolio)
     all_isins = set(_isin_from_asset_id(a) for a in events_by_asset) | set(terminal_by_isin)
+    mapping = instruments if instruments is not None else load_instrument_map()
+    mapping.require_degiro(all_isins)
 
     rows = []
     for isin in sorted(i for i in all_isins if i):
@@ -89,7 +93,9 @@ def compute_degiro_ticker_roi(
             open_qty=open_qty,
             last_price=terminal if open_qty else 0.0,
         )
-        rows.append(roi_summary_to_row(summary))
+        row = roi_summary_to_row(summary)
+        row["instrument"] = mapping.instrument_for_degiro(isin)
+        rows.append(row)
 
     return pd.DataFrame(rows), events_by_asset, warnings
 

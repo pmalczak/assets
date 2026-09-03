@@ -459,6 +459,9 @@ class CashConfigValidationTests(unittest.TestCase):
             catalog.to_excel(writer, sheet_name=CATALOG_SHEET, index=False)
             rules.to_excel(writer, sheet_name=RULES_SHEET, index=False)
             manual.to_excel(writer, sheet_name=MANUAL_SHEET, index=False)
+            from importers.assets.data_model import INSTRUMENTS_SHEET
+            from importers.assets.instruments import empty_instruments_table
+            empty_instruments_table().to_excel(writer, sheet_name=INSTRUMENTS_SHEET, index=False)
 
         report = validate_analyse_config(path)
         self.assertTrue(report.ok, "\n".join(i.format() for i in report.errors))
