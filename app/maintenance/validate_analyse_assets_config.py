@@ -14,12 +14,7 @@ Użycie:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
-
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from analyse_assets.validate_config import print_report, validate_analyse_config
 

@@ -13,15 +13,10 @@ Uzycie:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
-
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from importers.assets.data_model import (
     ASSET_EVALUATION_SHEET,

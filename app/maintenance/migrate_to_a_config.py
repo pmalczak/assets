@@ -12,16 +12,11 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sys
 import tempfile
 from copy import copy
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from app_proc.data_root import (  # noqa: E402
     A_CONFIG_FILE_NAME,

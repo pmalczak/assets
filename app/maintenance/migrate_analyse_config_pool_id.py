@@ -16,17 +16,12 @@ from pathlib import Path
 
 import pandas as pd
 
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 from analyse_assets.config_model import (
-    A_CONFIG_FILE_NAME,
     CATALOG_SHEET,
     MANUAL_SHEET,
     RULES_SHEET,
 )
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root, A_CONFIG_FILE_NAME
 
 
 def _rename_source_to_pool_id(df: pd.DataFrame) -> pd.DataFrame:

@@ -14,13 +14,8 @@ Uzycie:
 from __future__ import annotations
 
 import argparse
-import sys
 from datetime import date, timedelta
 from pathlib import Path
-
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from data_step.data_step import DATA_STEP
 from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE, ASSETS_SNAPSHOT_STEP

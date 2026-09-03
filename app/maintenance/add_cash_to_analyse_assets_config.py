@@ -17,19 +17,14 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
-APP_ROOT = Path(__file__).resolve().parent.parent
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 from analyse_assets.config_model import (
     CATALOG_SHEET,
-    A_CONFIG_FILE_NAME,
     RULES_SHEET,
     AnalyseAssetsCatalog,
     AnalyseAssetsRules,
 )
 from importers.assets.pool_id import MBANK_EUR
-from app_proc.data_root import get_online_data_root
+from app_proc.data_root import get_online_data_root, A_CONFIG_FILE_NAME
 from maintenance.export_analyse_assets_config import _catalog, _rules
 
 _CELL_REF = re.compile(r"^([A-Z]+)(\d+)$")
