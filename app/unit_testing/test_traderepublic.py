@@ -25,6 +25,7 @@ from importers.traderepublic.read_traderepublic import (
     extract_export_period,
     period_from_dataframe,
 )
+from importers.statement_download_date import download_date_of
 from maintenance.move_downloaded_results import (
     ACTION_MOVED,
     ACTION_SKIPPED,
@@ -102,12 +103,17 @@ class MoveTradeRepublicTests(unittest.TestCase):
                 _csv([_row(tx_date="2026-07-22", tx_id="019f8a58-b89b-73d5-bef0-8fbaa2ef5da9")]),
                 encoding="utf-8",
             )
+            fetched = download_date_of(src)
 
             results = move_traderepublic_files(assets, download_dir=download)
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].action, ACTION_MOVED)
             self.assertEqual(results[0].kind, KIND_TRADEREPUBLIC)
-            target = assets / DEFAULT_TRADEREPUBLIC_ASSET_ID / "eksport-transakcji_2026-07-22_2026-07-22.csv"
+            target = (
+                assets
+                / DEFAULT_TRADEREPUBLIC_ASSET_ID
+                / dated_export_filename(date(2026, 7, 22), date(2026, 7, 22), fetched)
+            )
             self.assertTrue(target.is_file())
             self.assertFalse(src.is_file())
 

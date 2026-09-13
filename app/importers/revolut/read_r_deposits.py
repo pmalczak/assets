@@ -9,6 +9,7 @@ import pandas as pd
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.revolut.deposit_data_model import RevolutDepositFile
+from importers.statement_download_date import iso_download_date
 from importers.revolut.savings_statement import (
     assert_no_coverage_gaps,
     empty_savings_frame,
@@ -73,7 +74,9 @@ def _read_savings_files(input_files: list[Path], *, asset_id: str) -> pd.DataFra
             savings_unique_key(),
         )
 
-    result[RevolutDepositFile.FILE_DATE] = ""
+    result[RevolutDepositFile.FILE_DATE] = max(
+        iso_download_date(path) for path in input_files
+    )
     RevolutDepositFile.check_structure(result)
     return result
 
@@ -95,6 +98,8 @@ def _read_uuid_files(input_files: list[Path]) -> pd.DataFrame:
             RevolutDepositFile.unique_key(),
         )
 
-    result[RevolutDepositFile.FILE_DATE] = ""
+    result[RevolutDepositFile.FILE_DATE] = max(
+        iso_download_date(path) for path in input_files
+    )
     RevolutDepositFile.check_structure(result)
     return result

@@ -34,7 +34,12 @@ def evaluate_mbank(
         assets_row = AssetsDef.as_assets_row(assets_file_row)
         assets_row[AssetsDef.IBAN] = _row[MBankFile.DEBIT_ACCOUNT]
         assets_row[AssetsDef.VALUE] = _row[MBankFile.MBANK_OUTSTANDING_BALANCE]
-        assets_row[AssetsDef.EVALUATION_DATE] = _row[MBankFile.FILE_DATE]
+        last_txn = _row[MBankFile.MBANK_TRANSACTION_DATE]
+        statement_date = _row[MBankFile.FILE_DATE]
+        assets_row[AssetsDef.LAST_TRANSACTION_DATE] = last_txn
+        assets_row[AssetsDef.STATEMENT_DATE] = statement_date
+        # Stara kolumna: data ostatniej txn (nie wyciągu); UI Cash pool jej nie pokazuje.
+        assets_row[AssetsDef.EVALUATION_DATE] = last_txn
         break
 
     data = [assets_row]
@@ -48,7 +53,12 @@ def evaluate_mbank(
 
     result = pd.DataFrame(data=data)
     AssetsDef.check_structure(result)
-    return format_date_columns(result, AssetsDef.EVALUATION_DATE)
+    return format_date_columns(
+        result,
+        AssetsDef.EVALUATION_DATE,
+        AssetsDef.STATEMENT_DATE,
+        AssetsDef.LAST_TRANSACTION_DATE,
+    )
 
 
 def _evaluate_deposits_mbank(

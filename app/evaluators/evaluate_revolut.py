@@ -21,12 +21,10 @@ from roi.revolut_deposit_roi import (
 
 
 def evaluate_revolut(
-    data_root: Path = None,
     asset_id: str = None,
     assets_file_row: pd.Series = None,
     valuation_date: date = None,
 ):
-    del data_root  # API kompatybilne; katalog z resolve_asset_dir
     p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
     if not p.is_dir():
         raise ValueError(p)
@@ -41,7 +39,12 @@ def evaluate_revolut(
     assets_row = None
     for _, row in last.iterrows():
         assets_row = AssetsDef.as_assets_row(assets_file_row)
-        assets_row[AssetsDef.EVALUATION_DATE] = row[RevolutAccountFile.FILE_DATE]
+        last_txn = row[RevolutAccountFile.DATE]
+        statement_date = row[RevolutAccountFile.FILE_DATE]
+        assets_row[AssetsDef.LAST_TRANSACTION_DATE] = last_txn
+        assets_row[AssetsDef.STATEMENT_DATE] = statement_date
+        # Stara kolumna: data ostatniej txn (nie wyciągu); UI Cash pool jej nie pokazuje.
+        assets_row[AssetsDef.EVALUATION_DATE] = last_txn
         assets_row[AssetsDef.VALUE] = row[RevolutAccountFile.BALANCE]
         break
     data = [assets_row]
@@ -74,4 +77,9 @@ def evaluate_revolut(
 
     result = pd.DataFrame(data=data)
     AssetsDef.check_structure(result)
-    return format_date_columns(result, AssetsDef.EVALUATION_DATE)
+    return format_date_columns(
+        result,
+        AssetsDef.EVALUATION_DATE,
+        AssetsDef.STATEMENT_DATE,
+        AssetsDef.LAST_TRANSACTION_DATE,
+    )

@@ -7,6 +7,7 @@ import pandas as pd
 
 from importers.traderepublic.data_model import (
     DEFAULT_TRADEREPUBLIC_ASSET_ID,
+    FILE_PREFIX,
     SOURCE_EXPORT_STEM,
     TradeRepublicFile,
 )
@@ -15,6 +16,7 @@ from importers.traderepublic.read_traderepublic import (
     is_traderepublic_export_header,
     period_from_dataframe,
 )
+from importers.statement_download_date import download_date_of
 from maintenance.move_downloaded_results import (
     ACTION_DELETED_EMPTY,
     ACTION_MOVED,
@@ -62,16 +64,19 @@ def _move_export(src: Path, assets_root: Path) -> MoveResult:
     period_start, period_end = period_from_dataframe(df)
     target_dir = assets_root / DEFAULT_TRADEREPUBLIC_ASSET_ID
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / dated_export_filename(period_start, period_end)
+    existing_path = _existing_period_file(target_dir, period_start, period_end)
+    target = existing_path or (
+        target_dir / dated_export_filename(period_start, period_end, download_date_of(src))
+    )
 
-    if target.is_file():
-        existing = pd.read_csv(target)
+    if existing_path is not None:
+        existing = pd.read_csv(existing_path)
         decision = _resolve_existing_target(existing, df)
         if decision == "skip":
             src.unlink()
             return MoveResult(
                 source=src,
-                destination=target,
+                destination=existing_path,
                 action=ACTION_SKIPPED,
                 kind=KIND_TRADEREPUBLIC,
             )
@@ -79,7 +84,7 @@ def _move_export(src: Path, assets_root: Path) -> MoveResult:
             raise ValueError(
                 f"Konflikt treści Trade Republic dla okresu "
                 f"{period_start.isoformat()}..{period_end.isoformat()}: "
-                f"{target.name} vs {src.name}"
+                f"{existing_path.name} vs {src.name}"
             )
 
     src.replace(target)
@@ -89,6 +94,15 @@ def _move_export(src: Path, assets_root: Path) -> MoveResult:
         action=ACTION_MOVED,
         kind=KIND_TRADEREPUBLIC,
     )
+
+
+def _existing_period_file(target_dir: Path, period_start, period_end) -> Path | None:
+    matches = sorted(
+        target_dir.glob(
+            f"{FILE_PREFIX}_{period_start.isoformat()}_{period_end.isoformat()}*.csv"
+        )
+    )
+    return matches[0] if matches else None
 
 
 def _resolve_existing_target(existing: pd.DataFrame, incoming: pd.DataFrame) -> str:

@@ -24,10 +24,12 @@ from importers.xtb.data_model import (
     XtbOpenPositionsFile,
     is_xtb_cash_footer,
 )
+from importers.statement_download_date import iso_download_date
 
 SUPPORTED_XTB_SUFFIXES = {".xlsx", ".xls", ".csv", ".zip"}
 _CANONICAL_RE = re.compile(
-    r"^xtb_(?P<kind>.+)_(?P<client>\d+)_(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})\.(?P<suffix>xlsx|xls|csv)$"
+    r"^xtb_(?P<kind>.+)_(?P<client>\d+)_(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})"
+    r"(?:_(?P<fetched>\d{4}-\d{2}-\d{2}))?\.(?P<suffix>xlsx|xls|csv)$"
 )
 
 _EXPECTED_TABLE_HEADERS = {
@@ -308,11 +310,12 @@ def _read_many(source_file: Path, required_kind: str, reader, model) -> pd.DataF
         df = reader(input_file)
         df[model.PERIOD_START] = start.isoformat()
         df[model.PERIOD_END] = end.isoformat()
-        df[model.FILE_DATE] = end.isoformat()
+        df[model.FILE_DATE] = iso_download_date(input_file)
         print(f"PLIK:{input_file} {len(df):>4} rekord/ów (XTB {required_kind})")
         records.append(df)
 
     result = pd.concat(records, ignore_index=True)
+    result[model.FILE_DATE] = max(iso_download_date(path) for path in input_files)
     model.check_structure(result)
     return result
 

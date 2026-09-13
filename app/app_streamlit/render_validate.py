@@ -21,6 +21,8 @@ _ASSETS_EVAL_DISPLAY = [
     AssetsDef.VALUE,
     AssetsDef.VALUE_PLN,
     AssetsDef.EVALUATION_DATE,
+    AssetsDef.LAST_TRANSACTION_DATE,
+    AssetsDef.STATEMENT_DATE,
     AssetsDef.VALUE_DATE,
     AssetsDef.DAYS_AFTER_VALUATION,
     AssetsDef.KIND,

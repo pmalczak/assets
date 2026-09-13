@@ -8,6 +8,7 @@ import pandas as pd
 
 from importers.pkobp.data_model import PkoBpBonds
 from importers.pkobp.historia_dyspozycji import HISTORIA_DYSPOZYCJI_FILE, dated_historia_filename
+from importers.statement_download_date import download_date_of
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_OBLIGACJE
 from maintenance.move_obligacje_files import OBLIGACJE_ASSET_ID, move_obligacje_files
 
@@ -57,7 +58,9 @@ class MoveObligacjeFilesTests(unittest.TestCase):
                     _row(date(2026, 8, 1), no_line=2, bonds_no=5, amount=500.0),
                 ]
             )
-            expected_historia = dated_historia_filename(date(2024, 3, 1), date(2026, 8, 1))
+            expected_historia = dated_historia_filename(
+                date(2024, 3, 1), date(2026, 8, 1), download_date_of(historia_src)
+            )
 
             with patch(
                 "importers.pkobp.historia_dyspozycji.read_historia_excel",
@@ -164,9 +167,9 @@ class MoveObligacjeFilesTests(unittest.TestCase):
                 results = move_obligacje_files(assets_root, download)
 
             self.assertEqual(results[0].action, ACTION_MOVED)
-            self.assertEqual(results[0].destination, existing)
             self.assertFalse(historia_src.exists())
-            self.assertEqual(existing.read_bytes(), b"new-bytes")
+            self.assertTrue(results[0].destination.is_file())
+            self.assertEqual(results[0].destination.read_bytes(), b"new-bytes")
 
     def test_noop_when_no_matching_files(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -45,7 +45,7 @@ def evaluate_assets(
                 result += [r]
 
         elif rodzaj_importu.startswith(KindDomain.REVOLUT):
-            r = evaluate_revolut(data_root, asset_id, assets_file_row, valuation_date)
+            r = evaluate_revolut(asset_id, assets_file_row, valuation_date)
             if len(r) > 0:
                 AssetsDef.check_structure(r)
                 result += [r]
@@ -99,7 +99,14 @@ def evaluate_assets(
 
     empty_cols = list(
         AssetsDef.expected_columns()
-        | {LastFx.FX, AssetsDef.VALUE_PLN, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION}
+        | {
+            LastFx.FX,
+            AssetsDef.VALUE_PLN,
+            AssetsDef.VALUE_DATE,
+            AssetsDef.DAYS_AFTER_VALUATION,
+            AssetsDef.STATEMENT_DATE,
+            AssetsDef.LAST_TRANSACTION_DATE,
+        }
     )
     if not result:
         return pd.DataFrame(columns=empty_cols), warnings
@@ -122,6 +129,19 @@ def evaluate_assets(
 
     value_date = pd.to_datetime(result_fx[AssetsDef.VALUE_DATE], format="%Y-%m-%d")
     evaluation_date = pd.to_datetime(result_fx[AssetsDef.EVALUATION_DATE], format="%Y-%m-%d")
+    # Domyślnie: data-waluty − data wyceny; cash_pool.ror: data-waluty − data-wyciągu.
     diff = (value_date - evaluation_date).dt.days
+    cash_pool_mask = result_fx[AssetsDef.TYPE] == TypeDomain.CURRENT_ACCOUNT
+    if AssetsDef.STATEMENT_DATE in result_fx.columns and cash_pool_mask.any():
+        statement_date = pd.to_datetime(
+            result_fx.loc[cash_pool_mask, AssetsDef.STATEMENT_DATE], format="%Y-%m-%d"
+        )
+        diff.loc[cash_pool_mask] = (value_date.loc[cash_pool_mask] - statement_date).dt.days
     result_fx[AssetsDef.DAYS_AFTER_VALUATION] = diff
-    return format_date_columns(result_fx, AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE), warnings
+    return format_date_columns(
+        result_fx,
+        AssetsDef.EVALUATION_DATE,
+        AssetsDef.VALUE_DATE,
+        AssetsDef.STATEMENT_DATE,
+        AssetsDef.LAST_TRANSACTION_DATE,
+    ), warnings

@@ -147,6 +147,9 @@ def download_yahoo_live_adjusted(
             close.columns = tickers
 
     close.index = pd.to_datetime(close.index)
+    if getattr(close.index, "tz", None) is not None:
+        close.index = close.index.tz_convert("UTC").tz_localize(None)
+    close.index = close.index.normalize()
     return close
 
 
@@ -281,16 +284,35 @@ def _write_cached_wig(wig: pd.Series) -> None:
     wig.rename("Close").to_csv(WIG_CACHE_PATH, index_label="Date")
 
 
+def _month_end_series(prices: pd.Series) -> pd.Series:
+    """Naïve month-end index so US/EU Yahoo calendars still overlap for splice."""
+    work = pd.to_numeric(prices, errors="coerce").dropna().sort_index()
+    if work.empty:
+        return work
+    idx = pd.DatetimeIndex(pd.to_datetime(work.index))
+    if idx.tz is not None:
+        idx = idx.tz_convert("UTC").tz_localize(None)
+    work = pd.Series(work.to_numpy(), index=idx, name=work.name)
+    work.index = work.index.to_period("M").to_timestamp("M")
+    return work.groupby(level=0).last().sort_index()
+
+
 def chain_link_prices(
     old_proxy: pd.Series,
     new_instrument: pd.Series,
     label: str,
 ) -> pd.Series:
-    old_proxy = pd.to_numeric(old_proxy, errors="coerce").dropna().sort_index()
-    new_instrument = pd.to_numeric(
-        new_instrument,
-        errors="coerce",
-    ).dropna().sort_index()
+    old_proxy = _month_end_series(old_proxy)
+    new_instrument = _month_end_series(new_instrument)
+
+    if old_proxy.empty and new_instrument.empty:
+        raise ValueError(f"No price history to chain-link {label}.")
+    if old_proxy.empty:
+        print(f"WARNING: No backfill series for {display_name(label)}; using live instrument only.")
+        return new_instrument.rename(label)
+    if new_instrument.empty:
+        print(f"WARNING: No live instrument for {display_name(label)}; using backfill proxy only.")
+        return old_proxy.rename(label)
 
     common_dates = old_proxy.index.intersection(new_instrument.index)
     valid_common_dates = [
@@ -299,7 +321,12 @@ def chain_link_prices(
         if old_proxy.loc[date] > 0 and new_instrument.loc[date] > 0
     ]
     if not valid_common_dates:
-        raise ValueError(f"No valid overlap date for chain-linking {label}.")
+        old_span = f"{old_proxy.index.min().date()}..{old_proxy.index.max().date()}"
+        new_span = f"{new_instrument.index.min().date()}..{new_instrument.index.max().date()}"
+        raise ValueError(
+            f"No valid overlap date for chain-linking {label} "
+            f"(backfill {old_span}, live {new_span})."
+        )
 
     splice_date = min(valid_common_dates)
     scale = new_instrument.loc[splice_date] / old_proxy.loc[splice_date]

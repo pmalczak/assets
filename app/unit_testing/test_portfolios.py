@@ -148,7 +148,27 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(list(by_name[PORTFOLIO_GM][AssetsDef.ID]), [DEFAULT_DEGIRO_ASSET_ID])
         for _, frame in tables:
             self.assertNotIn(AssetsDef.PORTFOLIO, frame.columns)
+            self.assertNotIn(AssetsDef.STATEMENT_DATE, frame.columns)
+            self.assertNotIn(AssetsDef.LAST_TRANSACTION_DATE, frame.columns)
             self.assertNotIn("p_m_23_2330", frame.get(AssetsDef.ID, pd.Series(dtype=str)).tolist())
+
+    def test_investments_tables_hide_statement_dates(self):
+        snapshot = pd.DataFrame(
+            [
+                {
+                    AssetsDef.ID: "cash",
+                    AssetsDef.TYPE: "investment.cash",
+                    AssetsDef.GROUP: "0 gotówka",
+                    AssetsDef.VALUE_PLN: 50,
+                    AssetsDef.STATEMENT_DATE: "2026-08-01",
+                    AssetsDef.LAST_TRANSACTION_DATE: "2026-09-01",
+                },
+            ]
+        )
+        _, table = investments_by_portfolio(snapshot)[0]
+        self.assertEqual(list(table[AssetsDef.ID]), ["cash"])
+        self.assertNotIn(AssetsDef.STATEMENT_DATE, table.columns)
+        self.assertNotIn(AssetsDef.LAST_TRANSACTION_DATE, table.columns)
 
     def test_investments_by_portfolio_keeps_empty_tables(self):
         snapshot = pd.DataFrame(

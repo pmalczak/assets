@@ -51,6 +51,9 @@ class AssetsCls(AssetsFileCls):
     IBAN = 'IBAN'
     # Runtime snapshot / UI — nie kolumna Excela `assets` (v1).
     PORTFOLIO = 'portfel'
+    # Runtime cash_pool.ror — data wyciągu (min końców po merge) i data ostatniej txn salda.
+    STATEMENT_DATE = 'data-wyciągu'
+    LAST_TRANSACTION_DATE = 'data-ostatniej-transakcji'
 
     def __init__(self):
         super().__init__()
@@ -59,7 +62,8 @@ class AssetsCls(AssetsFileCls):
     def expected_columns(self) -> set:
         result = (super().expected_columns() |
                   {self.EVALUATION_DATE, self.VALUE,
-                   self.IBAN })
+                   self.IBAN,
+                   self.STATEMENT_DATE, self.LAST_TRANSACTION_DATE})
         return result
 
     def as_assets_row(self, rec):
@@ -67,6 +71,8 @@ class AssetsCls(AssetsFileCls):
         result[self.IBAN] = ''
         result[self.EVALUATION_DATE] = None
         result[self.VALUE] = 0.0
+        result[self.STATEMENT_DATE] = None
+        result[self.LAST_TRANSACTION_DATE] = None
         # Odrzuć kolumny runtime (np. pool_id z read_assets), spoza schematu AssetsDef.
         extras = [key for key in result.index if key not in self.expected_columns()]
         if extras:

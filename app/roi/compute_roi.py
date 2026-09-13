@@ -56,12 +56,7 @@ def compute_roi(
 
     flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
     roi_nominal = flows_total + terminal_unrealized
-    sold = is_asset_sold(
-        asset_id,
-        cashflows,
-        properties_sheet,
-        valuation_date,
-    )
+    sold = is_asset_sold(asset_id, cashflows, valuation_date)
 
     xirr_dates, xirr_amounts = cashflows_for_xirr(filtered, valuation_date, terminal_unrealized)
     xirr = compute_xirr(xirr_dates, xirr_amounts)

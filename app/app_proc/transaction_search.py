@@ -49,13 +49,8 @@ REVOLUT_DEPOSIT_TEXT_COLUMNS = [
 ]
 
 
-def load_all_transactions(
-    data_root: Path | None = None,
-    assets: pd.DataFrame | None = None,
-) -> pd.DataFrame:
-    del data_root  # ścieżki kont z resolve_asset_dir; parametr zachowany dla kompatybilności API
-    if assets is None:
-        assets = read_assets()
+def load_all_transactions() -> pd.DataFrame:
+    assets = read_assets()
 
     frames: list[pd.DataFrame] = []
     for _, asset_row in assets.iterrows():

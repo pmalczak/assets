@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from data_step.data_step import DATA_STEP
-from app_proc.calculate_assets import PORTFOLIO_VALUATION_DATE, ASSETS_SNAPSHOT_STEP
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import (
     PORTFOLIO_WINDOW_DAYS,
     recalculate_weekly_snapshots,
@@ -56,7 +56,7 @@ def main() -> int:
         f".. {reference:%Y-%m-%d}"
     )
     print(f"Dat wyceny (wt, sr, pt, nd): {len(dates)}")
-    print(f"Kolumna daty snapshotu: {PORTFOLIO_VALUATION_DATE}")
+    print(f"Snapshoty: `{ASSETS_SNAPSHOT_STEP}/YYYY-MM-DD.parquet`")
     print()
 
     results = recalculate_weekly_snapshots(

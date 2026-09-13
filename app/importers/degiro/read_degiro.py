@@ -16,9 +16,13 @@ from importers.degiro.data_model import (
     DegiroPortfolioFile,
     DegiroTransactionsFile,
 )
+from importers.statement_download_date import download_date_of
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_DATED_RE = re.compile(r"^(?P<prefix>[a-z]+)_(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})$")
+_DATED_RE = re.compile(
+    r"^(?P<prefix>[a-z]+)_(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})"
+    r"(?:_(?P<fetched>\d{4}-\d{2}-\d{2}))?$"
+)
 
 
 def parse_degiro_number(value) -> float | None:
@@ -54,8 +58,16 @@ def period_from_account_file(path: Path) -> tuple[date, date]:
     return min(dates), max(dates)
 
 
-def dated_filename(prefix: str, period_start: date, period_end: date) -> str:
-    return f"{prefix}_{period_start.isoformat()}_{period_end.isoformat()}.csv"
+def dated_filename(
+    prefix: str,
+    period_start: date,
+    period_end: date,
+    fetched: date | None = None,
+) -> str:
+    stem = f"{prefix}_{period_start.isoformat()}_{period_end.isoformat()}"
+    if fetched is not None:
+        stem = f"{stem}_{fetched.isoformat()}"
+    return f"{stem}.csv"
 
 
 def extract_period(path: Path, expected_prefix: str) -> tuple[date, date]:
@@ -66,6 +78,13 @@ def extract_period(path: Path, expected_prefix: str) -> tuple[date, date]:
     if not _DATE_RE.match(start_s) or not _DATE_RE.match(end_s):
         raise ValueError(f"Unexpected DEGIRO dates in {path.name}")
     return date.fromisoformat(start_s), date.fromisoformat(end_s)
+
+
+def extract_download_date(path: Path, expected_prefix: str) -> date:
+    match = _DATED_RE.fullmatch(path.stem)
+    if match and match.group("prefix") == expected_prefix and match.group("fetched"):
+        return date.fromisoformat(match.group("fetched"))
+    return download_date_of(path)
 
 
 def read_portfolio_csv(path: Path) -> pd.DataFrame:
@@ -226,11 +245,14 @@ def _read_many(source_file: Path, prefix: str, reader, model) -> pd.DataFrame:
         df = reader(input_file)
         df[model.PERIOD_START] = start.isoformat()
         df[model.PERIOD_END] = end.isoformat()
-        df[model.FILE_DATE] = end.isoformat()
+        df[model.FILE_DATE] = extract_download_date(input_file, prefix).isoformat()
         print(f"PLIK:{input_file} {len(df):>4} rekord/ów (DEGIRO {prefix})")
         records.append(df)
 
     result = pd.concat(records, ignore_index=True)
+    result[model.FILE_DATE] = max(
+        extract_download_date(path, prefix).isoformat() for path in input_files
+    )
     model.check_structure(result)
     return result
 

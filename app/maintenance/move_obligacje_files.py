@@ -4,6 +4,7 @@ __author__ = "pmalczak@gmail.com"
 from pathlib import Path
 
 from importers.pkobp import historia_dyspozycji as historia
+from importers.statement_download_date import download_date_of
 from maintenance.move_downloaded_results import (
     ACTION_MOVED,
     ACTION_SKIPPED,
@@ -46,7 +47,7 @@ def _move_historia(src: Path, target_dir: Path) -> MoveResult:
             kind=KIND_OBLIGACJE,
         )
 
-    dst = target_dir / historia.dated_historia_filename_from_df(df)
+    dst = target_dir / historia.dated_historia_filename_from_df(df, download_date_of(src))
     src.replace(dst)  # nadpisanie tej samej nazwy / zawartości jest OK
     return MoveResult(
         source=src,

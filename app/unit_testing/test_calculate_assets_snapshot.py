@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from app_proc.calculate_assets import finalize_assets_snapshot, calculate_assets, assets_snapshot_resource
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_steps_root import get_data_steps_root
 from importers.assets.data_model import AssetsDef, AssetsFile
 
@@ -19,7 +19,7 @@ class AssetsSnapshotResourceTests(unittest.TestCase):
 
 
 class FinalizeAssetsSnapshotTests(unittest.TestCase):
-    def test_finalize_adds_portfolio_valuation_date(self):
+    def test_finalize_does_not_add_portfolio_valuation_date(self):
         assets = pd.DataFrame(
             [
                 {
@@ -40,17 +40,18 @@ class FinalizeAssetsSnapshotTests(unittest.TestCase):
                 }
             ]
         )
-        result = finalize_assets_snapshot(assets, date(2026, 7, 7))
-        self.assertEqual(result[PORTFOLIO_VALUATION_DATE].iloc[0], "2026-07-07")
+        result = finalize_assets_snapshot(assets)
+        self.assertNotIn("data_wyceny_portfela", result.columns)
         self.assertNotIn("fx", result.columns)
         self.assertNotIn(AssetsFile.NOTES, result.columns)
+        self.assertEqual(float(result[AssetsDef.VALUE].iloc[0]), 100.0)
 
 
 class CalculateAssetsObtainTests(unittest.TestCase):
     @patch("app_proc.calculate_assets.DATA_STEP")
     def test_calculate_assets_calls_obtain_with_dated_product(self, data_step_mock):
         valuation_date = date(2026, 7, 7)
-        expected_df = pd.DataFrame([{AssetsFile.ID: "a1", PORTFOLIO_VALUATION_DATE: "2026-07-07"}])
+        expected_df = pd.DataFrame([{AssetsFile.ID: "a1"}])
         frame_mock = MagicMock()
         frame_mock.data_frame.return_value = expected_df
         data_step_mock.obtain.return_value = frame_mock
@@ -83,7 +84,7 @@ class AssetsSnapshotParquetFileTests(unittest.TestCase):
             self.skipTest(f"Brak lokalnego snapshotu: {snapshot_path}")
         df = pd.read_parquet(snapshot_path)
         self.assertFalse(df.empty)
-        self.assertIn(PORTFOLIO_VALUATION_DATE, df.columns)
+        # Data snapshota = nazwa pliku; kolumna data_wyceny_portfela nie jest wymagana.
 
 
 if __name__ == "__main__":

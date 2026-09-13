@@ -10,7 +10,42 @@ from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
 from app_streamlit.safe_download import dataframe_for_streamlit
+from importers.assets.data_model import AssetsDef, AssetsFile
 from portfolios.assignment import investments_by_portfolio, rows_with_portfolio
+
+_HIDDEN_STATEMENT_COLUMNS = (
+    AssetsDef.STATEMENT_DATE,
+    AssetsDef.LAST_TRANSACTION_DATE,
+)
+
+CASH_POOL_DISPLAY_COLUMNS = [
+    AssetsFile.ID,
+    AssetsFile.DESCR,
+    AssetsFile.CURRENCY,
+    AssetsDef.VALUE,
+    AssetsDef.VALUE_PLN,
+    AssetsDef.STATEMENT_DATE,
+    AssetsDef.VALUE_DATE,
+    AssetsDef.DAYS_AFTER_VALUATION,
+    AssetsDef.PORTFOLIO,
+]
+
+
+def _drop_statement_columns(table: pd.DataFrame) -> pd.DataFrame:
+    if table is None:
+        return table
+    drop = [c for c in table.columns if str(c) in _HIDDEN_STATEMENT_COLUMNS]
+    if not drop:
+        return table
+    return table.drop(columns=drop)
+
+
+def cash_pool_table_for_display(cash_pool: pd.DataFrame) -> pd.DataFrame:
+    """Cash pool: data-wyciągu tak; bez last txn / data wyceny / data_wyceny_portfela."""
+    if cash_pool is None or cash_pool.empty:
+        return pd.DataFrame(columns=CASH_POOL_DISPLAY_COLUMNS)
+    cols = [c for c in CASH_POOL_DISPLAY_COLUMNS if c in cash_pool.columns]
+    return cash_pool.loc[:, cols].copy()
 
 
 @st.cache_data(show_spinner=False)
@@ -115,17 +150,27 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         st.code(format_rap_table(rap2(assets)), language=None)
 
     st.markdown("**Cash pool**")
-    st.dataframe(dataframe_for_streamlit(cash_pool), width="stretch", hide_index=True, height=360)
+    cash_display = dataframe_for_streamlit(cash_pool_table_for_display(cash_pool))
+    st.dataframe(
+        cash_display,
+        width="stretch",
+        hide_index=True,
+        height=360,
+        column_order=list(cash_display.columns),
+        key="cash_pool_table_v2",
+    )
 
     st.markdown("**Inwestycje**")
     for name, table in investments_by_portfolio(assets):
         st.markdown(f"**{name}**")
-        n_rows = 0 if table is None or table.empty else len(table)
+        display = dataframe_for_streamlit(_drop_statement_columns(table))
+        n_rows = 0 if display is None or display.empty else len(display)
         height = min(360, 38 + max(n_rows, 1) * 35)
         st.dataframe(
-            dataframe_for_streamlit(table),
+            display,
             width="stretch",
             hide_index=True,
             height=height,
-            key=f"investments_{name}",
+            column_order=list(display.columns) if display is not None else None,
+            key=f"investments_{name}_v2",
         )

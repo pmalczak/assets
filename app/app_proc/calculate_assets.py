@@ -17,7 +17,6 @@ from app_proc.export_product_excel import export_assets_evaluation
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 
 ASSETS_SNAPSHOT_STEP = "09 assets"
-PORTFOLIO_VALUATION_DATE = "data_wyceny_portfela"
 
 
 def calculate_assets(
@@ -61,7 +60,7 @@ def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
     check_wrong_catalogs(data_root, assets)
     assets, _warnings = evaluate_assets(data_root, assets, fx_rates, valuation_date)
 
-    return finalize_assets_snapshot(assets, valuation_date)
+    return finalize_assets_snapshot(assets)
 
 
 def evaluate_assets_file_for_ui(valuation_date: date) -> tuple[pd.DataFrame, list[str]]:
@@ -82,16 +81,14 @@ def evaluate_assets_file_for_ui(valuation_date: date) -> tuple[pd.DataFrame, lis
     assets = read_assets()
     check_wrong_catalogs(data_root, assets)
     evaluated, warnings = evaluate_assets(data_root, assets, fx_rates, valuation_date)
-    return finalize_assets_snapshot(evaluated, valuation_date), warnings
+    return finalize_assets_snapshot(evaluated), warnings
 
 
-def finalize_assets_snapshot(assets: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
+def finalize_assets_snapshot(assets: pd.DataFrame) -> pd.DataFrame:
     result = assets.sort_values(by=[AssetsFile.GROUP, AssetsFile.ID])
     result = result[result[AssetsDef.VALUE] != 0]
-    result = result.drop(columns=[AssetsDef.NOTES, LastFx.FX])
-    result = result.copy()
-    result[PORTFOLIO_VALUATION_DATE] = valuation_date.isoformat()
-    return result
+    result = result.drop(columns=[AssetsDef.NOTES, LastFx.FX], errors="ignore")
+    return result.copy()
 
 
 def assets_snapshot_resource(valuation_date: date) -> str:

@@ -9,6 +9,7 @@ from importers.deduplicate_records import deduplicate_records
 from importers.mbank.data_model import MBankFile
 from importers.mbank.local_extract_csv_table import ForbiddenSign
 from importers.mbank.local_read_csv_file import read_mbank_csv_file
+from importers.statement_download_date import iso_download_date
 
 
 def read_m_transactions(asset_dir: Path, asset_id: str) -> pd.DataFrame:
@@ -34,11 +35,11 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
     forbidden_signs = []
     records = []
-    ref_date = ''
+    download_dates: list[str] = []
     for input_file in input_files:
         try:
             mbank_transactions, _ref_date = read_mbank_csv_file(input_file)
-            ref_date = max(ref_date, _ref_date)
+            download_dates.append(iso_download_date(input_file))
             if len(mbank_transactions) == 0:
                 continue
 
@@ -62,6 +63,12 @@ def _read_m_transactions(source_file: Path = None) -> pd.DataFrame:
 
         result = deduplicate_records(result, record, MBankFile.MBANK_TRANSACTION_DATE, MBankFile.unique_key())
 
-    result[MBankFile.FILE_DATE] = ref_date
+    if result is None:
+        df = pd.DataFrame(data=None, columns=list(MBankFile.expected_columns()))
+        MBankFile.check_structure(df)
+        return df
+
+    # data-wyciągu w jednym parquet = max dat pobrań (nie min #Za okres / last txn).
+    result[MBankFile.FILE_DATE] = max(download_dates) if download_dates else ''
     MBankFile.check_structure(result)
     return result

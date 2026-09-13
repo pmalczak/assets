@@ -13,6 +13,7 @@ import pandas as pd
 from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.revolut.trading_data_model import RevolutTradingFile, RevolutTradingPnlFile
+from importers.statement_download_date import iso_download_date
 
 REVOLUT_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TRADING_PREFIX = "trading-account-statement"
@@ -60,12 +61,12 @@ def _read_revolut_trading_transactions(source_file: Path = None) -> pd.DataFrame
         df = pd.read_csv(input_file)
         df[RevolutTradingFile.PERIOD_START] = start
         df[RevolutTradingFile.PERIOD_END] = end
-        df[RevolutTradingFile.FILE_DATE] = end
+        df[RevolutTradingFile.FILE_DATE] = iso_download_date(input_file)
         print(f"PLIK:{input_file} {len(df):>4} rekord/ów")
         records.append(df)
 
     result = _merge_dedupe(records, RevolutTradingFile.DATE, RevolutTradingFile.unique_key())
-    result[RevolutTradingFile.FILE_DATE] = max(p[1] for p in periods)
+    result[RevolutTradingFile.FILE_DATE] = max(iso_download_date(p) for p in input_files)
     result = normalize_trading_transactions(result)
     RevolutTradingFile.check_structure(result)
     return result
@@ -85,7 +86,7 @@ def _read_revolut_trading_pnl(source_file: Path = None) -> pd.DataFrame:
         df = parse_trading_pnl_csv(input_file)
         df[RevolutTradingPnlFile.PERIOD_START] = start
         df[RevolutTradingPnlFile.PERIOD_END] = end
-        df[RevolutTradingPnlFile.FILE_DATE] = end
+        df[RevolutTradingPnlFile.FILE_DATE] = iso_download_date(input_file)
         print(f"PLIK:{input_file} {len(df):>4} rekord/ów PnL")
         records.append(df)
 
@@ -102,7 +103,7 @@ def _read_revolut_trading_pnl(source_file: Path = None) -> pd.DataFrame:
     result = _merge_dedupe(prepared, date_col, RevolutTradingPnlFile.unique_key())
     if date_col in result.columns:
         result = result.drop(columns=[date_col])
-    result[RevolutTradingPnlFile.FILE_DATE] = max(p[1] for p in periods)
+    result[RevolutTradingPnlFile.FILE_DATE] = max(iso_download_date(p) for p in input_files)
     RevolutTradingPnlFile.check_structure(result)
     return result
 

@@ -29,6 +29,34 @@ def _universe() -> list[str]:
     return list(RANKING_TICKERS.keys())
 
 
+class ChainLinkPricesTests(unittest.TestCase):
+    def test_chain_link_overlaps_timezone_and_intra_month_days(self):
+        from global_momentum.global_momentum_common import chain_link_prices
+
+        old = pd.Series(
+            [10.0, 11.0, 12.0],
+            index=pd.to_datetime(["2024-01-31", "2024-02-29", "2024-03-28"]).tz_localize("America/New_York"),
+        )
+        new = pd.Series(
+            [24.0, 26.0, 28.0],
+            index=pd.to_datetime(["2024-02-29", "2024-03-31", "2024-04-30"]).tz_localize("Europe/Berlin"),
+        )
+        linked = chain_link_prices(old, new, "Safe")
+        self.assertGreater(len(linked), 2)
+        self.assertEqual(linked.index.min(), pd.Timestamp("2024-01-31"))
+        self.assertEqual(linked.index.max(), pd.Timestamp("2024-04-30"))
+
+    def test_chain_link_uses_backfill_when_live_is_empty(self):
+        from global_momentum.global_momentum_common import chain_link_prices
+
+        old = pd.Series(
+            [10.0, 11.0],
+            index=pd.to_datetime(["2024-01-31", "2024-02-29"]),
+        )
+        linked = chain_link_prices(old, pd.Series(dtype=float), "Safe")
+        self.assertEqual(list(linked.values), [10.0, 11.0])
+
+
 class GlobalMomentumRankingTests(unittest.TestCase):
     def test_ready_ranking_has_top3_allocation(self):
         result = compute_current_universe7_ranking(

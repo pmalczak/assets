@@ -25,6 +25,7 @@ from importers.degiro.read_degiro import (
     read_transactions_csv,
     _read_degiro_portfolio,
 )
+from importers.statement_download_date import download_date_of
 from maintenance.move_degiro_files import move_degiro_files
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_DEGIRO
 from importers.assets.data_model import Instruments
@@ -119,13 +120,17 @@ class MoveDegiroTests(unittest.TestCase):
             download.mkdir()
             assets.mkdir()
             _write_package(download)
+            account = download / ACCOUNT_SOURCE
+            fetched = download_date_of(account)
 
             results = move_degiro_files(assets, download)
             self.assertEqual(len(results), 3)
             self.assertTrue(all(r.action == ACTION_MOVED for r in results))
             self.assertTrue(all(r.kind == KIND_DEGIRO for r in results))
             target_dir = assets / DEFAULT_DEGIRO_ASSET_ID
-            self.assertTrue((target_dir / dated_filename("portfolio", date(2021, 7, 28), date(2025, 10, 9))).is_file())
+            self.assertTrue(
+                (target_dir / dated_filename("portfolio", date(2021, 7, 28), date(2025, 10, 9), fetched)).is_file()
+            )
             self.assertFalse((download / ACCOUNT_SOURCE).is_file())
 
     def test_existing_covering_package_skips_incoming(self):

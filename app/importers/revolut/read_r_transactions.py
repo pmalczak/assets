@@ -9,6 +9,7 @@ from data_step.data_step import DATA_STEP
 from importers.deduplicate_records import deduplicate_records
 from importers.revolut.account_data_model import RevolutAccountFile
 from importers.revolut.revolut_file_state import RevolutFileState
+from importers.statement_download_date import iso_download_date
 
 REVOLUT_DATE_PATTERN = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
@@ -27,10 +28,11 @@ def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame
         df = pd.DataFrame(data=None, columns=list(RevolutAccountFile.expected_columns()))
         return df
 
-    ref_date = ''
+    download_dates: list[str] = []
     records = []
     for input_file in input_files:
-        ref_date = max(ref_date, _extract_file_date(input_file))
+        _extract_file_date(input_file)
+        download_dates.append(iso_download_date(input_file))
         df = pd.read_csv(input_file)
 
         print(f'PLIK:{input_file} {len(df):>4} rekord/ów')
@@ -48,7 +50,8 @@ def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame
     result = result[result[RevolutAccountFile.STATE] == RevolutFileState.CLOSED]
     result[RevolutAccountFile.INIT_DATE] = result[RevolutAccountFile.INIT_DATE].apply(_strip_date)
     result[RevolutAccountFile.DATE] = result[RevolutAccountFile.DATE].apply(_strip_date)
-    result[RevolutAccountFile.FILE_DATE] = ref_date
+    # data-wyciągu w jednym parquet = max dat pobrań (nie min końca okresu z nazwy).
+    result[RevolutAccountFile.FILE_DATE] = max(download_dates) if download_dates else ''
     RevolutAccountFile.check_structure(result)
     return result
 

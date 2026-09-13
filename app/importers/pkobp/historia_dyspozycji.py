@@ -13,7 +13,8 @@ from importers.pkobp.data_model import PkoBpBonds
 HISTORIA_DYSPOZYCJI_FILE = "HistoriaDyspozycji.xls"
 
 _HISTORIA_DATED_RE = re.compile(
-    rf"^(?P<first>\d{{4}}-\d{{2}}-\d{{2}}) (?P<last>\d{{4}}-\d{{2}}-\d{{2}}) {re.escape(HISTORIA_DYSPOZYCJI_FILE)}$",
+    rf"^(?P<first>\d{{4}}-\d{{2}}-\d{{2}}) (?P<last>\d{{4}}-\d{{2}}-\d{{2}})"
+    rf"(?: (?P<fetched>\d{{4}}-\d{{2}}-\d{{2}}))? {re.escape(HISTORIA_DYSPOZYCJI_FILE)}$",
     re.IGNORECASE,
 )
 
@@ -30,8 +31,10 @@ _COMPARE_COLS = [
 ]
 
 
-def dated_historia_filename(first: date, last: date) -> str:
-    return f"{first:%Y-%m-%d} {last:%Y-%m-%d} {HISTORIA_DYSPOZYCJI_FILE}"
+def dated_historia_filename(first: date, last: date, fetched: date | None = None) -> str:
+    if fetched is None:
+        return f"{first:%Y-%m-%d} {last:%Y-%m-%d} {HISTORIA_DYSPOZYCJI_FILE}"
+    return f"{first:%Y-%m-%d} {last:%Y-%m-%d} {fetched:%Y-%m-%d} {HISTORIA_DYSPOZYCJI_FILE}"
 
 
 def read_historia_excel(path: Path) -> pd.DataFrame:
@@ -52,9 +55,9 @@ def disposition_date_range(path: Path) -> tuple[date, date]:
     return disposition_date_range_from_df(read_historia_excel(path))
 
 
-def dated_historia_filename_from_df(df: pd.DataFrame) -> str:
+def dated_historia_filename_from_df(df: pd.DataFrame, fetched: date | None = None) -> str:
     first, last = disposition_date_range_from_df(df)
-    return dated_historia_filename(first, last)
+    return dated_historia_filename(first, last, fetched)
 
 
 def dated_historia_filename_from_excel(path: Path) -> str:
@@ -118,8 +121,9 @@ def _normalize_historia_rows(df: pd.DataFrame) -> pd.DataFrame:
     return out.drop_duplicates()
 
 
-def _historia_sort_key(path: Path) -> tuple[str, str, float]:
+def _historia_sort_key(path: Path) -> tuple[str, str, str, float]:
     match = _HISTORIA_DATED_RE.fullmatch(path.name)
     if match:
-        return match.group("last"), match.group("first"), path.stat().st_mtime
-    return "0001-01-01", "0001-01-01", path.stat().st_mtime
+        fetched = match.group("fetched") or match.group("last")
+        return match.group("last"), match.group("first"), fetched, path.stat().st_mtime
+    return "0001-01-01", "0001-01-01", "0001-01-01", path.stat().st_mtime

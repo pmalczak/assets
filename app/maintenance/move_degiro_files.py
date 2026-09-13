@@ -23,6 +23,7 @@ from importers.degiro.read_degiro import (
     read_portfolio_csv,
     read_transactions_csv,
 )
+from importers.statement_download_date import download_date_of
 from maintenance.move_downloaded_results import (
     ACTION_MOVED,
     ACTION_SKIPPED,
@@ -51,14 +52,23 @@ def move_degiro_files(assets_root: Path, download: Path) -> list[MoveResult]:
 
     account_src = download / ACCOUNT_SOURCE
     period_start, period_end = period_from_account_file(account_src)
+    fetched = download_date_of(account_src)
     target_dir = assets_root / DEFAULT_DEGIRO_ASSET_ID
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    targets = {
-        source_name: target_dir / dated_filename(prefix, period_start, period_end)
+    existing = {
+        source_name: _existing_period_file(target_dir, prefix, period_start, period_end)
         for source_name, prefix in _SOURCES.items()
     }
-    decision = _resolve_existing_targets(download, targets)
+    if all(path is not None for path in existing.values()):
+        targets = existing
+        decision = _resolve_existing_targets(download, targets)
+    else:
+        targets = {
+            source_name: target_dir / dated_filename(prefix, period_start, period_end, fetched)
+            for source_name, prefix in _SOURCES.items()
+        }
+        decision = "move"
     if decision == "skip":
         for source_name in _SOURCES:
             (download / source_name).unlink()
@@ -91,6 +101,15 @@ def move_degiro_files(assets_root: Path, download: Path) -> list[MoveResult]:
             )
         )
     return results
+
+
+def _existing_period_file(
+    target_dir: Path, prefix: str, period_start, period_end
+) -> Path | None:
+    matches = sorted(
+        target_dir.glob(f"{prefix}_{period_start.isoformat()}_{period_end.isoformat()}*.csv")
+    )
+    return matches[0] if matches else None
 
 
 def _resolve_existing_targets(download: Path, targets: dict[str, Path]) -> str:

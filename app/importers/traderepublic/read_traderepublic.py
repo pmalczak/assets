@@ -11,6 +11,7 @@ import pandas as pd
 
 from data_step.data_step import DATA_STEP
 from importers.period_coverage import assert_no_coverage_gaps
+from importers.statement_download_date import download_date_of
 from importers.traderepublic.data_model import (
     FILE_PREFIX,
     REQUIRED_SOURCE_COLUMNS,
@@ -19,7 +20,8 @@ from importers.traderepublic.data_model import (
 
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FILENAME_RE = re.compile(
-    rf"^{re.escape(FILE_PREFIX)}_(\d{{4}}-\d{{2}}-\d{{2}})_(\d{{4}}-\d{{2}}-\d{{2}})$"
+    rf"^{re.escape(FILE_PREFIX)}_(\d{{4}}-\d{{2}}-\d{{2}})_(\d{{4}}-\d{{2}}-\d{{2}})"
+    rf"(?:_(\d{{4}}-\d{{2}}-\d{{2}}))?$"
 )
 
 
@@ -39,8 +41,15 @@ def period_from_dataframe(df: pd.DataFrame) -> tuple[date, date]:
     return start, end
 
 
-def dated_export_filename(period_start: date, period_end: date) -> str:
-    return f"{FILE_PREFIX}_{period_start.isoformat()}_{period_end.isoformat()}.csv"
+def dated_export_filename(
+    period_start: date,
+    period_end: date,
+    fetched: date | None = None,
+) -> str:
+    stem = f"{FILE_PREFIX}_{period_start.isoformat()}_{period_end.isoformat()}"
+    if fetched is not None:
+        stem = f"{stem}_{fetched.isoformat()}"
+    return f"{stem}.csv"
 
 
 def extract_export_period(path: Path) -> tuple[date, date]:
@@ -51,6 +60,13 @@ def extract_export_period(path: Path) -> tuple[date, date]:
     if not _DATE_PATTERN.match(start_s) or not _DATE_PATTERN.match(end_s):
         raise ValueError(f"Unexpected dates in {path.name}")
     return date.fromisoformat(start_s), date.fromisoformat(end_s)
+
+
+def extract_download_date(path: Path) -> date:
+    match = _FILENAME_RE.fullmatch(path.stem)
+    if match and match.group(3):
+        return date.fromisoformat(match.group(3))
+    return download_date_of(path)
 
 
 def read_traderepublic_transactions(input_path: Path, asset_id: str) -> pd.DataFrame:
@@ -75,7 +91,7 @@ def _read_traderepublic_transactions(source_file: Path = None) -> pd.DataFrame:
             raise ValueError(f"Nieoczekiwane kolumny w {input_file.name}")
         df[TradeRepublicFile.PERIOD_START] = start.isoformat()
         df[TradeRepublicFile.PERIOD_END] = end.isoformat()
-        df[TradeRepublicFile.FILE_DATE] = end.isoformat()
+        df[TradeRepublicFile.FILE_DATE] = extract_download_date(input_file).isoformat()
         print(f"PLIK:{input_file} {len(df):>4} rekord/ów (Trade Republic)")
         records.append(df)
 
@@ -93,8 +109,10 @@ def _read_traderepublic_transactions(source_file: Path = None) -> pd.DataFrame:
     result["_sort"] = pd.to_datetime(result[TradeRepublicFile.DATE], errors="coerce")
     result = result.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
 
-    if not result.empty:
-        result[TradeRepublicFile.FILE_DATE] = max(p[1] for p in periods).isoformat()
+    # data-wyciągu w jednym parquet = max dat pobrań, nie min końców okresów / last txn.
+    result[TradeRepublicFile.FILE_DATE] = max(
+        extract_download_date(path).isoformat() for path in input_files
+    )
 
     TradeRepublicFile.check_structure(result)
     return result

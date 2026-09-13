@@ -6,7 +6,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.snapshots import snapshots_directory
 
 
@@ -126,6 +126,6 @@ def render_portfolio_history(history: pd.DataFrame, timeline_events: pd.DataFram
     st.altair_chart(chart, width='stretch')
     st.caption(
         f"Wykres budowany wylacznie ze snapshotow `{ASSETS_SNAPSHOT_STEP}` "
-        f"(kolumna `{PORTFOLIO_VALUATION_DATE}`). Kazdy punkt to wartosc portfela "
+        f"(data = nazwa pliku `YYYY-MM-DD.parquet`). Kazdy punkt to wartosc portfela "
         "wyliczona przez `calculate_assets()` na dana date wyceny — bez rekonstrukcji z transakcji."
     )

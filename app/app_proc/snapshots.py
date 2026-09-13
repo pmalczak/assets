@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP, PORTFOLIO_VALUATION_DATE
+from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_steps_root import get_data_steps_root
 
 SNAPSHOT_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})\.parquet$")
@@ -30,9 +30,4 @@ def list_snapshot_files(snapshots_dir: Path) -> list[tuple[date, Path]]:
 
 
 def load_snapshot(path: Path) -> pd.DataFrame:
-    df = pd.read_parquet(path)
-    if PORTFOLIO_VALUATION_DATE not in df.columns:
-        valuation_date = date.fromisoformat(path.stem)
-        df = df.copy()
-        df[PORTFOLIO_VALUATION_DATE] = valuation_date.isoformat()
-    return df
+    return pd.read_parquet(path)

@@ -47,11 +47,9 @@ def load_roi_aware_close_dates(
 def is_asset_sold(
     asset_id: str,
     cashflows: pd.DataFrame,
-    valuations: pd.DataFrame | None,
     valuation_date: date,
 ) -> bool:
     """is_sold: property ⇔ DIVESTMENT≤data; cash ⇔ close z manual; nie broker qty."""
-    del valuations
     asset_key = str(asset_id)
 
     # Catalog ROI: DIVESTMENT w CF tego aktywa = pełne wyjście.
@@ -77,12 +75,7 @@ def resolve_terminal_value(
     filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
     terminal_realized = _sum_divestment(filtered)
 
-    if is_asset_sold(
-        asset_id,
-        cashflows,
-        valuations,
-        valuation_date,
-    ):
+    if is_asset_sold(asset_id, cashflows, valuation_date):
         return terminal_realized, 0.0, warnings
 
     if is_gold_roi_asset(asset_id):

@@ -100,19 +100,27 @@ def investments_with_portfolio(assets: pd.DataFrame) -> pd.DataFrame:
     return rows_with_portfolio(assets, "investment.")
 
 
+_INVESTMENT_TABLE_HIDDEN = (
+    AssetsDef.PORTFOLIO,
+    AssetsDef.STATEMENT_DATE,
+    AssetsDef.LAST_TRANSACTION_DATE,
+)
+
+
 def investments_by_portfolio(assets: pd.DataFrame) -> list[tuple[str, pd.DataFrame]]:
-    """Inwestycje w kolejności KNOWN_PORTFOLIOS; kolumna `portfel` zbędna w każdej tabeli."""
+    """Inwestycje w kolejności KNOWN_PORTFOLIOS; bez `portfel` i dat wyciągu."""
     work = investments_with_portfolio(assets)
     if work is None:
         work = pd.DataFrame()
     tables: list[tuple[str, pd.DataFrame]] = []
     for name in KNOWN_PORTFOLIOS:
         if AssetsDef.PORTFOLIO in work.columns:
-            part = work.loc[work[AssetsDef.PORTFOLIO] == name].drop(
-                columns=[AssetsDef.PORTFOLIO]
-            )
+            part = work.loc[work[AssetsDef.PORTFOLIO] == name].copy()
         else:
             part = work.iloc[0:0].copy()
+        drop = [c for c in _INVESTMENT_TABLE_HIDDEN if c in part.columns]
+        if drop:
+            part = part.drop(columns=drop)
         tables.append((name, part))
     return tables
 
