@@ -248,8 +248,18 @@ class CashPoolDisplayColumnsTests(unittest.TestCase):
         )
         shown = cash_pool_table_for_display(df)
         self.assertEqual(list(shown.columns), CASH_POOL_DISPLAY_COLUMNS)
+        value_at = list(shown.columns).index(AssetsDef.VALUE)
+        self.assertEqual(
+            list(shown.columns)[value_at:value_at + 3],
+            [AssetsDef.VALUE, AssetsFile.CURRENCY, AssetsDef.VALUE_PLN],
+        )
         self.assertIn(AssetsDef.STATEMENT_DATE, shown.columns)
-        self.assertNotIn(AssetsDef.EVALUATION_DATE, shown.columns)
+        self.assertIn(AssetsDef.EVALUATION_DATE, shown.columns)
+        eval_at = list(shown.columns).index(AssetsDef.EVALUATION_DATE)
+        self.assertEqual(
+            list(shown.columns)[eval_at:eval_at + 3],
+            [AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION],
+        )
         self.assertNotIn(AssetsDef.LAST_TRANSACTION_DATE, shown.columns)
         self.assertNotIn("data_wyceny_portfela", shown.columns)
 

@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from app_streamlit.render_global_momentum import _load_benchmarks
+from app_streamlit.column_layout import with_value_currency_pln_order
 from app_streamlit.safe_download import dataframe_for_streamlit
 from global_momentum.global_momentum_benchmarks import GM_U7_LABEL
 from importers.assets.data_model import AssetsDef
@@ -27,7 +28,12 @@ _COMPOSITION_COLUMNS = (
     AssetsDef.ID,
     AssetsDef.DESCR,
     AssetsDef.TYPE,
+    AssetsDef.VALUE,
+    AssetsDef.CURRENCY,
     AssetsDef.VALUE_PLN,
+    AssetsDef.EVALUATION_DATE,
+    AssetsDef.VALUE_DATE,
+    AssetsDef.DAYS_AFTER_VALUATION,
 )
 
 
@@ -92,6 +98,7 @@ def _render_generic_composition(snapshot: pd.DataFrame, portfolio_name: str) -> 
         width="stretch",
         hide_index=True,
         column_config={
+            AssetsDef.VALUE: st.column_config.NumberColumn(format="%.2f"),
             AssetsDef.VALUE_PLN: st.column_config.NumberColumn(format="%.0f"),
         },
     )
@@ -104,7 +111,7 @@ def _composition_table(snapshot: pd.DataFrame, portfolio_name: str) -> pd.DataFr
     cols = [column for column in _COMPOSITION_COLUMNS if column in part.columns]
     if not cols:
         return pd.DataFrame()
-    out = part[cols].copy()
+    out = with_value_currency_pln_order(part[cols].copy())
     if AssetsDef.VALUE_PLN in out.columns:
         out[AssetsDef.VALUE_PLN] = pd.to_numeric(out[AssetsDef.VALUE_PLN], errors="coerce").fillna(0)
         out = out.sort_values(AssetsDef.VALUE_PLN, ascending=False)
@@ -133,9 +140,9 @@ def _render_gm_composition(
         st.warning(msg)
 
     table = compose_gm_composition(latest_snapshot, holdings)
-    total_nav = float(table["NAV PLN"].sum())
-    execution_nav = float(table.loc[table["Rola"] == ROLE_EXECUTION, "NAV PLN"].sum())
-    overlay_nav = float(table.loc[table["Rola"] == ROLE_OVERLAY, "NAV PLN"].sum())
+    total_nav = float(table[AssetsDef.VALUE_PLN].sum())
+    execution_nav = float(table.loc[table["Rola"] == ROLE_EXECUTION, AssetsDef.VALUE_PLN].sum())
+    overlay_nav = float(table.loc[table["Rola"] == ROLE_OVERLAY, AssetsDef.VALUE_PLN].sum())
 
     c1, c2, c3 = st.columns(3)
     c1.metric(f"NAV {PORTFOLIO_GM}", f"{total_nav:,.0f} PLN".replace(",", " "))
@@ -146,13 +153,14 @@ def _render_gm_composition(
     if missing:
         st.info("Brak w tym snapshocie: " + ", ".join(missing))
 
-    display = table.drop(columns=["id", "w_snapshocie"])
+    display = with_value_currency_pln_order(table.drop(columns=["id", "w_snapshocie"]))
     st.dataframe(
         display,
         width="stretch",
         hide_index=True,
         column_config={
-            "NAV PLN": st.column_config.NumberColumn(format="%.0f"),
+            AssetsDef.VALUE: st.column_config.NumberColumn(format="%.2f"),
+            AssetsDef.VALUE_PLN: st.column_config.NumberColumn(format="%.0f"),
             "Udział": st.column_config.NumberColumn(format="percent"),
             "Pozycje PLN": st.column_config.NumberColumn(format="%.0f"),
             "Gotówka PLN": st.column_config.NumberColumn(format="%.0f"),

@@ -79,7 +79,7 @@ class RevolutRoboSnapshotEvaluator(BrokerSnapshotEvaluator):
                 cash_value=float(cash_value),
                 n_positions=len(holdings),
                 n_cash_rows=1,
-                evaluation_date=_evaluation_date(trading_df, holdings, valuation_date),
+                evaluation_date=_evaluation_date(trading_df, valuation_date),
                 currency=_currency(trading_df, holdings),
             ),
             warnings,
@@ -139,7 +139,7 @@ def filter_trading_on_or_before(df: pd.DataFrame, valuation_date: date) -> pd.Da
 def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
     """
     FIFO: otwarte loty → wartość = Σ qty_pozostała × cena_zakupu.
-    Zwraca {ticker: {qty, cost, eval_date, currency}}.
+    Zwraca {ticker: {qty, cost, currency}}.
     """
     work = trading_df.copy()
     work["_dt"] = pd.to_datetime(work[RevolutTradingFile.DATE], format="ISO8601", utc=True)
@@ -191,16 +191,9 @@ def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
         if qty <= 1e-12:
             continue
         cost = sum(lot["qty"] * lot["price"] for lot in open_lots)
-        last_dt = max(lot["date"] for lot in open_lots)
-        eval_date = (
-            last_dt.tz_convert(None).date().isoformat()
-            if last_dt.tzinfo
-            else last_dt.date().isoformat()
-        )
         result[ticker] = {
             "qty": qty,
             "cost": float(cost),
-            "eval_date": eval_date,
             "currency": currency_by_ticker.get(ticker),
         }
     return result
@@ -230,21 +223,24 @@ def _to_float(value) -> float | None:
         return parse_trading_number(value)
 
 
-def _evaluation_date(
-    trading_df: pd.DataFrame,
-    holdings: dict[str, dict],
-    valuation_date: date,
-) -> str:
-    eval_dates = [info["eval_date"] for info in holdings.values() if info.get("eval_date")]
-    if eval_dates:
-        return max(eval_dates)
-    parsed = pd.to_datetime(trading_df[RevolutTradingFile.DATE], format="ISO8601", utc=True)
+def _evaluation_date(trading_df: pd.DataFrame, valuation_date: date) -> str:
+    """Świeżość źródła: min(snapshot, data-wyciągu). Nie data ostatniej transakcji."""
+    statement = _statement_download_date(trading_df)
+    if statement is None:
+        return valuation_date.isoformat()
+    return min(valuation_date, statement).isoformat()
+
+
+def _statement_download_date(trading_df: pd.DataFrame) -> date | None:
+    if trading_df is None or trading_df.empty:
+        return None
+    if RevolutTradingFile.FILE_DATE not in trading_df.columns:
+        return None
+    parsed = pd.to_datetime(trading_df[RevolutTradingFile.FILE_DATE], errors="coerce")
     last = parsed.max()
     if pd.isna(last):
-        return valuation_date.isoformat()
-    if last.tzinfo:
-        return last.tz_convert(None).date().isoformat()
-    return last.date().isoformat()
+        return None
+    return last.date()
 
 
 def _currency(trading_df: pd.DataFrame, holdings: dict[str, dict]) -> str | None:

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Przypisanie aktywów do portfela (0 OGÓLNY / 1 REVOLUT-ROBO / 2 G-MOMENTUM)."""
+"""Przypisanie aktywów do nazwanych portfeli."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,8 +13,9 @@ from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
 from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
 
 PORTFOLIO_OGOLNY = "0 OGÓLNY"
-PORTFOLIO_REVOLUT_ROBO = "1 REVOLUT-ROBO"
-PORTFOLIO_GM = "2 G-MOMENTUM"
+PORTFOLIO_NIERUCHOMOSCI = "1 NIERUCHOMOSCI"
+PORTFOLIO_REVOLUT_ROBO = "2 REVOLUT-ROBO"
+PORTFOLIO_GM = "3 G-MOMENTUM"
 DEFAULT_PORTFOLIO = PORTFOLIO_OGOLNY
 
 PORTFOLIO_GM_ORDER: tuple[str, ...] = (
@@ -32,6 +33,7 @@ ROLE_OVERLAY = "overlay"
 
 KNOWN_PORTFOLIOS: tuple[str, ...] = (
     PORTFOLIO_OGOLNY,
+    PORTFOLIO_NIERUCHOMOSCI,
     PORTFOLIO_REVOLUT_ROBO,
     PORTFOLIO_GM,
 )
@@ -47,7 +49,7 @@ def portfolio_for_asset_id(asset_id: str | None) -> str:
 
 
 def gm_asset_role(asset_id: str | None) -> str | None:
-    """Rola składnika w portfelu 2 G-MOMENTUM: wykonanie U7 vs overlay (złoto)."""
+    """Rola składnika w portfelu 3 G-MOMENTUM: wykonanie U7 vs overlay (złoto)."""
     key = str(asset_id or "").strip()
     if key in PORTFOLIO_GM_OVERLAY_ASSET_IDS:
         return ROLE_OVERLAY
@@ -58,6 +60,8 @@ def gm_asset_role(asset_id: str | None) -> str | None:
 
 def portfolio_for_row(asset_id: str | None, typ: str | None) -> str:
     kind = str(typ or "").strip()
+    if kind == "investment.property":
+        return PORTFOLIO_NIERUCHOMOSCI
     if kind.startswith("cash_pool.") or kind.startswith("investment."):
         return portfolio_for_asset_id(asset_id)
     if not kind:

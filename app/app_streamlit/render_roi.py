@@ -66,7 +66,7 @@ def render_roi(default_valuation_date: date | None) -> None:
     st.subheader("ROI")
     st.caption(
         "Per miejsce inwestycji — operacje na koncie (XIRR tickera / aktywa). "
-        "Wynik strategii GM (DEGIRO + XTB + złoto) jest w Portfele → 2 G-MOMENTUM; "
+        "Wynik strategii GM (DEGIRO + XTB + złoto) jest w Portfele → 3 G-MOMENTUM; "
         "nie sumuj tych XIRR."
     )
     venue = st.pills(

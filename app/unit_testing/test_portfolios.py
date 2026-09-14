@@ -15,6 +15,7 @@ from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
 from portfolios.assignment import (
     DEFAULT_PORTFOLIO,
     PORTFOLIO_GM,
+    PORTFOLIO_NIERUCHOMOSCI,
     PORTFOLIO_OGOLNY,
     PORTFOLIO_REVOLUT_ROBO,
     ROLE_EXECUTION,
@@ -57,6 +58,10 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_OGOLNY)
         self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_OGOLNY)
         self.assertEqual(
+            portfolio_for_row("properties", "investment.property"),
+            PORTFOLIO_NIERUCHOMOSCI,
+        )
+        self.assertEqual(
             portfolio_for_row(DEFAULT_REVOLUT_ROBO_ASSET_ID, "investment.udziały"),
             PORTFOLIO_REVOLUT_ROBO,
         )
@@ -83,6 +88,12 @@ class PortfolioAssignmentTests(unittest.TestCase):
                     AssetsDef.VALUE_PLN: 50,
                 },
                 {
+                    AssetsDef.ID: "properties",
+                    AssetsDef.TYPE: "investment.property",
+                    AssetsDef.GROUP: "4 nieruchomości",
+                    AssetsDef.VALUE_PLN: 700,
+                },
+                {
                     AssetsDef.ID: "p_m_23_2330",
                     AssetsDef.TYPE: "cash_pool.ror",
                     AssetsDef.GROUP: "1 konta bankowe",
@@ -99,15 +110,21 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertNotIn("p_m_23_2330", investments[AssetsDef.ID].tolist())
         self.assertEqual(
             list(investments[AssetsDef.PORTFOLIO]),
-            [PORTFOLIO_GM, PORTFOLIO_REVOLUT_ROBO, PORTFOLIO_OGOLNY],
+            [
+                PORTFOLIO_GM,
+                PORTFOLIO_REVOLUT_ROBO,
+                PORTFOLIO_OGOLNY,
+                PORTFOLIO_NIERUCHOMOSCI,
+            ],
         )
         nav = portfolio_nav_pln(snapshot)
         by_name = dict(zip(nav[AssetsDef.PORTFOLIO], nav[AssetsDef.VALUE_PLN]))
         self.assertAlmostEqual(float(by_name[PORTFOLIO_GM]), 400.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_REVOLUT_ROBO]), 100.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_OGOLNY]), 1049.0)
+        self.assertAlmostEqual(float(by_name[PORTFOLIO_NIERUCHOMOSCI]), 700.0)
 
-    def test_investments_split_into_three_portfolio_tables(self):
+    def test_investments_split_into_four_portfolio_tables(self):
         snapshot = pd.DataFrame(
             [
                 {
@@ -129,6 +146,12 @@ class PortfolioAssignmentTests(unittest.TestCase):
                     AssetsDef.VALUE_PLN: 50,
                 },
                 {
+                    AssetsDef.ID: "properties",
+                    AssetsDef.TYPE: "investment.property",
+                    AssetsDef.GROUP: "4 nieruchomości",
+                    AssetsDef.VALUE_PLN: 700,
+                },
+                {
                     AssetsDef.ID: "p_m_23_2330",
                     AssetsDef.TYPE: "cash_pool.ror",
                     AssetsDef.GROUP: "1 konta bankowe",
@@ -138,9 +161,21 @@ class PortfolioAssignmentTests(unittest.TestCase):
         )
         tables = investments_by_portfolio(snapshot)
         names = [name for name, _ in tables]
-        self.assertEqual(names, [PORTFOLIO_OGOLNY, PORTFOLIO_REVOLUT_ROBO, PORTFOLIO_GM])
+        self.assertEqual(
+            names,
+            [
+                PORTFOLIO_OGOLNY,
+                PORTFOLIO_NIERUCHOMOSCI,
+                PORTFOLIO_REVOLUT_ROBO,
+                PORTFOLIO_GM,
+            ],
+        )
         by_name = {name: frame for name, frame in tables}
         self.assertEqual(list(by_name[PORTFOLIO_OGOLNY][AssetsDef.ID]), ["cash"])
+        self.assertEqual(
+            list(by_name[PORTFOLIO_NIERUCHOMOSCI][AssetsDef.ID]),
+            ["properties"],
+        )
         self.assertEqual(
             list(by_name[PORTFOLIO_REVOLUT_ROBO][AssetsDef.ID]),
             [DEFAULT_REVOLUT_ROBO_ASSET_ID],
@@ -184,6 +219,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
         tables = investments_by_portfolio(snapshot)
         by_name = {name: frame for name, frame in tables}
         self.assertEqual(len(by_name[PORTFOLIO_OGOLNY]), 1)
+        self.assertTrue(by_name[PORTFOLIO_NIERUCHOMOSCI].empty)
         self.assertTrue(by_name[PORTFOLIO_REVOLUT_ROBO].empty)
         self.assertTrue(by_name[PORTFOLIO_GM].empty)
 

@@ -9,6 +9,7 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
+from app_streamlit.column_layout import with_value_currency_pln_order
 from app_streamlit.safe_download import dataframe_for_streamlit
 from importers.assets.data_model import AssetsDef, AssetsFile
 from portfolios.assignment import investments_by_portfolio, rows_with_portfolio
@@ -21,12 +22,13 @@ _HIDDEN_STATEMENT_COLUMNS = (
 CASH_POOL_DISPLAY_COLUMNS = [
     AssetsFile.ID,
     AssetsFile.DESCR,
-    AssetsFile.CURRENCY,
     AssetsDef.VALUE,
+    AssetsFile.CURRENCY,
     AssetsDef.VALUE_PLN,
-    AssetsDef.STATEMENT_DATE,
+    AssetsDef.EVALUATION_DATE,
     AssetsDef.VALUE_DATE,
     AssetsDef.DAYS_AFTER_VALUATION,
+    AssetsDef.STATEMENT_DATE,
     AssetsDef.PORTFOLIO,
 ]
 
@@ -41,7 +43,7 @@ def _drop_statement_columns(table: pd.DataFrame) -> pd.DataFrame:
 
 
 def cash_pool_table_for_display(cash_pool: pd.DataFrame) -> pd.DataFrame:
-    """Cash pool: data-wyciągu tak; bez last txn / data wyceny / data_wyceny_portfela."""
+    """Cash pool: wartość/waluta/PLN, potem data wyceny/waluty/dni; data-wyciągu; bez last txn."""
     if cash_pool is None or cash_pool.empty:
         return pd.DataFrame(columns=CASH_POOL_DISPLAY_COLUMNS)
     cols = [c for c in CASH_POOL_DISPLAY_COLUMNS if c in cash_pool.columns]
@@ -163,7 +165,9 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     st.markdown("**Inwestycje**")
     for name, table in investments_by_portfolio(assets):
         st.markdown(f"**{name}**")
-        display = dataframe_for_streamlit(_drop_statement_columns(table))
+        display = dataframe_for_streamlit(
+            with_value_currency_pln_order(_drop_statement_columns(table))
+        )
         n_rows = 0 if display is None or display.empty else len(display)
         height = min(360, 38 + max(n_rows, 1) * 35)
         st.dataframe(

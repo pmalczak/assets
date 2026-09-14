@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Skład portfela 2 G-MOMENTUM: role, NAV, rozbicie pozycji/gotówki brokerów."""
+"""Skład portfela 3 G-MOMENTUM: role, NAV, rozbicie pozycji/gotówki brokerów."""
 from __future__ import annotations
 
 from datetime import date
@@ -31,6 +31,15 @@ _DISPLAY_NAMES = {
 def _component_label(asset_id: str) -> str:
     key = str(asset_id).strip()
     return _DISPLAY_NAMES.get(key, key)
+
+
+def _cell(row: pd.Series | None, column: str, default: str = "") -> str:
+    if row is None:
+        return default
+    value = row.get(column)
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return default
+    return str(value).strip()
 
 
 def _numeric(value, default: float = 0.0) -> float:
@@ -81,6 +90,17 @@ def compose_gm_composition(
     for asset_id in PORTFOLIO_GM_ORDER:
         snap_row = by_id.get(asset_id)
         nav_pln = _numeric(snap_row.get(AssetsDef.VALUE_PLN)) if snap_row is not None else 0.0
+        native_value = _numeric(snap_row.get(AssetsDef.VALUE)) if snap_row is not None else 0.0
+        currency = (
+            str(snap_row.get(AssetsDef.CURRENCY) or "").strip()
+            if snap_row is not None
+            else ""
+        )
+        eval_date = _cell(snap_row, AssetsDef.EVALUATION_DATE)
+        value_date = _cell(snap_row, AssetsDef.VALUE_DATE)
+        days = None
+        if snap_row is not None and AssetsDef.DAYS_AFTER_VALUATION in snap_row.index:
+            days = pd.to_numeric(snap_row.get(AssetsDef.DAYS_AFTER_VALUATION), errors="coerce")
         in_snapshot = snap_row is not None
         positions_pln, cash_pln = _split_pln(
             asset_id,
@@ -93,7 +113,12 @@ def compose_gm_composition(
                 "id": asset_id,
                 "Składnik": _component_label(asset_id),
                 "Rola": gm_asset_role(asset_id),
-                "NAV PLN": nav_pln,
+                AssetsDef.VALUE: native_value,
+                AssetsDef.CURRENCY: currency,
+                AssetsDef.VALUE_PLN: nav_pln,
+                AssetsDef.EVALUATION_DATE: eval_date,
+                AssetsDef.VALUE_DATE: value_date,
+                AssetsDef.DAYS_AFTER_VALUATION: days,
                 "Udział": weight,
                 "Pozycje PLN": positions_pln,
                 "Gotówka PLN": cash_pln,

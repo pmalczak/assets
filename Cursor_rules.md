@@ -28,7 +28,7 @@ Arkusze `a_config.xlsx`:
 | **investment.\*** | Aktywa nabyte / wyceniane jako inwestycje (w tym ROI `cash`, nieruchomości, złoto, obligacje…) |
 | **`id=cash` / `assets.cash`** | Aktywo ROI (np. gotówka „wyprowadzona” do inwestycji), **nie** ewidencja gotówki bieżącej w portfelu |
 | **`grupa`** | Agregacja raportowa (RAP1, wykres wartości) — nie mylić z **portfelem** |
-| **portfel** | Przypisanie aktywa (nie nowe ID, nie `grupa`): `0 OGÓLNY` / `1 REVOLUT-ROBO` / `2 G-MOMENTUM`. Dotyczy `investment.*` **i** `cash_pool.*`. **`0 OGÓLNY`** = domyślny (w tym cały cash pool i każde nowe aktywo). Nie mylić z plikiem `a_config.xlsx` („katalog aktywów”). |
+| **portfel** | Przypisanie aktywa (nie nowe ID, nie `grupa`): `0 OGÓLNY` / `1 NIERUCHOMOSCI` / `2 REVOLUT-ROBO` / `3 G-MOMENTUM`. Dotyczy `investment.*` **i** `cash_pool.*`. **`0 OGÓLNY`** = domyślny (w tym cały cash pool i każde nowe aktywo poza `investment.property`); wszystkie `investment.property` należą do **`1 NIERUCHOMOSCI`**. Nie mylić z plikiem `a_config.xlsx` („katalog aktywów”). |
 | **`typ`** | Klasa instrumentu; steruje m.in. `pool_id` i RAP2 |
 | **`RODZAJ*`** | Ścieżka ewaluacji / importu (`mbank.*`, `assets.cash`, `assets.properties-wyceny`…) |
 | **CAPEX** | Nakłady inwestycyjne (zakup) |
@@ -62,7 +62,7 @@ Arkusze `a_config.xlsx`:
    - **Brak / niejednoznaczne / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
 8. **ROI cash a FX** — XIRR / ROI nominalny dla `cash` liczony w **walucie wyceny (EUR)**; bez przeliczania CAPEX/terminal FX w ROI. Przeliczenie na PLN jest w snapshocie portfela (`09 assets`), nie w warstwie ROI cash.
 9. **Snapshoty** — raporty UI z `09 assets/*.parquet`; data snapshota = **nazwa pliku** `YYYY-MM-DD.parquet` (bez kolumny `data_wyceny_portfela`). Po zmianie logiki wyceny użytkownik regeneruje snapshot (przycisk w Raportach). Nie migrujemy historycznych parquetów bez prośby. Nowe snapshoty dla gotówki mają `id=cash` (nie `id=EUR`).
-   - **`cash_pool.ror` (daty w snapshocie):** `data-ostatniej-transakcji` (wiersz salda), `data-wyciągu` (data **pobrania** pliku / `mtime`; po merge **max** dat pobrań), `data-waluty` (kurs NBP), `liczba dni od wyceny` = `data-waluty − data-wyciągu`. Nie używać ostatniej transakcji jako daty wyciągu. W UI Cash pool: `data-wyciągu` (bez `data-ostatniej-transakcji`). W Inwestycjach obu dat nie ma.
+   - **`cash_pool.ror` (daty w snapshocie):** `data-ostatniej-transakcji` (wiersz salda), `data-wyciągu` (data **pobrania** pliku / `mtime`; po merge **max** dat pobrań), `data-waluty` (kurs NBP), `liczba dni od wyceny` = `data-waluty − data-wyciągu`. Nie używać ostatniej transakcji jako daty wyciągu. W UI Cash pool: `data wyceny` → `data-waluty` → `liczba dni od wyceny`, plus `data-wyciągu` (bez `data-ostatniej-transakcji`). W Inwestycjach obu dat wyciągu/last txn nie ma.
 10. **Layout Dropbox `INWESTYCJE/`**:
     - `assets/` — `a_config.xlsx` (ex `assets_1` + `analyse_assets_config`), katalogi aktywów `investment.*`
     - `cash_pool/` — katalogi aktywów `cash_pool.*` (wyciągi ROR mBank/Revolut)
@@ -70,7 +70,8 @@ Arkusze `a_config.xlsx`:
     - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`)
     - Wyciąg, którego okres z nazwy **całkowicie zawiera się** w innym pliku tego samego rodzaju (to samo konto mBank / ten sam prefix Revolut `account-statement` lub `savings-statement`) jest zbędny — `maintenance/prune_contained_statements.py` (domyślnie dry-run; `--delete` kasuje). Równe okresy: zostaje jeden plik. UUID depozytów (bez dat w nazwie) poza tą regułą. Ten sam skrypt raportuje **luki** między pozostałymi okresami (next.start > prev.end + 1 dzień), np. `…_200101_200228` i `…_200315_200630`.
     - Migrator: `app/maintenance/migrate_to_a_config.py`
-11. **Portfel** — każde `investment.*` i `cash_pool.*` ma dokładnie jeden: `0 OGÓLNY` (default, w tym cash pool), `1 REVOLUT-ROBO` albo `2 G-MOMENTUM`. Nie jest to `grupa` ani osobny wiersz katalogu. RAP 1 = portfel × grupa; RAP 2 = portfel × typ (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`).
+11. **Portfel** — każde `investment.*` i `cash_pool.*` ma dokładnie jeden: `0 OGÓLNY` (default, w tym cash pool), `1 NIERUCHOMOSCI` (każde `investment.property`), `2 REVOLUT-ROBO` albo `3 G-MOMENTUM`. Nie jest to `grupa` ani osobny wiersz katalogu. RAP 1 = portfel × grupa; RAP 2 = portfel × typ (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`).
+12. **Kolejność kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. Dotyczy tabel Wartość aktywów (Cash pool / Inwestycje) i zakładki Portfele.
 
 ---
 
@@ -158,7 +159,7 @@ Market Data --> GMS Ranking --> Target --------+
 - Źródła: `trading-account-statement_*` + `trading-pnl-statement_*`.
 - Merge wielu plików: usuwać duplikaty; luki w okresach nazw → ostrzeżenie.
 - Po wczytaniu blottera: SELL → `Quantity` ujemne; BUY → `Total Amount` ujemne; FX → `1/fx`.
-- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Sama gotówka (wpłata bez kupna) też daje wiersz. Zakładka ROI per ticker **bez** gotówki w XIRR (TOP-UP/FEE poza XIRR jak dotychczas).
+- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Sama gotówka (wpłata bez kupna) też daje wiersz. `data wyceny` = `min(data snapshota, data-wyciągu)` — świeżość pobrania blottera, nie data ostatniej transakcji (brak transakcji nie oznacza starego wyciągu). Zakładka ROI per ticker **bez** gotówki w XIRR (TOP-UP/FEE poza XIRR jak dotychczas).
 - **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; FEE / TOP-UP poza XIRR; `is_sold` ⇔ qty≈0.
 - Terminal otwartych = last trade price × qty; `is_sold` ⇔ qty == 0.
 - Reconciliacja: Σ `CASH TOP-UP` vs `|To Robo portfolio|` na `revolut_eur` (tol. 0.01 EUR).
@@ -201,8 +202,8 @@ Zrobione w v1: (1) próbka XLSX i kolumny Open/Closed/Cash; (2) import ZIP → `
 
 Pozostaje:
 5. Reconciliation XTB ↔ GMS: current portfolio + cash vs target, lista BUY/SELL/rebalance do ręcznego wykonania w XTB.
-6. Czysty TWR portfela 2 G-MOMENTUM (strip CF) vs XIRR/MWR — v1 pokazuje ścieżkę NAV ze snapshotów (z dopłatami), nie sumę XIRR tickerów.
-7. Metryki: Sharpe, turnover; YTD/DD portfela 2 G-MOMENTUM poza ścieżką NAV v1.
+6. Czysty TWR portfela 3 G-MOMENTUM (strip CF) vs XIRR/MWR — v1 pokazuje ścieżkę NAV ze snapshotów (z dopłatami), nie sumę XIRR tickerów.
+7. Metryki: Sharpe, turnover; YTD/DD portfela 3 G-MOMENTUM poza ścieżką NAV v1.
 9. (dalsze) częściowa sprzedaż, przewalutowanie i pełny flow XTB → GMS → raport TWR/XIRR, gdy będzie historia zleceń / ISIN w eksporcie.
 
 ### Obligacje skarbowe (PKO BP)
@@ -233,11 +234,11 @@ Pozostaje:
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
 - Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele ROI wg `is_sold`. Preferencja w `_ui/sold_filter.txt`. Snapshoty i tak pomijają `VALUE=0`.
 - Zakładka **Waliduj**: walidacja ROI (`roi_def`/`roi_rules`/`roi_manual` / `instruments`) + ewaluacja katalogu `assets` w `a_config.xlsx` (dry-run, bez zapisu snapshotu).
-- Zakładka **ROI**: jedno miejsce z pills (Katalog / Revolut robo / depozyty Revolut / depozyty mBank / obligacje / DEGIRO / XTB) — soczewka operacji na koncie; bez zmiany semantyki XIRR. Tabele przepływów per ticker/aktywo: od najnowszej do najstarszej. Wynik strategii GM jest w **Portfele** (`2 G-MOMENTUM`), nie tu.
-- Zakładka **Portfele**: NAV i skład nazwanych portfeli (`0 OGÓLNY` z cash pool / `1 REVOLUT-ROBO` / `2 G-MOMENTUM`) ze snapshotów. Ścieżka NAV zawiera dopłaty — to nie XIRR i nie czysty TWR. TWR/XIRR całego portfela — później. Tylko `2 G-MOMENTUM`: role wykonanie vs overlay i NAV vs backtest U7 (serie = 100 na wspólnym starcie).
+- Zakładka **ROI**: jedno miejsce z pills (Katalog / Revolut robo / depozyty Revolut / depozyty mBank / obligacje / DEGIRO / XTB) — soczewka operacji na koncie; bez zmiany semantyki XIRR. Tabele przepływów per ticker/aktywo: od najnowszej do najstarszej. Wynik strategii GM jest w **Portfele** (`3 G-MOMENTUM`), nie tu.
+- Zakładka **Portfele**: NAV i skład nazwanych portfeli (`0 OGÓLNY` z cash pool / `1 NIERUCHOMOSCI` / `2 REVOLUT-ROBO` / `3 G-MOMENTUM`) ze snapshotów. W tabelach składu: `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. Ścieżka NAV zawiera dopłaty — to nie XIRR i nie czysty TWR. TWR/XIRR całego portfela — później. Tylko `3 G-MOMENTUM`: role wykonanie vs overlay i NAV vs backtest U7 (serie = 100 na wspólnym starcie).
 - Zakładka **Global momentum**: ranking operacyjny U7 (sygnał na koniec minionego miesiąca) + **as_today** (nieoficjalny nowcast na ostatnim wspólnym close ETF, nie sygnał rebalance; przy nazwie dryf TOP3 vs U7: `*` zostaje, `+` weszło, `-` wypadło) + backtest/benchmarki z `app/global_momentum`; ceny Yahoo przez DATA_STEP. **Poland** = `ETFPZUW20M40` (50% WIG20TR + 50% mWIG40TR); bez sWIG80 / pełnego WIG — brak lepszego jednego ETF-a wykonania, zostaje ten ticker. Kolumna **Asset** w Ranking U7 / as_today = `instruments.instrument` (join po `gm`); **Ticker** zostaje kodem Yahoo. Prefiksy dryfu zostają na Asset. Wewnętrzny ranking nadal po kluczach uniwersum (`USA`, `Japan`, …).
-- Zakładka **Wartość aktywów**: RAP 1 | RAP 2, potem Cash pool (jedna tabela), potem **Inwestycje** jako trzy tabele — `0 OGÓLNY`, `1 REVOLUT-ROBO`, `2 G-MOMENTUM`. Cash pool pokazuje `data-wyciągu`; Inwestycje **bez** `data-wyciągu` / `data-ostatniej-transakcji`.
-- **Portfel** — każde `investment.*` i `cash_pool.*` należy do dokładnie jednego: **`0 OGÓLNY`** (reszta, w tym cash pool; default nowego aktywa), **`1 REVOLUT-ROBO`** (`p_re_robo`), **`2 G-MOMENTUM`** (`p_degiro` + `p_xtb` + `zloto-monety`; złoto = overlay poza U7). Przypisanie w kodzie (v1); nie kolumna Excela. RAP 1 = portfel × `grupa`; RAP 2 = portfel × `typ` (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`). Widok wykonania GM = zakładka **Portfele** / `2 G-MOMENTUM`. Snapshot brokerów zostaje 1 wierszem (pozycje + gotówka). Ścieżka NAV ze snapshotów (PLN) vs backtest U7 (serie = 100 na wspólnym starcie) **nie** jest sumą XIRR tickerów i zawiera dopłaty; czysty TWR po CF oraz XIRR całego portfela G-MOMENTUM — później.
+- Zakładka **Wartość aktywów**: RAP 1 | RAP 2, potem Cash pool (jedna tabela), potem **Inwestycje** jako cztery tabele — `0 OGÓLNY`, `1 NIERUCHOMOSCI`, `2 REVOLUT-ROBO`, `3 G-MOMENTUM`. Cash pool pokazuje `data-wyciągu`; Inwestycje **bez** `data-wyciągu` / `data-ostatniej-transakcji`.
+- **Portfel** — każde `investment.*` i `cash_pool.*` należy do dokładnie jednego: **`0 OGÓLNY`** (reszta, w tym cash pool; default nowego aktywa), **`1 NIERUCHOMOSCI`** (wszystkie `investment.property`), **`2 REVOLUT-ROBO`** (`p_re_robo`), **`3 G-MOMENTUM`** (`p_degiro` + `p_xtb` + `zloto-monety`; złoto = overlay poza U7). Przypisanie w kodzie (v1); nie kolumna Excela. RAP 1 = portfel × `grupa`; RAP 2 = portfel × `typ` (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`). Widok wykonania GM = zakładka **Portfele** / `3 G-MOMENTUM`. Snapshot brokerów zostaje 1 wierszem (pozycje + gotówka). Ścieżka NAV ze snapshotów (PLN) vs backtest U7 (serie = 100 na wspólnym starcie) **nie** jest sumą XIRR tickerów i zawiera dopłaty; czysty TWR po CF oraz XIRR całego portfela G-MOMENTUM — później.
 - **DATA_STEP** — jedyna warstwa cache i łańcucha zależności. Korzystamy **tylko z API wysokopoziomowego** — w praktyce wyłącznie z metod klasy `DataStep` (np. `init_steps`, `obtain`, `obtain_dependent`, `force_read_data`). Nie wywoływać prywatnych pól/metod (`_dependencies_stack`, `_dependencies`, …) i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
 - **Yahoo Close** — serie dzienne w `data_steps/yahoo/{ticker}/{as_of}.parquet` przez DATA_STEP (`yahoo_finance.download_yahoo`). Nie do snapshotu / ROI brokerów (MTM online nadal non-goal).
 - Komunikacja z użytkownikiem: zwięźle, po polsku jeśli pyta po polsku.

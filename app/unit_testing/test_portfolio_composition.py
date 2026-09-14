@@ -18,7 +18,8 @@ def _snapshot_row(asset_id: str, value_pln: float) -> dict:
     return {
         AssetsDef.ID: asset_id,
         AssetsDef.VALUE_PLN: value_pln,
-        AssetsDef.VALUE: value_pln,
+        AssetsDef.VALUE: value_pln / 4 if value_pln else 0.0,
+        AssetsDef.CURRENCY: "EUR",
         AssetsDef.GROUP: "5 inwestycje finansowe",
     }
 
@@ -35,6 +36,18 @@ class GmCompositionTests(unittest.TestCase):
         )
         self.assertAlmostEqual(nav_pln_for_portfolio(snapshot, PORTFOLIO_GM), 1000.0)
         table = compose_gm_composition(snapshot)
+        cols = list(table.columns)
+        self.assertEqual(
+            cols[cols.index(AssetsDef.VALUE): cols.index(AssetsDef.DAYS_AFTER_VALUATION) + 1],
+            [
+                AssetsDef.VALUE,
+                AssetsDef.CURRENCY,
+                AssetsDef.VALUE_PLN,
+                AssetsDef.EVALUATION_DATE,
+                AssetsDef.VALUE_DATE,
+                AssetsDef.DAYS_AFTER_VALUATION,
+            ],
+        )
         self.assertEqual(list(table["id"]), [
             DEFAULT_DEGIRO_ASSET_ID,
             DEFAULT_XTB_ASSET_ID,
@@ -75,7 +88,7 @@ class GmCompositionTests(unittest.TestCase):
         table = compose_gm_composition(pd.DataFrame())
         self.assertEqual(len(table), 3)
         self.assertFalse(bool(table["w_snapshocie"].any()))
-        self.assertAlmostEqual(float(table["NAV PLN"].sum()), 0.0)
+        self.assertAlmostEqual(float(table[AssetsDef.VALUE_PLN].sum()), 0.0)
 
 
 if __name__ == "__main__":

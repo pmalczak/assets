@@ -475,7 +475,27 @@ class EvaluateBrokerTests(unittest.TestCase):
         self.assertEqual(result.iloc[0][AssetsDef.TYPE], TypeDomain.EQUITIES)
         self.assertEqual(result.iloc[0][AssetsDef.GROUP], GroupDomain.INVESTMENT)
         self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (2 poz. + 1 cash)")
+        self.assertEqual(result.iloc[0][AssetsDef.EVALUATION_DATE], "2026-01-31")
         self.assertEqual(warnings, ["luka test"])
+
+    def test_evaluation_date_is_min_of_snapshot_and_statement_download(self):
+        old_buy = self._tx(
+            **{
+                RevolutTradingFile.DATE: "2024-01-01T00:00:00Z",
+                RevolutTradingFile.FILE_DATE: "2026-01-20",
+            }
+        )
+        result, _warnings = self._evaluate(pd.DataFrame([old_buy]))
+        self.assertEqual(result.iloc[0][AssetsDef.EVALUATION_DATE], "2026-01-20")
+
+        newer_download = self._tx(
+            **{
+                RevolutTradingFile.DATE: "2024-01-01T00:00:00Z",
+                RevolutTradingFile.FILE_DATE: "2026-02-15",
+            }
+        )
+        result, _warnings = self._evaluate(pd.DataFrame([newer_download]))
+        self.assertEqual(result.iloc[0][AssetsDef.EVALUATION_DATE], "2026-01-31")
 
     def test_evaluate_includes_uninvested_top_up(self):
         trading = pd.DataFrame(
