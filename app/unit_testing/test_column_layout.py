@@ -5,7 +5,12 @@ import unittest
 
 import pandas as pd
 
-from app_streamlit.column_layout import with_value_currency_pln_order
+from app_streamlit.column_layout import (
+    amount_column_config,
+    format_amount_columns,
+    format_amount_display,
+    with_value_currency_pln_order,
+)
 from app_streamlit.render_portfolios import _composition_table
 from importers.assets.data_model import AssetsDef
 from portfolios.assignment import PORTFOLIO_OGOLNY, PORTFOLIO_REVOLUT_ROBO
@@ -90,3 +95,45 @@ class ValueCurrencyPlnOrderTests(unittest.TestCase):
         )
         empty = _composition_table(snapshot, PORTFOLIO_REVOLUT_ROBO)
         self.assertTrue(empty.empty)
+
+
+class AmountDisplayFormatTests(unittest.TestCase):
+    def test_space_thousands_without_decimals(self):
+        self.assertEqual(format_amount_display(1234.6), "1 235")
+        self.assertEqual(format_amount_display(1_234_567), "1 234 567")
+        self.assertEqual(format_amount_display(-1200), "-1 200")
+        self.assertEqual(format_amount_display(None), "")
+
+    def test_formats_value_and_value_pln_columns(self):
+        df = pd.DataFrame(
+            [
+                {
+                    AssetsDef.VALUE: 1234.2,
+                    AssetsDef.VALUE_PLN: 4_321.8,
+                    AssetsDef.CURRENCY: "EUR",
+                }
+            ]
+        )
+        shown = format_amount_columns(df)
+        self.assertEqual(shown[AssetsDef.VALUE].iloc[0], "1 234")
+        self.assertEqual(shown[AssetsDef.VALUE_PLN].iloc[0], "4 322")
+        self.assertEqual(shown[AssetsDef.CURRENCY].iloc[0], "EUR")
+
+    def test_amount_columns_are_right_aligned(self):
+        df = pd.DataFrame(
+            [
+                {
+                    AssetsDef.VALUE: "1 234",
+                    AssetsDef.CURRENCY: "EUR",
+                    AssetsDef.VALUE_PLN: "4 322",
+                }
+            ]
+        )
+        config = amount_column_config(df, {AssetsDef.CURRENCY: "waluta"})
+        self.assertEqual(
+            sorted(k for k in config if k != AssetsDef.CURRENCY),
+            sorted([AssetsDef.VALUE, AssetsDef.VALUE_PLN]),
+        )
+        for name in (AssetsDef.VALUE, AssetsDef.VALUE_PLN):
+            self.assertEqual(config[name]["alignment"], "right")
+        self.assertEqual(config[AssetsDef.CURRENCY], "waluta")

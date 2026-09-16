@@ -13,6 +13,7 @@ from analyse_assets.config_model import (
     AnalyseAssetsRules,
 )
 from analyse_assets.data_model import AssetRw
+from evaluators.evaluate_zloto_monety import _resolve_portfolio_value
 from importers.assets.data_model import Inventory, UnitPriceEvaluation
 from importers.assets.pool_id import REVOLUT_PLN
 from importers.mbank.data_model import MBankFile, MbankOperationType
@@ -93,6 +94,37 @@ def _inventory_row(
 
 
 class GoldTerminalMtmTests(unittest.TestCase):
+    @patch(
+        "evaluators.evaluate_zloto_monety.resolve_gold_terminal_unrealized",
+        return_value=(25_000.0, []),
+    )
+    def test_snapshot_evaluation_date_is_latest_inventory_transaction(
+        self, _resolve_terminal
+    ):
+        inventory = pd.DataFrame(
+            [
+                _inventory_row(
+                    tx_date="2024-03-15",
+                    instrument="Krugerrand 1oz",
+                ),
+                _inventory_row(
+                    tx_date="2025-06-20",
+                    instrument="Maple Leaf 1oz",
+                ),
+                _inventory_row(
+                    tx_date="2027-01-01",
+                    instrument="Future coin",
+                ),
+            ]
+        )
+
+        value, evaluation_date = _resolve_portfolio_value(
+            inventory, date(2026, 9, 16), []
+        )
+
+        self.assertEqual(value, 25_000.0)
+        self.assertEqual(evaluation_date, "2025-06-20")
+
     def test_mark_to_market_two_coins(self):
         holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
         prices = pd.DataFrame(

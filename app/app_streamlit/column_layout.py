@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import streamlit as st
 
 from importers.assets.data_model import AssetsDef
 
@@ -22,6 +23,42 @@ _DISPLAY_BLOCKS = (
     VALUE_THEN_CURRENCY_THEN_PLN,
     EVAL_THEN_FX_THEN_DAYS,
 )
+
+
+AMOUNT_DISPLAY_COLUMNS = (
+    AssetsDef.VALUE,
+    AssetsDef.VALUE_PLN,
+)
+
+
+def format_amount_display(value) -> str:
+    """Kwota UI: spacje tysięcy, bez części dziesiętnej (jak RAP)."""
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return ""
+    return f"{int(round(float(number))):,}".replace(",", " ")
+
+
+def format_amount_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.columns.empty:
+        return df
+    out = df.copy()
+    for name in AMOUNT_DISPLAY_COLUMNS:
+        if name in out.columns:
+            out[name] = out[name].map(format_amount_display)
+    return out
+
+
+def amount_column_config(df: pd.DataFrame, extra: dict | None = None) -> dict:
+    """Kwoty (tekst ze spacjami tysięcy) wyrównane do prawej — jak liczby w RAP."""
+    config: dict = {}
+    if df is not None and not df.columns.empty:
+        for name in AMOUNT_DISPLAY_COLUMNS:
+            if name in df.columns:
+                config[name] = st.column_config.TextColumn(alignment="right")
+    if extra:
+        config.update(extra)
+    return config
 
 
 def with_value_currency_pln_order(df: pd.DataFrame) -> pd.DataFrame:

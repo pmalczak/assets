@@ -5,13 +5,18 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from app_streamlit.column_layout import format_amount_columns
+from importers.assets.data_model import AssetsDef
+
 
 def dataframe_for_streamlit(df: pd.DataFrame) -> pd.DataFrame:
     """Ramka bez pandas StringDtype/bool — bezpieczniejsza dla serializacji Arrow."""
     if df is None or df.empty:
         return df
-    out = df.copy()
+    out = format_amount_columns(df.copy())
     for col in out.columns:
+        if col in (AssetsDef.VALUE, AssetsDef.VALUE_PLN):
+            continue
         out[col] = out[col].map(lambda v: "" if v is None or (isinstance(v, float) and pd.isna(v)) else v)
         out[col] = out[col].astype(str)
     return out

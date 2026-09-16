@@ -9,7 +9,7 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
-from app_streamlit.column_layout import with_value_currency_pln_order
+from app_streamlit.column_layout import amount_column_config, with_value_currency_pln_order
 from app_streamlit.safe_download import dataframe_for_streamlit
 from importers.assets.data_model import AssetsDef, AssetsFile
 from portfolios.assignment import investments_by_portfolio, rows_with_portfolio
@@ -159,6 +159,7 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         hide_index=True,
         height=360,
         column_order=list(cash_display.columns),
+        column_config=amount_column_config(cash_display),
         key="cash_pool_table_v2",
     )
 
@@ -176,5 +177,6 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
             hide_index=True,
             height=height,
             column_order=list(display.columns) if display is not None else None,
+            column_config=amount_column_config(display),
             key=f"investments_{name}_v2",
         )

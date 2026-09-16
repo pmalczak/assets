@@ -7,7 +7,11 @@ import pandas as pd
 import streamlit as st
 
 from app_streamlit.render_global_momentum import _load_benchmarks
-from app_streamlit.column_layout import with_value_currency_pln_order
+from app_streamlit.column_layout import (
+    amount_column_config,
+    format_amount_columns,
+    with_value_currency_pln_order,
+)
 from app_streamlit.safe_download import dataframe_for_streamlit
 from global_momentum.global_momentum_benchmarks import GM_U7_LABEL
 from importers.assets.data_model import AssetsDef
@@ -93,14 +97,12 @@ def _render_generic_composition(snapshot: pd.DataFrame, portfolio_name: str) -> 
     if table.empty:
         st.info(f"Brak wierszy w tym snapshocie dla {portfolio_name}.")
         return
+    display = dataframe_for_streamlit(table)
     st.dataframe(
-        dataframe_for_streamlit(table),
+        display,
         width="stretch",
         hide_index=True,
-        column_config={
-            AssetsDef.VALUE: st.column_config.NumberColumn(format="%.2f"),
-            AssetsDef.VALUE_PLN: st.column_config.NumberColumn(format="%.0f"),
-        },
+        column_config=amount_column_config(display),
     )
 
 
@@ -153,18 +155,21 @@ def _render_gm_composition(
     if missing:
         st.info("Brak w tym snapshocie: " + ", ".join(missing))
 
-    display = with_value_currency_pln_order(table.drop(columns=["id", "w_snapshocie"]))
+    display = format_amount_columns(
+        with_value_currency_pln_order(table.drop(columns=["id", "w_snapshocie"]))
+    )
     st.dataframe(
         display,
         width="stretch",
         hide_index=True,
-        column_config={
-            AssetsDef.VALUE: st.column_config.NumberColumn(format="%.2f"),
-            AssetsDef.VALUE_PLN: st.column_config.NumberColumn(format="%.0f"),
-            "Udział": st.column_config.NumberColumn(format="percent"),
-            "Pozycje PLN": st.column_config.NumberColumn(format="%.0f"),
-            "Gotówka PLN": st.column_config.NumberColumn(format="%.0f"),
-        },
+        column_config=amount_column_config(
+            display,
+            {
+                "Udział": st.column_config.NumberColumn(format="percent"),
+                "Pozycje PLN": st.column_config.NumberColumn(format="%.0f"),
+                "Gotówka PLN": st.column_config.NumberColumn(format="%.0f"),
+            },
+        ),
     )
 
 

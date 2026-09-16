@@ -9,6 +9,7 @@ import streamlit as st
 from analyse_assets.validate_config import ValidationReport, validate_analyse_config
 from app_proc.calculate_assets import evaluate_assets_file_for_ui
 from app_proc.data_root import A_CONFIG_FILE_NAME
+from app_streamlit.column_layout import amount_column_config, format_amount_columns
 from importers.assets.data_model import AssetsDef
 from importers.assets.read_assets import get_assets_file
 from roi.config import get_config_file
@@ -122,7 +123,14 @@ def _render_assets_evaluation_section() -> None:
         return
 
     cols = [c for c in _ASSETS_EVAL_DISPLAY if c in result.columns]
-    st.dataframe(result[cols], width="stretch", hide_index=True, height=420)
+    display = format_amount_columns(result[cols])
+    st.dataframe(
+        display,
+        width="stretch",
+        hide_index=True,
+        height=420,
+        column_config=amount_column_config(display),
+    )
 
 
 def _render_report(report: ValidationReport) -> None:

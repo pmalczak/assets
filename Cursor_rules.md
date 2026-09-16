@@ -58,7 +58,7 @@ Arkusze `a_config.xlsx`:
 7. **Złoto ROI** (`asset_id=zloto-monety`):
    - **CAPEX** wyłącznie z `a_config` (`roi_rules` / `roi_manual`) via `allocate_catalog` — jak inne aktywa
    - **Inventory** z arkusza `inventory`; join CAPEX ↔ inventory **wyłącznie po dacie**
-   - **Terminal / snapshot** = Σ sztuki × cena z `unit-price-evaluation`
+   - **Terminal / snapshot (obecnie):** `data wyceny` = data **ostatniej transakcji zarejestrowanej w `inventory`** ≤ data snapshota; `wartość` = wycena po **cenie ostatniego zakupu** (qty × ta cena). To odrębna reguła od kont brokerskich i nie jest kurs rynkowy dnia snapshota. **Zmiana na wycenę online / MTM rynkowy — dopiero gdy będzie robiona wycena online**; do tego czasu tej zasady nie ruszać.
    - **Brak / niejednoznaczne / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
 8. **ROI cash a FX** — XIRR / ROI nominalny dla `cash` liczony w **walucie wyceny (EUR)**; bez przeliczania CAPEX/terminal FX w ROI. Przeliczenie na PLN jest w snapshocie portfela (`09 assets`), nie w warstwie ROI cash.
 9. **Snapshoty** — raporty UI z `09 assets/*.parquet`; data snapshota = **nazwa pliku** `YYYY-MM-DD.parquet` (bez kolumny `data_wyceny_portfela`). Po zmianie logiki wyceny użytkownik regeneruje snapshot (przycisk w Raportach). Nie migrujemy historycznych parquetów bez prośby. Nowe snapshoty dla gotówki mają `id=cash` (nie `id=EUR`).
@@ -71,7 +71,7 @@ Arkusze `a_config.xlsx`:
     - Wyciąg, którego okres z nazwy **całkowicie zawiera się** w innym pliku tego samego rodzaju (to samo konto mBank / ten sam prefix Revolut `account-statement` lub `savings-statement`) jest zbędny — `maintenance/prune_contained_statements.py` (domyślnie dry-run; `--delete` kasuje). Równe okresy: zostaje jeden plik. UUID depozytów (bez dat w nazwie) poza tą regułą. Ten sam skrypt raportuje **luki** między pozostałymi okresami (next.start > prev.end + 1 dzień), np. `…_200101_200228` i `…_200315_200630`.
     - Migrator: `app/maintenance/migrate_to_a_config.py`
 11. **Portfel** — każde `investment.*` i `cash_pool.*` ma dokładnie jeden: `0 OGÓLNY` (default, w tym cash pool), `1 NIERUCHOMOSCI` (każde `investment.property`), `2 REVOLUT-ROBO` albo `3 G-MOMENTUM`. Nie jest to `grupa` ani osobny wiersz katalogu. RAP 1 = portfel × grupa; RAP 2 = portfel × typ (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`).
-12. **Kolejność kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. Dotyczy tabel Wartość aktywów (Cash pool / Inwestycje) i zakładki Portfele.
+12. **Kolejność i format kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. `wartość` i `wartość-pln` jak kwoty: spacje tysięcy, bez części dziesiętnej, wyrównane do prawej (`column_config` z `alignment="right"`, bo kwoty idą do UI jako tekst). Dotyczy tabel Wartość aktywów (Cash pool / Inwestycje), zakładki Portfele i ewaluacji w Waliduj.
 
 ---
 
@@ -250,10 +250,10 @@ Pozostaje:
 - Pełna speka algorytmów w tym pliku (to jest kod).
 - Migracja wszystkich historycznych snapshotów przy każdej zmianie modelu.
 - Osobny ledger gotówki bieżącej równoległy do cash pools.
-- Osobna wycena całego holdingu złota (dawne `zloto-monety-wyceny`).
+- Osobna wycena całego holdingu złota (dawne `zloto-monety-wyceny`). Snapshot `investment.złoto-monety`: data ostatniej transakcji w `inventory` + cena ostatniego zakupu, aż do wyceny online.
 - Auto-migracja starego Excela inventory → nowy schemat bez prośby.
 - FX w XIRR cash (osobna decyzja, jeśli kiedyś wspólny mianownik PLN z nieruchomościami).
-- MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot brokerów udziałowych = pozycje (FIFO lub MTM wg źródła) **+ gotówka robocza**; ROI ticker Revolut = last price × qty.
+- MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot brokerów udziałowych = pozycje (FIFO lub MTM wg źródła) **+ gotówka robocza**; ROI ticker Revolut = last price × qty. **Złoto:** to samo — nie przechodzić na wycenę online, dopóki ta decyzja nie zapadnie.
 - Klasyczne ROI katalogowe `p_re_robo` / `obligacjeskarbowe` z cash pool / `roi_def` (równolegle do ROI per instrument).
 - Fee / TOP-UP / podatki / przelewy PKO w XIRR per instrument; rozbicie instrumentów w tabeli Wartość aktywów → Inwestycje.
 
