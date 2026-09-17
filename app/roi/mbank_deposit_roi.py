@@ -17,6 +17,7 @@ from importers.mbank.read_m_transactions import read_m_transactions
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 LOKATA_NR_RE = re.compile(r"\bNR \d{15}\b")
@@ -216,12 +217,17 @@ def compute_mbank_deposit_roi(
 
     for account_id, raw in sorted(statements.items()):
         filtered = filter_on_or_before(raw, MBankFile.MBANK_TRANSACTION_DATE, valuation_date)
+        eval_date = evaluation_date_from_frame(
+            filtered, MBankFile.FILE_DATE, valuation_date
+        )
         events, cf_warnings = build_mbank_lokata_cashflows(filtered, account_id)
         warnings.extend(cf_warnings)
         for asset_id, cashflows in sorted(events.items()):
             summary = compute_lokata_roi(asset_id, cashflows, valuation_date)
             warnings.extend(f"{msg}" for msg in summary.warnings)
-            summary_rows.append(roi_summary_to_row(summary))
+            summary_rows.append(
+                attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+            )
             events_by_asset[asset_id] = cashflows
 
     if not summary_rows:

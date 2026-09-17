@@ -28,6 +28,7 @@ from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.compute_roi import roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 
 
 def build_degiro_cashflows(
@@ -69,6 +70,9 @@ def compute_degiro_ticker_roi(
             warnings.extend(account_warnings)
 
     portfolio = latest_portfolio_as_of(portfolio_df, valuation_date)
+    eval_date = evaluation_date_from_frame(
+        portfolio, DegiroPortfolioFile.FILE_DATE, valuation_date
+    )
     tx = _filter_degiro_rows_on_or_before(transactions_df, DegiroTransactionsFile.DATE, valuation_date)
     account = _filter_degiro_rows_on_or_before(account_df, DegiroAccountFile.BOOKING_DATE, valuation_date)
 
@@ -93,7 +97,7 @@ def compute_degiro_ticker_roi(
             open_qty=open_qty,
             last_price=terminal if open_qty else 0.0,
         )
-        row = roi_summary_to_row(summary)
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
         row["instrument"] = mapping.instrument_for_degiro(isin)
         rows.append(row)
 

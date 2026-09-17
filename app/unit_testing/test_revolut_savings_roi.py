@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from importers.assets.data_model import AssetsDef
 from importers.revolut.deposit_data_model import RevolutDepositFile
 from importers.revolut.read_r_deposits import _read_revolut_deposit_transactions
 from importers.revolut.savings_statement import (
@@ -251,6 +252,7 @@ class ComputeDepositRoiIntegrationTests(unittest.TestCase):
             self.assertAlmostEqual(float(deposit["capex"]), -1000)
             self.assertAlmostEqual(float(deposit["revenue"]), 0)
             self.assertAlmostEqual(float(deposit["terminal_unrealized"]), 1010)
+            self.assertEqual(deposit[AssetsDef.EVALUATION_DATE], "2026-01-15")
             tax_id = tax_liability_asset_id("p_re_eur", 2026)
             self.assertIn(tax_id, events)
             self.assertIn("p_re_eur", events)

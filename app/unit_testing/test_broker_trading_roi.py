@@ -7,6 +7,7 @@ from datetime import date
 import pandas as pd
 
 from analyse_assets.account_tx import AccountTx
+from importers.assets.data_model import AssetsDef
 from importers.revolut.trading_data_model import RevolutTradingFile
 from roi.broker_trading_roi import (
     TO_ROBO_TITLE,
@@ -280,6 +281,34 @@ class ReconcileRoboTests(unittest.TestCase):
         self.assertEqual(len(summary), 1)
         self.assertIn("p_re_robo:ZZZ", events)
         self.assertTrue(any("mismatch" in w for w in warnings))
+
+
+class BrokerEvaluationDateTests(unittest.TestCase):
+    def test_uses_latest_file_date_clamped_to_calculation(self):
+        trading = pd.DataFrame(
+            [
+                {**_row(dt="2026-01-01T10:00:00Z", ticker="PRAR", tx_type=RevolutTradingFile.TYPE_BUY, qty=1.0, price=10.0, total=-10.0), RevolutTradingFile.FILE_DATE: "2026-01-10"},
+                {**_row(dt="2026-02-01T10:00:00Z", ticker="PRAR", tx_type=RevolutTradingFile.TYPE_BUY, qty=1.0, price=10.0, total=-10.0), RevolutTradingFile.FILE_DATE: "2026-06-30"},
+            ]
+        )
+        summary, _events = compute_broker_ticker_roi_from_trading(
+            trading, date(2026, 3, 1), "p_re_robo"
+        )
+        self.assertEqual(summary.iloc[0][AssetsDef.EVALUATION_DATE], "2026-03-01")
+
+        later = compute_broker_ticker_roi_from_trading(
+            trading, date(2026, 9, 16), "p_re_robo"
+        )[0]
+        self.assertEqual(later.iloc[0][AssetsDef.EVALUATION_DATE], "2026-06-30")
+
+    def test_missing_file_date_is_empty(self):
+        trading = pd.DataFrame(
+            [_row(dt="2026-01-01T10:00:00Z", ticker="PRAR", tx_type=RevolutTradingFile.TYPE_BUY, qty=1.0, price=10.0, total=-10.0)]
+        ).drop(columns=[RevolutTradingFile.FILE_DATE])
+        summary, _events = compute_broker_ticker_roi_from_trading(
+            trading, date(2026, 9, 16), "p_re_robo"
+        )
+        self.assertEqual(summary.iloc[0][AssetsDef.EVALUATION_DATE], "")
 
 
 if __name__ == "__main__":

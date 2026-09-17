@@ -233,6 +233,7 @@ class CashRoiAllocationTests(unittest.TestCase):
         self.assertEqual(summary.terminal_unrealized, 120000.0)
         self.assertIsNotNone(summary.xirr)
         self.assertGreater(summary.xirr, 0.0)
+        self.assertEqual(summary.evaluation_date, "2026-01-01")
 
     def test_cash_terminal_ignores_future_properties_valuation(self):
         events = pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))

@@ -23,6 +23,7 @@ from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, OPEX
 from roi.compute_roi import roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 
 
 def _roi_category(order_type: str) -> str | None:
@@ -136,6 +137,9 @@ def compute_bonds_broker_roi_from_frames(
     events_by_asset = build_bonds_cashflows(filtered, broker_id)
     open_qty = open_qty_by_code(filtered)
     stan_as_of = select_stan_as_of(stan_df, valuation_date)
+    eval_date = evaluation_date_from_frame(
+        stan_as_of, PkoBpStan.FILE_DATE, valuation_date
+    )
     state = terminal_by_code(stan_as_of, open_qty)
 
     for code, st in state.items():
@@ -159,7 +163,7 @@ def compute_bonds_broker_roi_from_frames(
             open_qty=qty,
             last_price=last_price,
         )
-        rows.append(roi_summary_to_row(summary))
+        rows.append(attach_evaluation_date(roi_summary_to_row(summary), eval_date))
 
     return pd.DataFrame(rows), events_by_asset
 

@@ -19,6 +19,7 @@ from importers.revolut.savings_statement import (
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 DEPOSIT_ASSET_IDS = ("p_re_eur", "p_re_pln", "g_re_eur", "g_re_pln")
@@ -248,6 +249,10 @@ def compute_revolut_deposit_roi(
             warnings.append(f"[{asset_id}] Brak operacji Depozyt/Wypłata w savings")
             continue
 
+        used = filter_on_or_before(deposit_df, RevolutDepositFile.DATE, valuation_date)
+        eval_date = evaluation_date_from_frame(
+            used, RevolutDepositFile.FILE_DATE, valuation_date
+        )
         terminal = latest_deposit_balance(deposit_df, valuation_date)
         summary = compute_deposit_roi(
             asset_id,
@@ -255,14 +260,16 @@ def compute_revolut_deposit_roi(
             valuation_date,
             terminal_unrealized=terminal,
         )
-        summary_rows.append(roi_summary_to_row(summary))
+        summary_rows.append(attach_evaluation_date(roi_summary_to_row(summary), eval_date))
         events_by_asset[asset_id] = deposit_cf
 
         tax_cf = build_tax_liability_cashflows(deposit_df, asset_id, year)
         if not tax_cf.empty:
             tax_id = tax_liability_asset_id(asset_id, year)
             tax_summary = compute_tax_liability_roi(tax_id, tax_cf, valuation_date)
-            summary_rows.append(roi_summary_to_row(tax_summary))
+            summary_rows.append(
+                attach_evaluation_date(roi_summary_to_row(tax_summary), eval_date)
+            )
             events_by_asset[tax_id] = tax_cf
 
     if not summary_rows:

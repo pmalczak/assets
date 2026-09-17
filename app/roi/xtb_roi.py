@@ -35,6 +35,7 @@ from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.compute_roi import roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 
 
 def compute_xtb_ticker_roi(
@@ -61,6 +62,9 @@ def compute_xtb_ticker_roi(
         closed_positions_df = pd.DataFrame()
 
     open_latest = latest_open_as_of(open_positions_df, valuation_date)
+    eval_date = evaluation_date_from_frame(
+        open_latest, XtbOpenPositionsFile.FILE_DATE, valuation_date
+    )
     cash_operations_df = _filter_xtb_rows_on_or_before(
         cash_operations_df, XtbCashOperationsFile.TIME, valuation_date
     )
@@ -92,7 +96,7 @@ def compute_xtb_ticker_roi(
             open_qty=open_qty,
             last_price=terminal if open_qty else 0.0,
         )
-        row = roi_summary_to_row(summary)
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
         row["instrument"] = mapping.instrument_for_xtb(ticker)
         rows.append(row)
 

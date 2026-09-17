@@ -290,6 +290,27 @@ class GoldTerminalMtmTests(unittest.TestCase):
         self.assertAlmostEqual(float(passed.iloc[0][CashFlowEvent.AMOUNT]), -15000.0)
         self.assertEqual(passed.iloc[0][CashFlowEvent.CATEGORY], CAPEX)
 
+    @patch("roi.compute_roi.is_asset_sold", return_value=False)
+    @patch("roi.compute_roi.resolve_terminal_value", return_value=(0.0, 25000.0, []))
+    @patch("importers.assets.read_assets.read_inventory")
+    def test_catalog_evaluation_date_from_inventory(
+        self, read_inv, _resolve_terminal, _is_sold
+    ):
+        from roi.compute_roi import compute_roi
+
+        read_inv.return_value = pd.DataFrame(
+            [
+                _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz"),
+                _inventory_row(tx_date="2025-06-20", instrument="Maple Leaf 1oz"),
+                _inventory_row(tx_date="2027-01-01", instrument="Future coin"),
+            ]
+        )
+        events = pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+        summary = compute_roi(
+            GOLD_COINS_ROI_ASSET_ID, events, None, date(2026, 9, 16)
+        )
+        self.assertEqual(summary.evaluation_date, "2025-06-20")
+
 
 class GoldCapexAllocationTests(unittest.TestCase):
     def test_capex_from_title_and_amount_rule(self):

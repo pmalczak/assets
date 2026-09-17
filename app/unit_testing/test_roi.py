@@ -77,6 +77,7 @@ class ComputeRoiTests(unittest.TestCase):
         self.assertEqual(summary.roi_nominal, 442710.0)
         self.assertIsNotNone(summary.xirr)
         self.assertGreater(summary.xirr, 0.0)
+        self.assertEqual(summary.evaluation_date, "2024-06-01")
 
     def test_property_divestment_means_sold_even_with_nav_row(self):
         """Nieruchomość: DIVESTMENT = is_sold (brak częściowego zmniejszenia jak u obligacji)."""
@@ -112,6 +113,7 @@ class ComputeRoiTests(unittest.TestCase):
         self.assertTrue(summary.is_sold)
         self.assertEqual(summary.terminal_realized, 650000.0)
         self.assertEqual(summary.terminal_unrealized, 0.0)
+        self.assertEqual(summary.evaluation_date, "2025-01-01")
 
     def test_property_divestment_sold_when_id_missing_from_assets_sheet(self):
         """roi_def ID (horbaczewskiego) nie jest wierszem assets — rodzic to `properties`."""

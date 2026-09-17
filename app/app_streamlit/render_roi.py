@@ -13,6 +13,7 @@ from app_proc.export_product_excel import (
 )
 from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download_button
 from evaluators.valuation_date import filter_excel_rows_on_or_before
+from importers.assets.data_model import AssetsDef
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
 from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
@@ -32,6 +33,7 @@ ROI_DISPLAY_COLUMNS = {
     "xirr": "XIRR",
     "is_sold": "Sprzedane",
 }
+ROI_EVALUATION_DATE_LABEL = "Data wyceny"
 ROI_FLOW_DISPLAY_COLUMNS = {
     CashFlowEvent.DATE: "Data",
     CashFlowEvent.AMOUNT: "Kwota",
@@ -60,6 +62,20 @@ ROI_VENUES = [
     ROI_VENUE_DEGIRO,
     ROI_VENUE_XTB,
 ]
+ROI_CALCULATION_DATE_LABEL = "Data obliczenia ROI"
+
+
+def _roi_calculation_date_input(
+    default_valuation_date: date | None,
+    *,
+    key: str,
+) -> date:
+    """Wspólna data graniczna obliczeń ROI dla każdego miejsca inwestycji."""
+    return st.date_input(
+        ROI_CALCULATION_DATE_LABEL,
+        value=default_valuation_date or date.today(),
+        key=key,
+    )
 
 
 def render_roi(default_valuation_date: date | None) -> None:
@@ -96,9 +112,8 @@ def render_roi(default_valuation_date: date | None) -> None:
 def _render_roi_catalog(default_valuation_date: date | None) -> None:
     st.subheader("ROI (nieruchomosci + cash + rocky-iv + zloto)")
 
-    valuation_date = st.date_input(
-        "Data wyceny ROI",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_valuation_date",
     )
 
@@ -160,7 +175,8 @@ def _render_roi_catalog(default_valuation_date: date | None) -> None:
 
     st.caption(
         "ROI nominalny = suma alokowanych przeplywow + wycena z arkusza asset-evaluation dla otwartych inwestycji. "
-        "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej na date wyceny. "
+        "XIRR = roczna stopa zwrotu z uwzglednieniem dat przeplywow i wyceny terminalnej "
+        "na datę obliczenia ROI. "
         "Cash (mbank_eur) liczony w EUR; nieruchomosci w PLN. "
         f"Dezynwestycja: DIVESTMENT w {A_CONFIG_FILE_NAME}; "
         "nieruchomosc: DIVESTMENT=sprzedane; brokerzy qty=0; cash=data zamkniecia manual."
@@ -220,9 +236,8 @@ def _render_roi_catalog(default_valuation_date: date | None) -> None:
 
 def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
     st.subheader("ROI Revolut robo (per ticker)")
-    valuation_date = st.date_input(
-        "Data wyceny ROI robo",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_robo_valuation_date",
     )
     st.caption(
@@ -259,15 +274,14 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
 
 def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
     st.subheader("ROI Revolut depozyty (savings)")
-    valuation_date = st.date_input(
-        "Data wyceny ROI depozytów",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_deposits_valuation_date",
     )
     st.caption(
         "Cashflow z `savings-statement`: Depozyt → CAPEX (−); Wypłata → DIVESTMENT (+). "
         "Oprocentowanie brutto poza CF (w Saldo/terminalu). "
-        "Zobowiązanie podatkowe 19% (rok wyceny) jako osobne aktywo."
+        "Zobowiązanie podatkowe 19% (rok daty obliczenia ROI) jako osobne aktywo."
     )
     try:
         with st.spinner("Liczenie ROI depozytów Revolut..."):
@@ -303,9 +317,8 @@ def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
 
 def render_roi_mbank_deposits(default_valuation_date: date | None) -> None:
     st.subheader("ROI mBank depozyty (per NR)")
-    valuation_date = st.date_input(
-        "Data wyceny ROI lokat mBank",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_mbank_deposits_valuation_date",
     )
     st.caption(
@@ -348,9 +361,8 @@ def render_roi_mbank_deposits(default_valuation_date: date | None) -> None:
 
 def render_roi_obligacje(default_valuation_date: date | None) -> None:
     st.subheader("ROI obligacje skarbowe (per kod)")
-    valuation_date = st.date_input(
-        "Data wyceny ROI obligacji",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_bonds_valuation_date",
     )
     st.caption(
@@ -388,15 +400,14 @@ def render_roi_obligacje(default_valuation_date: date | None) -> None:
 
 def render_roi_degiro(default_valuation_date: date | None) -> None:
     st.subheader("ROI DEGIRO")
-    valuation_date = st.date_input(
-        "Data wyceny ROI DEGIRO",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_degiro_valuation_date",
     )
     st.caption(
         "Analityka z pakietów DEGIRO: Transactions → CAPEX/DIVESTMENT, "
         "Account: Dywidenda → REVENUES. Terminal otwartych = Wartość w EUR "
-        "z najnowszego Portfolio <= data wyceny; opłaty/podatki/FX poza XIRR v1. "
+        "z najnowszego Portfolio <= data obliczenia ROI; opłaty/podatki/FX poza XIRR v1. "
         "Nazwa instrumentu z arkusza instruments (kolumna degiro = ISIN)."
     )
     try:
@@ -427,14 +438,13 @@ def render_roi_degiro(default_valuation_date: date | None) -> None:
 
 def render_roi_xtb(default_valuation_date: date | None) -> None:
     st.subheader("ROI XTB")
-    valuation_date = st.date_input(
-        "Data wyceny ROI XTB",
-        value=default_valuation_date or date.today(),
+    valuation_date = _roi_calculation_date_input(
+        default_valuation_date,
         key="roi_xtb_valuation_date",
     )
     st.caption(
         "Analityka z DATA_STEP (`p_xtb-cash`): Cash Operations → CAPEX/DIVESTMENT/REVENUES. "
-        "Terminal otwartych = Value z najnowszego Open Positions <= data wyceny. "
+        "Terminal otwartych = Value z najnowszego Open Positions <= data obliczenia ROI. "
         "Wpłaty/wypłaty/prowizje/podatki/FX poza XIRR per instrument (jak DEGIRO v1). "
         "Nazwa instrumentu z arkusza instruments (kolumna xtb = ticker)."
     )
@@ -506,12 +516,24 @@ def _prepare_flow_display(events: pd.DataFrame, valuation_date: date) -> pd.Data
     return events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
 
 
+def _roi_display_column_map(summary: pd.DataFrame) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for key, label in ROI_DISPLAY_COLUMNS.items():
+        mapping[key] = label
+        if key == "terminal_unrealized" and AssetsDef.EVALUATION_DATE in summary.columns:
+            mapping[AssetsDef.EVALUATION_DATE] = ROI_EVALUATION_DATE_LABEL
+    return mapping
+
+
 def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
-    display = summary[list(ROI_DISPLAY_COLUMNS.keys())].rename(columns=ROI_DISPLAY_COLUMNS)
+    column_map = _roi_display_column_map(summary)
+    keys = [key for key in column_map if key in summary.columns]
+    display = summary[keys].rename(columns=column_map)
     if "instrument" in summary.columns:
         display["Aktywo"] = summary["instrument"].astype(str)
-    for col in ROI_DISPLAY_COLUMNS.values():
-        if col in ("Sprzedane", "XIRR"):
+    skip_amount = {ROI_EVALUATION_DATE_LABEL, "Sprzedane", "XIRR"}
+    for col in column_map.values():
+        if col in skip_amount:
             continue
         if col in display.columns:
             display[col] = display[col].map(

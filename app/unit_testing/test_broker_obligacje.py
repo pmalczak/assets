@@ -336,6 +336,7 @@ class BondsRoiAndSnapshotTests(unittest.TestCase):
         sold_row = by_id["obligacjeskarbowe:COI0723"]
         self.assertTrue(bool(sold_row["is_sold"]))
         self.assertAlmostEqual(float(sold_row["terminal_unrealized"]), 0.0)
+        self.assertEqual(open_row[AssetsDef.EVALUATION_DATE], "2026-08-03")
         self.assertIn("obligacjeskarbowe:EDO1029", events)
 
     def test_evaluate_single_mtm_row(self):

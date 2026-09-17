@@ -24,6 +24,7 @@ from importers.revolut.trading_data_model import RevolutTradingFile
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 TO_ROBO_TITLE = "To Robo portfolio"
@@ -186,6 +187,9 @@ def compute_broker_ticker_roi_from_trading(
     filtered = filter_trading_on_or_before(trading_df, valuation_date)
     events_by_asset = build_broker_ticker_cashflows(filtered, broker_id)
     state = ticker_open_state(filtered)
+    eval_date = evaluation_date_from_frame(
+        filtered, RevolutTradingFile.FILE_DATE, valuation_date
+    )
 
     rows = []
     for asset_id, events in sorted(events_by_asset.items()):
@@ -198,7 +202,7 @@ def compute_broker_ticker_roi_from_trading(
             open_qty=st["qty"],
             last_price=st["last_price"],
         )
-        rows.append(roi_summary_to_row(summary))
+        rows.append(attach_evaluation_date(roi_summary_to_row(summary), eval_date))
 
     summary_df = pd.DataFrame(rows)
     return summary_df, events_by_asset

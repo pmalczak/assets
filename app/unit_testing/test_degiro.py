@@ -28,7 +28,7 @@ from importers.degiro.read_degiro import (
 from importers.statement_download_date import download_date_of
 from maintenance.move_degiro_files import move_degiro_files
 from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KIND_DEGIRO
-from importers.assets.data_model import Instruments
+from importers.assets.data_model import AssetsDef, Instruments
 from importers.assets.instruments import instrument_map_from_frame, instrument_table_from_rows
 from roi.categories import CAPEX, REVENUES
 from roi.data_model import CashFlowEvent
@@ -186,6 +186,7 @@ class DegiroRoiTests(unittest.TestCase):
             self.assertAlmostEqual(float(row["revenue"]), 5.0)
             self.assertAlmostEqual(float(row["terminal_unrealized"]), 402.0)
             self.assertAlmostEqual(float(row["roi_nominal"]), -229.0)
+            self.assertEqual(row[AssetsDef.EVALUATION_DATE], "2025-10-09")
             cats = events["p_degiro:LT0000128621"][CashFlowEvent.CATEGORY].tolist()
             self.assertEqual(cats, [CAPEX, REVENUES])
 

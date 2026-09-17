@@ -396,6 +396,7 @@ class XtbRoiTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["roi_nominal"]), -7.0)
         self.assertEqual(events["p_xtb:ETFPZUW20M40.PL"][CashFlowEvent.CATEGORY].tolist(), [CAPEX])
         self.assertAlmostEqual(float(row["opex"]), 0.0)
+        self.assertEqual(row[AssetsDef.EVALUATION_DATE], "2026-08-20")
 
     def test_sale_dividend_unknown_type_and_closed_sold(self):
         open_df = pd.DataFrame(

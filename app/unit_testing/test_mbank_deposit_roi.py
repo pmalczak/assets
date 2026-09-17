@@ -11,6 +11,7 @@ import pandas as pd
 
 from evaluators.evaluate_mbank import evaluate_mbank
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
+from importers.assets.data_model import AssetsDef
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.data_model import CashFlowEvent
@@ -46,6 +47,7 @@ def _row(
         MBankFile.MBANK_AMOUNT: amount,
         MBankFile.MBANK_TRANSACTION_PARTY: party,
         MBankFile.MBANK_ACCOUNT_NUMBER: account,
+        MBankFile.FILE_DATE: "2026-03-12",
     }
 
 
@@ -269,6 +271,8 @@ class ComputeMbankDepositRoiTests(unittest.TestCase):
         self.assertFalse(bool(by_id.loc[ASSET_OPEN, "is_sold"]))
         self.assertEqual(int(by_id.loc[ASSET_OPEN, "terminal_unrealized"]), 100000)
         self.assertFalse(any("snapshot NAV" in msg for msg in warnings))
+        self.assertEqual(by_id.loc[ASSET_OPEN, AssetsDef.EVALUATION_DATE], "2026-03-12")
+        self.assertEqual(by_id.loc[ASSET_CLOSED, AssetsDef.EVALUATION_DATE], "2026-03-12")
 
     def test_wygasniecie_also_terminates(self):
         df = pd.DataFrame(
