@@ -1,0 +1,26 @@
+{
+    "$HOME_PATH\\Dropbox\\INWESTYCJE\\assets\\assets_1.xlsx": {
+        "dependencies": [],
+        "digest": "f6bb142978413e71e4111488e2094308"
+    },
+    "assets.parquet": {
+        "dependencies": [
+            "$HOME_PATH\\Dropbox\\INWESTYCJE\\assets\\a_config.xlsx"
+        ],
+        "digest": "d758cd1282da8262d7a2abb0fea99f48",
+        "columns": {
+            "id": "str",
+            "typ": "str",
+            "waluta": "str",
+            "grupa": "str",
+            "opis": "str",
+            "RODZAJ*": "str",
+            "dost\u0119p": "str"
+        },
+        "data_frame_rows": 27
+    },
+    "$HOME_PATH\\Dropbox\\INWESTYCJE\\assets\\a_config.xlsx": {
+        "dependencies": [],
+        "digest": "9401d65920b0f31406b2901970455da1"
+    }
+}

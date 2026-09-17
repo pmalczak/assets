@@ -1,0 +1,8 @@
+﻿..\.venv\Scripts\python.exe : C:\Users\PiotrMalczak\PycharmProjects\assets\.venv\Scripts\python.exe: No module named py
+test
+At C:\Users\PiotrMalczak\AppData\Local\Temp\ps-script-e558835e-d01f-4ca7-acb6-8d7ec0062204.ps1:113 char:64
++ ... assets\app; ..\.venv\Scripts\python.exe -m pytest unit_testing/test_r ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\PiotrM...le named pytest:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

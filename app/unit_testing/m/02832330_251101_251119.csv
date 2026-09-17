@@ -1,0 +1,62 @@
+mBank S.A. Bankowość Detaliczna;
+		Skrytka Pocztowa 2108;
+		90-959 Łódź 2;
+		www.mBank.pl;
+		mLinia: 801 300 800;
+		+48 (42) 6 300 800;
+		
+
+#Klient;
+PIOTR BERNARD MALCZAK;
+
+Elektroniczne zestawienie operacji;
+
+#Za okres:;
+01.11.2025;19.11.2025;
+#Rodzaj rachunku;
+MKONTO INTENSIVE;
+#Waluta;
+PLN;
+#Numer rachunku;
+23 1140 2004 0000 3502 0283 2330 ;
+#Data następnej kapitalizacji;
+2025-11-30;
+#Oprocentowanie rachunku;
+0,00%;
+#Limit kredytu;
+0,00 PLN;
+#Oprocentowanie kredytu;
+0,00%;
+
+#Podsumowanie obrotów na rachunku;#Liczba operacji;#Wartość operacji
+Uznania;1;21 220,54 PLN;
+Obciążenia;18;229 522,30 PLN;
+Łącznie;19;-208 301,76 PLN;
+
+#Saldo początkowe;232 023,88 PLN;
+
+#Data księgowania;#Data operacji;#Opis operacji;#Tytuł;#Nadawca/Odbiorca;#Numer konta;#Kwota;#Saldo po operacji;
+2025-11-02;2025-11-02;PRZELEW WEWNĘTRZNY WYCHODZĄCY;"DAROWIZNA";"MIŁOSZ MALCZAK  ";'48114020040000310274924610';-50 000,00;182 023,88;
+2025-11-04;2025-11-04;ZAKUP PRZY UŻYCIU KARTY;"PRIME DENTAL       /WROCLAW                                           DATA TRANSAKCJI: 2025-11-03";"  ";'';-1 900,00;180 123,88;
+2025-11-05;2025-11-05;ZAKUP PRZY UŻYCIU KARTY;"ORLEN STACJA NR 440/BROJCE                                            DATA TRANSAKCJI: 2025-11-04";"  ";'';-11,99;180 111,89;
+2025-11-07;2025-11-07;ZAKUP PRZY UŻYCIU KARTY;"Revolut**1248*     /Dublin                                            DATA TRANSAKCJI: 2025-11-05";"  ";'';-500,00;179 611,89;
+2025-11-10;2025-11-10;ZAKUP PRZY UŻYCIU KARTY;"PAYPAL *HBOMAX HELP/3531436900                                        DATA TRANSAKCJI: 2025-11-08";"  ";'';-19,99;179 591,90;
+2025-11-14;2025-11-14;PRZELEW WEWNĘTRZNY WYCHODZĄCY;"WPŁATA WŁASNA";"MAŁGORZATA MALCZAK  UL. KIEMLICZÓW 9/4                 54-513 WROCŁAW";'46114020040000310236992796';-170 000,00;9 591,90;
+2025-11-16;2025-11-16;ZAKUP PRZY UŻYCIU KARTY;"CIMONE PICCOLO     /WROCLAW                                           DATA TRANSAKCJI: 2025-11-15";"  ";'';-154,00;9 437,90;
+2025-11-17;2025-11-17;BLIK ZAKUP E-COMMERCE;"ORANGE.PL";"  ";'';-52,49;9 385,41;
+2025-11-17;2025-11-17;PRZELEW ZEWNĘTRZNY PRZYCHODZĄCY;"Piotr Malczak Wyslano z Revolut";"Revolut Bank UAB                   Konstitucijos 21B  Vilnius 08130 LT  ";'29291000062469800209237093';21 220,54;30 605,95;
+2025-11-17;2025-11-17;PRZELEW PODATKOWY;"P67091402896                       25M10                              PPE";"URZĄD SKARBOWY  CENTRUM ROZLICZENIOWE";'14101000712221670914028960';-2 642,00;27 963,95;
+2025-11-18;2025-11-18;BLIK ZAKUP NFC;"HASTA LA VISTA";"  ";'';-3,50;27 960,45;
+2025-11-18;2025-11-18;BLIK ZAKUP NFC;"ROSSMANN 43";"  ";'';-3,49;27 956,96;
+2025-11-18;2025-11-18;BLIK ZAKUP NFC;"APTEKA MAGICZNA";"  ";'';-111,97;27 844,99;
+2025-11-18;2025-11-18;BLIK ZAKUP NFC;"APTEKA MAGICZNA";"  ";'';-35,97;27 809,02;
+2025-11-19;2025-11-19;WYPŁATA W BANKOMACIE;"UL. HORBACZEWSKIEGO/WROCLAW                                           DATA TRANSAKCJI: 2025-11-18";"  ";'';-1 000,00;26 809,02;
+2025-11-19;2025-11-19;WYPŁATA W BANKOMACIE;"UL. HORBACZEWSKIEGO/WROCLAW                                           DATA TRANSAKCJI: 2025-11-18";"  ";'';-1 000,00;25 809,02;
+2025-11-19;2025-11-19;WYPŁATA W BANKOMACIE;"UL. HORBACZEWSKIEGO/WROCLAW                                           DATA TRANSAKCJI: 2025-11-18";"  ";'';-1 000,00;24 809,02;
+2025-11-19;2025-11-19;WYPŁATA W BANKOMACIE;"UL. HORBACZEWSKIEGO/WROCLAW                                           DATA TRANSAKCJI: 2025-11-18";"  ";'';-1 000,00;23 809,02;
+2025-11-19;2025-11-19;BLIK ZAKUP NFC;"WESTIN TERRA RESTAURAN";"  ";'';-86,90;23 722,12;
+
+
+;;;;;;#Saldo końcowe;23 722,12 PLN;
+
+Niniejszy dokument sporządzono na podstawie art. 7 Ustawy Prawo Bankowe (Dz. U. Nr 140 z 199
