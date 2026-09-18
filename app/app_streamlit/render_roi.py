@@ -243,7 +243,9 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
     st.caption(
         "Analityka z blottera `p_re_robo-trading` — osobno od syntetycznego wiersza "
         "`p_re_robo` w Wartość aktywów → Inwestycje. Terminal otwartych = last price × qty; "
-        "sprzedane gdy qty=0. SELL → DIVESTMENT; DIVIDEND → REVENUES."
+        "sprzedane gdy qty=0. SELL → DIVESTMENT; DIVIDEND → REVENUES. "
+        "ROBO MANAGEMENT FEE → OPEX na sztucznym tickera `REVOLUT-ROBO` "
+        "(bez XIRR wiersza; wchodzi do Razem). TOP-UP poza XIRR."
     )
     try:
         with st.spinner("Liczenie ROI robo ticker..."):

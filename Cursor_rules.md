@@ -159,8 +159,8 @@ Market Data --> GMS Ranking --> Target --------+
 - Źródła: `trading-account-statement_*` + `trading-pnl-statement_*`.
 - Merge wielu plików: usuwać duplikaty; luki w okresach nazw → ostrzeżenie.
 - Po wczytaniu blottera: SELL → `Quantity` ujemne; BUY → `Total Amount` ujemne; FX → `1/fx`.
-- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Sama gotówka (wpłata bez kupna) też daje wiersz. `data wyceny` = `min(data snapshota, data-wyciągu)` — świeżość pobrania blottera, nie data ostatniej transakcji (brak transakcji nie oznacza starego wyciągu). Zakładka ROI per ticker **bez** gotówki w XIRR (TOP-UP/FEE poza XIRR jak dotychczas).
-- **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; FEE / TOP-UP poza XIRR; `is_sold` ⇔ qty≈0.
+- **Snapshot:** 1 wiersz — Σ koszt nabycia FIFO otwartych pozycji **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Sama gotówka (wpłata bez kupna) też daje wiersz. `data wyceny` = `min(data snapshota, data-wyciągu)` — świeżość pobrania blottera, nie data ostatniej transakcji (brak transakcji nie oznacza starego wyciągu).
+- **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; `ROBO MANAGEMENT FEE` → `OPEX` na sztucznym tickera `REVOLUT-ROBO` (`p_re_robo:REVOLUT-ROBO`; bez XIRR wiersza, `is_sold=false` — OPEX wchodzi do Razem); TOP-UP poza XIRR; `is_sold` ⇔ qty≈0 (poza `REVOLUT-ROBO`).
 - Terminal otwartych = last trade price × qty; `is_sold` ⇔ qty == 0.
 - Reconciliacja: Σ `CASH TOP-UP` vs `|To Robo portfolio|` na `revolut_eur` (tol. 0.01 EUR).
 
@@ -255,7 +255,7 @@ Pozostaje:
 - FX w XIRR cash (osobna decyzja, jeśli kiedyś wspólny mianownik PLN z nieruchomościami).
 - MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot brokerów udziałowych = pozycje (FIFO lub MTM wg źródła) **+ gotówka robocza**; ROI ticker Revolut = last price × qty. **Złoto:** to samo — nie przechodzić na wycenę online, dopóki ta decyzja nie zapadnie.
 - Klasyczne ROI katalogowe `p_re_robo` / `obligacjeskarbowe` z cash pool / `roi_def` (równolegle do ROI per instrument).
-- Fee / TOP-UP / podatki / przelewy PKO w XIRR per instrument; rozbicie instrumentów w tabeli Wartość aktywów → Inwestycje.
+- Fee / TOP-UP / podatki / przelewy PKO w XIRR **per instrument ETF** (Revolut: FEE jest na `REVOLUT-ROBO` i w Razem; TOP-UP nadal poza); rozbicie instrumentów w tabeli Wartość aktywów → Inwestycje.
 
 ---
 

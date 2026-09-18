@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""ROI per ticker z blottera Revolut robo + reconciliacja CASH TOP-UP vs ROR."""
+"""ROI per ticker z blottera Revolut robo + reconciliacja CASH TOP-UP vs ROR.
+
+ROBO MANAGEMENT FEE → sztuczny ticker REVOLUT-ROBO (OPEX; XIRR wiersza zwykle None,
+OPEX wchodzi do Razem). TOP-UP poza ROI ticker.
+"""
 from __future__ import annotations
 
 from datetime import date
@@ -29,6 +33,7 @@ from roi.xirr import cashflows_for_xirr, compute_xirr
 
 TO_ROBO_TITLE = "To Robo portfolio"
 DEFAULT_BROKER_ASSET_ID = "p_re_robo"
+ROBO_FEE_TICKER = "REVOLUT-ROBO"
 RECONCILE_TOLERANCE_EUR = 0.01
 
 
@@ -40,7 +45,10 @@ def build_broker_ticker_cashflows(
     trading_df: pd.DataFrame,
     broker_id: str,
 ) -> dict[str, pd.DataFrame]:
-    """BUY→CAPEX, SELL→DIVESTMENT, DIV→REVENUES. FEE/TOP-UP poza ROI ticker."""
+    """BUY→CAPEX, SELL→DIVESTMENT, DIV→REVENUES, ROBO FEE→OPEX na REVOLUT-ROBO.
+
+    TOP-UP poza ROI ticker.
+    """
     empty_cols = list(CashFlowEvent.COLUMN_ORDER)
     if trading_df is None or trading_df.empty:
         return {}
@@ -48,10 +56,6 @@ def build_broker_ticker_cashflows(
     by_ticker: dict[str, list[dict]] = {}
     for _, row in trading_df.iterrows():
         tx_type = row[RevolutTradingFile.TYPE]
-        ticker = row.get(RevolutTradingFile.TICKER)
-        if pd.isna(ticker) or not str(ticker).strip():
-            continue
-        ticker = str(ticker).strip()
         amount = parse_trading_number(row[RevolutTradingFile.TOTAL_AMOUNT])
         if amount is None:
             continue
@@ -59,17 +63,26 @@ def build_broker_ticker_cashflows(
         if event_date is None:
             continue
 
-        if tx_type == RevolutTradingFile.TYPE_BUY:
-            category = CAPEX
+        if tx_type == RevolutTradingFile.TYPE_ROBO_FEE:
+            ticker = ROBO_FEE_TICKER
+            category = OPEX
             amount = -abs(amount)
-        elif tx_type == RevolutTradingFile.TYPE_SELL:
-            category = DIVESTMENT
-            amount = abs(amount)
-        elif tx_type == RevolutTradingFile.TYPE_DIVIDEND:
-            category = REVENUES
-            amount = abs(amount)
         else:
-            continue
+            ticker = row.get(RevolutTradingFile.TICKER)
+            if pd.isna(ticker) or not str(ticker).strip():
+                continue
+            ticker = str(ticker).strip()
+            if tx_type == RevolutTradingFile.TYPE_BUY:
+                category = CAPEX
+                amount = -abs(amount)
+            elif tx_type == RevolutTradingFile.TYPE_SELL:
+                category = DIVESTMENT
+                amount = abs(amount)
+            elif tx_type == RevolutTradingFile.TYPE_DIVIDEND:
+                category = REVENUES
+                amount = abs(amount)
+            else:
+                continue
 
         asset_id = ticker_asset_id(broker_id, ticker)
         by_ticker.setdefault(ticker, []).append(
@@ -194,6 +207,20 @@ def compute_broker_ticker_roi_from_trading(
     rows = []
     for asset_id, events in sorted(events_by_asset.items()):
         ticker = asset_id.split(":", 1)[-1]
+        if ticker == ROBO_FEE_TICKER:
+            # Tylko OPEX; XIRR per wiersz zwykle None — OPEX wchodzi do Razem.
+            summary = compute_ticker_roi(
+                asset_id,
+                events,
+                valuation_date,
+                open_qty=0.0,
+                last_price=0.0,
+            )
+            row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+            row["is_sold"] = False
+            row["instrument"] = ROBO_FEE_TICKER
+            rows.append(row)
+            continue
         st = state.get(ticker, {"qty": 0.0, "last_price": 0.0})
         summary = compute_ticker_roi(
             asset_id,
@@ -202,7 +229,9 @@ def compute_broker_ticker_roi_from_trading(
             open_qty=st["qty"],
             last_price=st["last_price"],
         )
-        rows.append(attach_evaluation_date(roi_summary_to_row(summary), eval_date))
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+        row["instrument"] = ticker
+        rows.append(row)
 
     summary_df = pd.DataFrame(rows)
     return summary_df, events_by_asset
