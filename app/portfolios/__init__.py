@@ -6,13 +6,11 @@ from portfolios.assignment import (
     PORTFOLIO_GM_ASSET_IDS,
     PORTFOLIO_GM_BROKER_ASSET_IDS,
     PORTFOLIO_GM_ORDER,
-    PORTFOLIO_GM_OVERLAY_ASSET_IDS,
     PORTFOLIO_NIERUCHOMOSCI,
     PORTFOLIO_OGOLNY,
     PORTFOLIO_REVOLUT_ROBO,
     PORTFOLIO_REVOLUT_ROBO_ASSET_IDS,
     ROLE_EXECUTION,
-    ROLE_OVERLAY,
     attach_portfolio_column,
     gm_asset_role,
     investments_by_portfolio,
@@ -22,7 +20,12 @@ from portfolios.assignment import (
     portfolio_nav_pln,
     rows_with_portfolio,
 )
-from portfolios.composition import compose_gm_composition, load_gm_broker_holdings
+from portfolios.composition import (
+    compose_gm_composition,
+    compose_gm_instrument_composition,
+    load_gm_broker_holdings,
+    load_gm_position_lines,
+)
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 __all__ = [
@@ -32,19 +35,19 @@ __all__ = [
     "PORTFOLIO_GM_ASSET_IDS",
     "PORTFOLIO_GM_BROKER_ASSET_IDS",
     "PORTFOLIO_GM_ORDER",
-    "PORTFOLIO_GM_OVERLAY_ASSET_IDS",
     "PORTFOLIO_NIERUCHOMOSCI",
     "PORTFOLIO_OGOLNY",
     "PORTFOLIO_REVOLUT_ROBO",
     "PORTFOLIO_REVOLUT_ROBO_ASSET_IDS",
     "ROLE_EXECUTION",
-    "ROLE_OVERLAY",
     "attach_portfolio_column",
     "compose_gm_composition",
+    "compose_gm_instrument_composition",
     "gm_asset_role",
     "investments_by_portfolio",
     "investments_with_portfolio",
     "load_gm_broker_holdings",
+    "load_gm_position_lines",
     "nav_path_metrics",
     "portfolio_for_asset_id",
     "portfolio_for_row",
