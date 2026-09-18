@@ -37,7 +37,10 @@ from importers.xtb.read_xtb import (
     _read_xtb_cash,
     _read_xtb_open,
     inspect_xtb_export,
+    latest_xtb_cash_total,
     period_gap_warnings,
+    resolve_xtb_cash_value,
+    xtb_cash_total_amount,
     xtb_open_position_rows,
     xtb_open_positions_value,
 )
@@ -297,6 +300,78 @@ class ReadXtbTests(unittest.TestCase):
         self.assertEqual(len(cash), 1)
         self.assertEqual(cash.iloc[0][XtbCashOperationsFile.TYPE], "Deposit")
 
+    def test_xtb_cash_total_amount_reads_footer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / (
+                f"xtb_open_closed_cash_{DEFAULT_XTB_CLIENT_ID}_2026-07-31_2026-08-20.xlsx"
+            )
+            path.write_bytes(
+                _xtb_workbook_bytes(
+                    cash_amount=None,
+                    extra_cash=[{"Type": "Total", "Amount": 214.71}],
+                )
+            )
+            self.assertAlmostEqual(xtb_cash_total_amount(path), 214.71)
+
+    def test_latest_xtb_cash_total_picks_newest_period(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            older = root / (
+                f"xtb_open_closed_cash_{DEFAULT_XTB_CLIENT_ID}_2026-07-01_2026-07-31.xlsx"
+            )
+            newer = root / (
+                f"xtb_open_closed_cash_{DEFAULT_XTB_CLIENT_ID}_2026-08-01_2026-08-20.xlsx"
+            )
+            older.write_bytes(
+                _xtb_workbook_bytes(
+                    period_start="2026-07-01",
+                    period_end="2026-07-31",
+                    cash_amount=None,
+                    extra_cash=[{"Type": "Total", "Amount": 10.0}],
+                )
+            )
+            newer.write_bytes(
+                _xtb_workbook_bytes(
+                    period_start="2026-08-01",
+                    period_end="2026-08-20",
+                    cash_amount=None,
+                    extra_cash=[{"Type": "Total", "Amount": 278.59}],
+                )
+            )
+            total = latest_xtb_cash_total(root, date(2026, 8, 20))
+            self.assertIsNotNone(total)
+            amount, period_end = total
+            self.assertAlmostEqual(amount, 278.59)
+            self.assertEqual(period_end, "2026-08-20")
+
+    def test_resolve_xtb_cash_prefers_open_free_funds(self):
+        open_df = pd.DataFrame(
+            [
+                _open_row(product="Cash", instrument="Free funds", ticker="", value=100.0, type_="CASH"),
+            ]
+        )
+        with patch(
+            "importers.xtb.read_xtb.latest_xtb_cash_total",
+            return_value=(999.0, "2026-08-20"),
+        ):
+            value, n_rows = resolve_xtb_cash_value(open_df, Path("/tmp"), date(2026, 8, 20))
+        self.assertAlmostEqual(value, 100.0)
+        self.assertEqual(n_rows, 1)
+
+    def test_resolve_xtb_cash_falls_back_to_operations_total(self):
+        open_df = pd.DataFrame(
+            [
+                _open_row(ticker="ETFPZUW20M40.PL", volume=167, value=21429.44),
+            ]
+        )
+        with patch(
+            "importers.xtb.read_xtb.latest_xtb_cash_total",
+            return_value=(214.71, "2026-08-20"),
+        ):
+            value, n_rows = resolve_xtb_cash_value(open_df, Path("/tmp"), date(2026, 8, 20))
+        self.assertAlmostEqual(value, 214.71)
+        self.assertEqual(n_rows, 1)
+
     def test_period_gap_warning(self):
         warnings = period_gap_warnings(
             [(date(2026, 1, 1), date(2026, 3, 31)), (date(2026, 5, 1), date(2026, 8, 20))],
@@ -341,6 +416,39 @@ class EvaluateXtbTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 21693.32)
         self.assertIn("1 poz. + 1 cash", result.iloc[0][AssetsDef.DESCR])
         self.assertEqual(result.iloc[0][AssetsDef.CURRENCY], "PLN")
+
+    def test_evaluate_falls_back_to_cash_operations_total(self):
+        open_df = pd.DataFrame(
+            [
+                _open_row(ticker="ETFPZUW20M40.PL", volume=167, value=21429.44, instrument="WIG20TR + mWIG40TR"),
+                _open_row(
+                    ticker="ETFPZUW20M40.PL",
+                    volume=167,
+                    value=21429.44,
+                    instrument="2761661939",
+                    type_="BUY",
+                ),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset_dir = root / DEFAULT_XTB_ASSET_ID
+            asset_dir.mkdir()
+            with (
+                patch("evaluators.evaluate_broker_xtb.resolve_asset_dir", return_value=asset_dir),
+                patch("evaluators.evaluate_broker_xtb.read_xtb_open", return_value=open_df),
+                patch(
+                    "evaluators.evaluate_broker_xtb.resolve_xtb_cash_value",
+                    return_value=(214.71, 1),
+                ),
+            ):
+                result, warnings = evaluate_broker_xtb(
+                    root, DEFAULT_XTB_ASSET_ID, _catalog_row(), date(2026, 8, 20)
+                )
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(result), 1)
+        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 21644.15)
+        self.assertIn("1 poz. + 1 cash", result.iloc[0][AssetsDef.DESCR])
 
     def test_evaluate_missing_dir_returns_empty(self):
         missing = Path("/tmp/definitely-missing-p_xtb")

@@ -318,7 +318,7 @@ def load_gm_position_lines(
     from importers.xtb.read_xtb import (
         latest_open_as_of,
         read_xtb_open,
-        xtb_cash_rows,
+        resolve_xtb_cash_value,
         xtb_open_position_rows,
     )
 
@@ -452,16 +452,7 @@ def load_gm_position_lines(
                             evaluation_date=eval_date,
                         )
                     )
-            cash_rows = xtb_cash_rows(latest)
-            cash_value = (
-                float(
-                    pd.to_numeric(cash_rows[XtbOpenPositionsFile.VALUE], errors="coerce")
-                    .fillna(0)
-                    .sum()
-                )
-                if not cash_rows.empty
-                else 0.0
-            )
+            cash_value, _n_cash = resolve_xtb_cash_value(latest, asset_dir, valuation_date)
             if abs(cash_value) > 1e-9:
                 lines.append(
                     GmPositionLine(
