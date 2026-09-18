@@ -15,6 +15,7 @@ from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsDef
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
+from roi.aggregate_venue_roi import aggregate_venue_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
 from roi.broker_trading_roi import compute_revolut_robo_ticker_roi
 from roi.degiro_roi import compute_degiro_ticker_roi
@@ -194,8 +195,7 @@ def _render_roi_catalog(default_valuation_date: date | None) -> None:
     c2.metric("Sprzedane", sold_count)
     c3.metric("Suma ROI nominal", f"{total_roi:,}".replace(",", " "))
 
-    display = _format_roi_summary_display(summary)
-    st.dataframe(dataframe_for_streamlit(display), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     opt_in_download_button(
         prepare_label="Przygotuj pobieranie ROI (CSV)",
@@ -265,7 +265,7 @@ def render_roi_revolut_robo(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = _asset_selectbox("Ticker (robo)", asset_ids, "roi_robo_selected_ticker")
@@ -303,7 +303,7 @@ def render_roi_revolut_deposits(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = _asset_selectbox("Depozyt", asset_ids, "roi_deposits_selected_asset")
@@ -347,7 +347,7 @@ def render_roi_mbank_deposits(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = _asset_selectbox("Lokata (NR)", asset_ids, "roi_mbank_deposits_selected_asset")
@@ -391,7 +391,7 @@ def render_roi_obligacje(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     asset_ids = sorted(summary["asset_id"].astype(str).tolist())
     selected = _asset_selectbox("Kod obligacji", asset_ids, "roi_bonds_selected_code")
@@ -430,7 +430,7 @@ def render_roi_degiro(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     selected = _roi_instrument_picker(summary, "roi_degiro_selected_isin", "ISIN (DEGIRO)")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla instrumentu.")
@@ -468,10 +468,30 @@ def render_roi_xtb(default_valuation_date: date | None) -> None:
     if summary is None:
         return
 
-    st.dataframe(_format_roi_summary_display(summary), width="stretch", hide_index=True)
+    _render_venue_summary_tables(summary, events_by_asset, valuation_date)
 
     selected = _roi_instrument_picker(summary, "roi_xtb_selected_ticker", "Ticker (XTB)")
     _render_flow_details(events_by_asset, selected, valuation_date, empty_msg="Brak przepływów dla instrumentu.")
+
+
+def _render_venue_summary_tables(
+    summary: pd.DataFrame,
+    events_by_asset: dict[str, pd.DataFrame],
+    valuation_date: date,
+) -> None:
+    """Tabela Razem (XIRR soczewki) ponad tabelą szczegółową."""
+    total = aggregate_venue_roi(summary, events_by_asset, valuation_date)
+    if not total.empty:
+        st.dataframe(
+            dataframe_for_streamlit(_format_roi_summary_display(total)),
+            width="stretch",
+            hide_index=True,
+        )
+    st.dataframe(
+        dataframe_for_streamlit(_format_roi_summary_display(summary)),
+        width="stretch",
+        hide_index=True,
+    )
 
 
 def _apply_sold_filter(summary: pd.DataFrame) -> pd.DataFrame | None:
