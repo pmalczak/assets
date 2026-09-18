@@ -13,7 +13,7 @@ from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID, XtbOpenPositionsFile
 from importers.xtb.read_xtb import (
     latest_open_as_of,
     read_xtb_open,
-    xtb_cash_rows,
+    resolve_xtb_cash_value,
     xtb_open_position_rows,
     xtb_open_positions_value,
 )
@@ -49,13 +49,13 @@ class XtbSnapshotEvaluator(BrokerSnapshotEvaluator):
             return None, warnings
 
         position_rows = xtb_open_position_rows(latest)
-        cash_rows = xtb_cash_rows(latest)
+        cash_value, n_cash_rows = resolve_xtb_cash_value(latest, p, valuation_date)
         return (
             BrokerHoldings(
                 positions_value=xtb_open_positions_value(position_rows),
-                cash_value=xtb_open_positions_value(cash_rows),
+                cash_value=cash_value,
                 n_positions=len(position_rows),
-                n_cash_rows=len(cash_rows),
+                n_cash_rows=n_cash_rows,
                 evaluation_date=str(latest[XtbOpenPositionsFile.PERIOD_END].max()),
                 currency=_currency(assets_file_row, latest),
             ),

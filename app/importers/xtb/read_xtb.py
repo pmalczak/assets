@@ -250,6 +250,66 @@ def xtb_open_positions_value(open_positions: pd.DataFrame) -> float:
     return float(pd.to_numeric(open_positions[XtbOpenPositionsFile.VALUE], errors="coerce").fillna(0.0).sum())
 
 
+def xtb_cash_total_amount(path: Path) -> float | None:
+    """Amount z wiersza Type=Total/Suma w Cash Operations (saldo gotówki, nie CF)."""
+    raw = read_xtb_sheet(Path(path), XTB_SHEET_CASH_OPERATIONS)
+    if raw is None or raw.empty or XtbCashOperationsFile.TYPE not in raw.columns:
+        return None
+    if XtbCashOperationsFile.AMOUNT not in raw.columns:
+        return None
+    footers = raw.loc[raw[XtbCashOperationsFile.TYPE].map(is_xtb_cash_footer)]
+    if footers.empty:
+        return None
+    value = parse_xtb_number(footers.iloc[-1].get(XtbCashOperationsFile.AMOUNT))
+    if value is None:
+        return None
+    return float(value)
+
+
+def latest_xtb_cash_total(
+    asset_dir: Path,
+    valuation_date: date,
+    *,
+    client_id: str = DEFAULT_XTB_CLIENT_ID,
+) -> tuple[float, str] | None:
+    """Saldo Total z najnowszego raportu Cash Operations z period_end <= valuation_date."""
+    path = latest_xtb_report_as_of(
+        asset_dir,
+        valuation_date,
+        required_kind=CASH_KIND,
+        client_id=client_id,
+    )
+    if path is None:
+        return None
+    amount = xtb_cash_total_amount(path)
+    if amount is None:
+        return None
+    _, end = extract_xtb_report_period(path)
+    return float(amount), end.isoformat()
+
+
+def resolve_xtb_cash_value(
+    open_latest: pd.DataFrame,
+    asset_dir: Path,
+    valuation_date: date,
+) -> tuple[float, int]:
+    """Gotówka XTB: Free funds z Open, a gdy brak — Total z Cash Operations.
+
+    Zwraca (cash_value, n_cash_rows). Total nie wchodzi do CF/ROI.
+    """
+    cash_rows = xtb_cash_rows(open_latest)
+    from_open = xtb_open_positions_value(cash_rows)
+    if abs(from_open) > 1e-9:
+        return from_open, len(cash_rows)
+    total = latest_xtb_cash_total(asset_dir, valuation_date)
+    if total is None:
+        return 0.0, 0
+    amount, _period_end = total
+    if abs(amount) <= 1e-9:
+        return 0.0, 0
+    return float(amount), 1
+
+
 def parse_xtb_number(value) -> float | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
