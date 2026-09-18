@@ -19,7 +19,6 @@ from portfolios.assignment import (
     PORTFOLIO_OGOLNY,
     PORTFOLIO_REVOLUT_ROBO,
     ROLE_EXECUTION,
-    ROLE_OVERLAY,
     assets_in_portfolio,
     attach_portfolio_column,
     gm_asset_role,
@@ -38,7 +37,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
     def test_known_membership_and_default(self):
         self.assertEqual(portfolio_for_asset_id(DEFAULT_DEGIRO_ASSET_ID), PORTFOLIO_GM)
         self.assertEqual(portfolio_for_asset_id(DEFAULT_XTB_ASSET_ID), PORTFOLIO_GM)
-        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_GM)
+        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_OGOLNY)
         self.assertEqual(
             portfolio_for_asset_id(DEFAULT_REVOLUT_ROBO_ASSET_ID),
             PORTFOLIO_REVOLUT_ROBO,
@@ -47,8 +46,8 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_OGOLNY)
         self.assertEqual(portfolio_for_asset_id("nowe-aktywo"), DEFAULT_PORTFOLIO)
 
-    def test_gm_roles_execution_vs_overlay(self):
-        self.assertEqual(gm_asset_role(GOLD_COINS_ROI_ASSET_ID), ROLE_OVERLAY)
+    def test_gm_roles_execution_only(self):
+        self.assertIsNone(gm_asset_role(GOLD_COINS_ROI_ASSET_ID))
         self.assertEqual(gm_asset_role(DEFAULT_DEGIRO_ASSET_ID), ROLE_EXECUTION)
         self.assertEqual(gm_asset_role(DEFAULT_XTB_ASSET_ID), ROLE_EXECUTION)
         self.assertIsNone(gm_asset_role("obligacjeskarbowe"))
@@ -284,8 +283,8 @@ class PortfolioNavHistoryTests(unittest.TestCase):
             gm = load_portfolio_nav_history(PORTFOLIO_GM, root)
             ogolny = load_portfolio_nav_history(PORTFOLIO_OGOLNY, root)
             robo = load_portfolio_nav_history(PORTFOLIO_REVOLUT_ROBO, root)
-        self.assertEqual(list(gm.values), [150.0, 200.0])
-        self.assertEqual(list(ogolny.values), [20.0, 30.0])
+        self.assertEqual(list(gm.values), [100.0, 150.0])
+        self.assertEqual(list(ogolny.values), [70.0, 80.0])
         self.assertEqual(list(robo.values), [0.0, 800.0])
 
     def test_nav_history_without_typ_column_still_assigns_by_id(self):

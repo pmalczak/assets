@@ -18,16 +18,19 @@ from importers.assets.data_model import AssetsDef
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_GM,
-    ROLE_EXECUTION,
-    ROLE_OVERLAY,
+    PORTFOLIO_OGOLNY,
     assets_in_portfolio,
     load_portfolio_nav_history,
     nav_pln_for_portfolio,
 )
-from portfolios.composition import compose_gm_composition, load_gm_broker_holdings
+from portfolios.composition import (
+    compose_gm_instrument_composition,
+    load_gm_position_lines,
+)
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 1
+_GM_POSITIONS_SCHEMA = 1
 _COMPOSITION_COLUMNS = (
     AssetsDef.ID,
     AssetsDef.DESCR,
@@ -44,6 +47,14 @@ _COMPOSITION_COLUMNS = (
 @st.cache_data(show_spinner=False)
 def _load_portfolio_nav(portfolio_name: str, _schema: int = _PORTFOLIO_NAV_SCHEMA) -> pd.Series:
     return load_portfolio_nav_history(portfolio_name)
+
+
+@st.cache_data(show_spinner=False)
+def _load_gm_positions(
+    valuation_date: date,
+    _schema: int = _GM_POSITIONS_SCHEMA,
+) -> tuple[list, list[str]]:
+    return load_gm_position_lines(valuation_date)
 
 
 def render_portfolios() -> None:
@@ -64,6 +75,7 @@ def render_portfolios() -> None:
 
     if st.button("Odśwież NAV", key="portfolios_refresh"):
         _load_portfolio_nav.clear()
+        _load_gm_positions.clear()
         _load_benchmarks.clear()
         st.rerun()
 
@@ -125,38 +137,43 @@ def _render_gm_composition(
     latest_snapshot_date: date,
 ) -> None:
     st.caption(
-        f"Wykonanie strategii: DEGIRO + XTB. Złoto jest overlay w NAV portfela {PORTFOLIO_GM}, "
-        "nie nogą rankingu U7. Data snapshotu ≠ data sygnału U7. "
-        "To nie jest XIRR per ticker."
+        f"Alokacja per instrument (DEGIRO + XTB). Cel U7 ≈ 1/3 NAV na aktywo. "
+        f"Data snapshotu ≠ data sygnału U7. Portfel {PORTFOLIO_GM} bez złota "
+        f"(złoto w {PORTFOLIO_OGOLNY})."
     )
 
-    holdings: dict = {}
-    holdings_warnings: list[str] = []
+    lines: list = []
+    position_warnings: list[str] = []
     try:
-        with st.spinner("Rozbicie pozycji / gotówki brokerów..."):
-            holdings, holdings_warnings = load_gm_broker_holdings(latest_snapshot_date)
+        with st.spinner("Ładowanie pozycji instrumentów..."):
+            lines, position_warnings = _load_gm_positions(latest_snapshot_date)
     except Exception as exc:
-        holdings_warnings = [f"Nie udało się wczytać holdings: {exc}"]
+        position_warnings = [f"Nie udało się wczytać pozycji: {exc}"]
 
-    for msg in holdings_warnings:
+    for msg in position_warnings:
         st.warning(msg)
 
-    table = compose_gm_composition(latest_snapshot, holdings)
-    total_nav = float(table[AssetsDef.VALUE_PLN].sum())
-    execution_nav = float(table.loc[table["Rola"] == ROLE_EXECUTION, AssetsDef.VALUE_PLN].sum())
-    overlay_nav = float(table.loc[table["Rola"] == ROLE_OVERLAY, AssetsDef.VALUE_PLN].sum())
+    total_nav = nav_pln_for_portfolio(latest_snapshot, PORTFOLIO_GM)
+    table = compose_gm_instrument_composition(latest_snapshot, lines)
+    position_nav = 0.0
+    if not table.empty and "kind" in table.columns:
+        position_nav = float(
+            table.loc[table["kind"] == "position", AssetsDef.VALUE_PLN].sum()
+        )
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric(f"NAV {PORTFOLIO_GM}", f"{total_nav:,.0f} PLN".replace(",", " "))
-    c2.metric("Wykonanie (DEGIRO+XTB)", f"{execution_nav:,.0f} PLN".replace(",", " "))
-    c3.metric("Overlay (złoto)", f"{overlay_nav:,.0f} PLN".replace(",", " "))
+    c2.metric("Pozycje (bez gotówki)", f"{position_nav:,.0f} PLN".replace(",", " "))
 
-    missing = table.loc[~table["w_snapshocie"], "Składnik"].tolist()
-    if missing:
-        st.info("Brak w tym snapshocie: " + ", ".join(missing))
+    if table.empty:
+        st.info(
+            "Brak pozycji instrumentów dla tego snapshota — "
+            "sprawdź wyciągi DEGIRO/XTB albo wygeneruj ponownie snapshot."
+        )
+        return
 
     display = format_amount_columns(
-        with_value_currency_pln_order(table.drop(columns=["id", "w_snapshocie"]))
+        with_value_currency_pln_order(table.drop(columns=["kind"], errors="ignore"))
     )
     st.dataframe(
         display,
@@ -166,8 +183,6 @@ def _render_gm_composition(
             display,
             {
                 "Udział": st.column_config.NumberColumn(format="percent"),
-                "Pozycje PLN": st.column_config.NumberColumn(format="%.0f"),
-                "Gotówka PLN": st.column_config.NumberColumn(format="%.0f"),
             },
         ),
     )

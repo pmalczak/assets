@@ -10,7 +10,6 @@ from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
-from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
 
 PORTFOLIO_OGOLNY = "0 OGÓLNY"
 PORTFOLIO_NIERUCHOMOSCI = "1 NIERUCHOMOSCI"
@@ -21,15 +20,12 @@ DEFAULT_PORTFOLIO = PORTFOLIO_OGOLNY
 PORTFOLIO_GM_ORDER: tuple[str, ...] = (
     DEFAULT_DEGIRO_ASSET_ID,
     DEFAULT_XTB_ASSET_ID,
-    GOLD_COINS_ROI_ASSET_ID,
 )
 PORTFOLIO_GM_ASSET_IDS = frozenset(PORTFOLIO_GM_ORDER)
 PORTFOLIO_GM_BROKER_ASSET_IDS = frozenset({DEFAULT_DEGIRO_ASSET_ID, DEFAULT_XTB_ASSET_ID})
-PORTFOLIO_GM_OVERLAY_ASSET_IDS = frozenset({GOLD_COINS_ROI_ASSET_ID})
 PORTFOLIO_REVOLUT_ROBO_ASSET_IDS = frozenset({DEFAULT_REVOLUT_ROBO_ASSET_ID})
 
 ROLE_EXECUTION = "wykonanie"
-ROLE_OVERLAY = "overlay"
 
 KNOWN_PORTFOLIOS: tuple[str, ...] = (
     PORTFOLIO_OGOLNY,
@@ -49,10 +45,8 @@ def portfolio_for_asset_id(asset_id: str | None) -> str:
 
 
 def gm_asset_role(asset_id: str | None) -> str | None:
-    """Rola składnika w portfelu 3 G-MOMENTUM: wykonanie U7 vs overlay (złoto)."""
+    """Rola składnika w portfelu 3 G-MOMENTUM (wykonanie U7)."""
     key = str(asset_id or "").strip()
-    if key in PORTFOLIO_GM_OVERLAY_ASSET_IDS:
-        return ROLE_OVERLAY
     if key in PORTFOLIO_GM_BROKER_ASSET_IDS:
         return ROLE_EXECUTION
     return None
