@@ -10,14 +10,16 @@ from analyse_assets.account_tx import AccountTx
 from importers.assets.data_model import AssetsDef
 from importers.revolut.trading_data_model import RevolutTradingFile
 from roi.broker_trading_roi import (
+    ROBO_FEE_TICKER,
     TO_ROBO_TITLE,
     build_broker_ticker_cashflows,
     compute_broker_ticker_roi_from_trading,
     compute_revolut_robo_ticker_roi,
     reconcile_robo_top_up,
+    ticker_asset_id,
     ticker_open_state,
 )
-from roi.categories import CAPEX, DIVESTMENT, REVENUES
+from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.data_model import CashFlowEvent
 
 
@@ -93,6 +95,47 @@ class BrokerTickerCashflowTests(unittest.TestCase):
         self.assertAlmostEqual(float(df.iloc[1][CashFlowEvent.AMOUNT]), 24.0)
         self.assertAlmostEqual(float(df.iloc[2][CashFlowEvent.AMOUNT]), 1.5)
 
+    def test_robo_management_fee_goes_to_synthetic_ticker(self):
+        trading = pd.DataFrame(
+            [
+                _row(
+                    dt="2026-01-01T10:00:00Z",
+                    ticker="PRAR",
+                    tx_type=RevolutTradingFile.TYPE_BUY,
+                    qty=10.0,
+                    price=5.0,
+                    total=-50.0,
+                ),
+                _row(
+                    dt="2026-02-01T00:00:00Z",
+                    ticker="",
+                    tx_type=RevolutTradingFile.TYPE_ROBO_FEE,
+                    qty="",
+                    price="",
+                    total=-0.47,
+                ),
+                _row(
+                    dt="2026-03-01T00:00:00Z",
+                    ticker=None,
+                    tx_type=RevolutTradingFile.TYPE_ROBO_FEE,
+                    qty="",
+                    price="",
+                    total=0.36,
+                ),
+            ]
+        )
+        events = build_broker_ticker_cashflows(trading, "p_re_robo")
+        fee_id = ticker_asset_id("p_re_robo", ROBO_FEE_TICKER)
+        self.assertEqual(set(events), {"p_re_robo:PRAR", fee_id})
+        fees = events[fee_id]
+        self.assertEqual(fees[CashFlowEvent.CATEGORY].tolist(), [OPEX, OPEX])
+        self.assertAlmostEqual(float(fees.iloc[0][CashFlowEvent.AMOUNT]), -0.47)
+        self.assertAlmostEqual(float(fees.iloc[1][CashFlowEvent.AMOUNT]), -0.36)
+        self.assertEqual(fees[CashFlowEvent.DESCRIPTION].tolist(), [
+            RevolutTradingFile.TYPE_ROBO_FEE,
+            RevolutTradingFile.TYPE_ROBO_FEE,
+        ])
+
 
 class BrokerTickerRoiTests(unittest.TestCase):
     def test_partial_sell_open_terminal_last_price(self):
@@ -163,6 +206,40 @@ class BrokerTickerRoiTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["terminal_unrealized"]), 0.0)
         self.assertAlmostEqual(float(row["terminal_realized"]), 50.0)
         self.assertAlmostEqual(float(row["roi_nominal"]), 10.0)  # -40 + 50
+
+    def test_robo_fee_ticker_opex_not_sold_no_xirr(self):
+        trading = pd.DataFrame(
+            [
+                _row(
+                    dt="2026-01-01T00:00:00Z",
+                    ticker="AAA",
+                    tx_type=RevolutTradingFile.TYPE_BUY,
+                    qty=10.0,
+                    price=10.0,
+                    total=-100.0,
+                ),
+                _row(
+                    dt="2026-02-01T00:00:00Z",
+                    ticker="",
+                    tx_type=RevolutTradingFile.TYPE_ROBO_FEE,
+                    qty="",
+                    price="",
+                    total=-1.5,
+                ),
+            ]
+        )
+        summary, events = compute_broker_ticker_roi_from_trading(
+            trading, date(2026, 6, 1), "p_re_robo"
+        )
+        fee_id = ticker_asset_id("p_re_robo", ROBO_FEE_TICKER)
+        self.assertIn(fee_id, events)
+        fee_row = summary.loc[summary["asset_id"] == fee_id].iloc[0]
+        self.assertFalse(bool(fee_row["is_sold"]))
+        self.assertEqual(fee_row["instrument"], ROBO_FEE_TICKER)
+        self.assertAlmostEqual(float(fee_row["opex"]), -2.0)  # round(-1.5) → -2
+        self.assertAlmostEqual(float(fee_row["capex"]), 0.0)
+        self.assertAlmostEqual(float(fee_row["terminal_unrealized"]), 0.0)
+        self.assertTrue(fee_row["xirr"] is None or pd.isna(fee_row["xirr"]))
 
     def test_dividend_inflow(self):
         trading = pd.DataFrame(
