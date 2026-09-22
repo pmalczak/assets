@@ -79,7 +79,7 @@ def resolve_terminal_value(
         return terminal_realized, 0.0, warnings
 
     if is_gold_roi_asset(asset_id):
-        terminal_unrealized, gold_warnings = resolve_gold_terminal_unrealized(
+        terminal_unrealized, _gold_price_date, gold_warnings = resolve_gold_terminal_unrealized(
             valuation_date,
             cashflows=filtered,
         )

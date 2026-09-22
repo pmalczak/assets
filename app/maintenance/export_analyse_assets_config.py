@@ -41,8 +41,8 @@ def _catalog() -> pd.DataFrame:
             {"asset_id": "opoczynska", "output_file": "mbank_opoczynska.xlsx", "order": 9, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
             {"asset_id": "karpacz", "output_file": "mbank_karpacz.xlsx", "order": 10, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
             {"asset_id": "cash", "output_file": "mbank_cash.xlsx", "order": 11, "enabled": 1, "pool_id": MBANK_EUR},
-            # zloto-monety: terminal qty×cena (nie lookup w asset-evaluation).
-            # CAPEX: rules. Inventory: inventory. Ceny: unit-price-evaluation.
+            # zloto-monety: terminal sztuki × NBP × 0,99 (nie lookup w asset-evaluation).
+            # CAPEX: rules. Inventory: inventory. unit-price-evaluation = historia kupna.
             {"asset_id": "zloto-monety", "output_file": "mbank_zloto_monety.xlsx", "order": 12, "enabled": 1, "pool_id": DEFAULT_POOL_ID},
             # rocky-iv: terminal z asset-evaluation (jak cash); CAPEX z rules (mbank_eur).
             {"asset_id": "rocky-iv", "output_file": "a_rocky-iv.xlsx", "order": 13, "enabled": 1, "pool_id": MBANK_EUR},

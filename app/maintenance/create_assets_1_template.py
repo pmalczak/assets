@@ -45,7 +45,7 @@ def build_inventory_sheets() -> dict[str, pd.DataFrame]:
                 AssetsFile.DESCR: "Złote monety bulionowe",
                 AssetsFile.KIND: f"{KindDomain.ASSETS}.zloto-monety",
                 AssetsFile.CURRENCY: "PLN",
-                AssetsFile.NOTES: "MTM: inventory × ceny (unit-price-evaluation)",
+                AssetsFile.NOTES: "MTM: sztuki × 1oz × NBP cenyzlota × 0,99",
             }
         ]
     )
@@ -75,13 +75,13 @@ def build_inventory_sheets() -> dict[str, pd.DataFrame]:
                 UnitPriceEvaluation.DATE: "2026-07-01",
                 UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
                 UnitPriceEvaluation.UNIT_PRICE: 0,
-                UnitPriceEvaluation.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
+                UnitPriceEvaluation.NOTES: "historia ceny kupna; nie wchodzi do MTM",
             },
             {
                 UnitPriceEvaluation.DATE: "2026-07-01",
                 UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
                 UnitPriceEvaluation.UNIT_PRICE: 0,
-                UnitPriceEvaluation.NOTES: "cena jednostkowa (ROI / snapshot MTM)",
+                UnitPriceEvaluation.NOTES: "historia ceny kupna; nie wchodzi do MTM",
             },
         ]
     )
