@@ -14,7 +14,7 @@ from analyse_assets.config_model import (
 )
 from analyse_assets.data_model import AssetRw
 from evaluators.evaluate_zloto_monety import _resolve_portfolio_value
-from importers.assets.data_model import Inventory, UnitPriceEvaluation
+from importers.assets.data_model import Inventory
 from importers.assets.pool_id import REVOLUT_PLN
 from importers.mbank.data_model import MBankFile, MbankOperationType
 from importers.revolut.account_data_model import RevolutOperationType
@@ -23,8 +23,11 @@ from roi.categories import CAPEX
 from roi.data_model import CashFlowEvent
 from roi.gold_terminal import (
     GOLD_COINS_ROI_ASSET_ID,
+    GOLD_VALUE_FACTOR,
+    TROY_OUNCE_GRAMS,
     GoldInventoryJoinError,
     holdings_from_capex_and_inventory,
+    holdings_from_inventory,
     mark_to_market,
     resolve_gold_terminal_unrealized,
 )
@@ -96,11 +99,9 @@ def _inventory_row(
 class GoldTerminalMtmTests(unittest.TestCase):
     @patch(
         "evaluators.evaluate_zloto_monety.resolve_gold_terminal_unrealized",
-        return_value=(25_000.0, []),
+        return_value=(25_000.0, date(2026, 9, 15), []),
     )
-    def test_snapshot_evaluation_date_is_latest_inventory_transaction(
-        self, _resolve_terminal
-    ):
+    def test_snapshot_evaluation_date_is_nbp_publication(self, _resolve_terminal):
         inventory = pd.DataFrame(
             [
                 _inventory_row(
@@ -123,52 +124,46 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
 
         self.assertEqual(value, 25_000.0)
-        self.assertEqual(evaluation_date, "2025-06-20")
+        self.assertEqual(evaluation_date, "2026-09-15")
 
-    def test_mark_to_market_two_coins(self):
+    def test_mark_to_market_nbp_minus_one_percent(self):
         holdings = {"Krugerrand 1oz": 2.0, "Maple Leaf 1oz": 1.0}
-        prices = pd.DataFrame(
-            [
-                {
-                    UnitPriceEvaluation.DATE: "2025-06-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 10000.0,
-                    UnitPriceEvaluation.NOTES: "",
-                },
-                {
-                    UnitPriceEvaluation.DATE: "2025-06-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 9500.0,
-                    UnitPriceEvaluation.NOTES: "",
-                },
-                {
-                    UnitPriceEvaluation.DATE: "2026-01-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 11000.0,
-                    UnitPriceEvaluation.NOTES: "nowsza",
-                },
-            ]
+        prices = pd.DataFrame({"data": ["2026-06-30"], "cena": [100.0]})
+        value, price_date, warnings = mark_to_market(
+            holdings, date(2026, 7, 1), gold_prices=prices
         )
-        value, warnings = mark_to_market(holdings, prices, date(2026, 7, 1))
         self.assertEqual(warnings, [])
-        self.assertAlmostEqual(value, 31500.0)
+        self.assertEqual(price_date, date(2026, 6, 30))
+        self.assertAlmostEqual(value, 3 * TROY_OUNCE_GRAMS * 100.0 * GOLD_VALUE_FACTOR)
 
-    def test_missing_unit_price_warns_and_skips_coin(self):
-        holdings = {"Krugerrand 1oz": 1.0, "Unknown": 3.0}
+    def test_weekend_uses_previous_nbp_publication(self):
+        holdings = {"Krugerrand 1oz": 2.0}
         prices = pd.DataFrame(
+            {
+                "data": ["2026-07-03", "2026-07-06"],
+                "cena": [200.0, 210.0],
+            }
+        )
+        value, price_date, warnings = mark_to_market(
+            holdings, date(2026, 7, 4), gold_prices=prices
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(price_date, date(2026, 7, 3))
+        self.assertAlmostEqual(value, 2 * TROY_OUNCE_GRAMS * 200.0 * GOLD_VALUE_FACTOR)
+
+    def test_unknown_weight_raises(self):
+        inventory = pd.DataFrame(
             [
-                {
-                    UnitPriceEvaluation.DATE: "2026-01-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 10000.0,
-                    UnitPriceEvaluation.NOTES: "",
-                },
+                _inventory_row(
+                    tx_date="2024-03-15",
+                    instrument="Krugerrand 1oz",
+                    weight="10g",
+                ),
             ]
         )
-        value, warnings = mark_to_market(holdings, prices, date(2026, 7, 1))
-        self.assertAlmostEqual(value, 10000.0)
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("Unknown", warnings[0])
+        with self.assertRaises(ValueError) as ctx:
+            holdings_from_inventory(inventory, date(2026, 7, 1))
+        self.assertIn("1oz", str(ctx.exception))
 
     def test_holdings_join_capex_and_inventory_by_date(self):
         cashflows = pd.DataFrame(
@@ -241,36 +236,22 @@ class GoldTerminalMtmTests(unittest.TestCase):
                 _inventory_row(tx_date="2024-05-10", instrument="Maple Leaf 1oz", quantity=1),
             ]
         )
-        prices = pd.DataFrame(
-            [
-                {
-                    UnitPriceEvaluation.DATE: "2026-01-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Krugerrand 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 12000.0,
-                    UnitPriceEvaluation.NOTES: "",
-                },
-                {
-                    UnitPriceEvaluation.DATE: "2026-01-01",
-                    UnitPriceEvaluation.INSTRUMENT: "Maple Leaf 1oz",
-                    UnitPriceEvaluation.UNIT_PRICE: 11000.0,
-                    UnitPriceEvaluation.NOTES: "",
-                },
-            ]
-        )
-        value, warnings = resolve_gold_terminal_unrealized(
+        prices = pd.DataFrame({"data": ["2026-06-30"], "cena": [500.0]})
+        value, price_date, warnings = resolve_gold_terminal_unrealized(
             date(2026, 7, 1),
             cashflows=cashflows,
             inventory=inventory,
-            unit_prices=prices,
+            gold_prices=prices,
         )
         self.assertEqual(warnings, [])
-        self.assertAlmostEqual(value, 35000.0)
+        self.assertEqual(price_date, date(2026, 6, 30))
+        self.assertAlmostEqual(value, 3 * TROY_OUNCE_GRAMS * 500.0 * GOLD_VALUE_FACTOR)
 
     def test_resolve_terminal_value_gold_branch_passes_cashflows(self):
         cashflows = pd.DataFrame([_capex_event(tx_date="2024-03-15")])
         with patch(
             "roi.terminal_value.resolve_gold_terminal_unrealized",
-            return_value=(35000.0, []),
+            return_value=(35000.0, date(2026, 7, 1), []),
         ) as mocked, patch(
             "roi.terminal_value.is_asset_sold",
             return_value=False,
@@ -290,11 +271,12 @@ class GoldTerminalMtmTests(unittest.TestCase):
         self.assertAlmostEqual(float(passed.iloc[0][CashFlowEvent.AMOUNT]), -15000.0)
         self.assertEqual(passed.iloc[0][CashFlowEvent.CATEGORY], CAPEX)
 
+    @patch("roi.compute_roi.gold_price_as_of", return_value=(date(2026, 9, 15), 500.0))
     @patch("roi.compute_roi.is_asset_sold", return_value=False)
     @patch("roi.compute_roi.resolve_terminal_value", return_value=(0.0, 25000.0, []))
     @patch("importers.assets.read_assets.read_inventory")
-    def test_catalog_evaluation_date_from_inventory(
-        self, read_inv, _resolve_terminal, _is_sold
+    def test_catalog_evaluation_date_from_nbp(
+        self, read_inv, _resolve_terminal, _is_sold, _gold_price
     ):
         from roi.compute_roi import compute_roi
 
@@ -309,7 +291,7 @@ class GoldTerminalMtmTests(unittest.TestCase):
         summary = compute_roi(
             GOLD_COINS_ROI_ASSET_ID, events, None, date(2026, 9, 16)
         )
-        self.assertEqual(summary.evaluation_date, "2025-06-20")
+        self.assertEqual(summary.evaluation_date, "2026-09-15")
 
 
 class GoldCapexAllocationTests(unittest.TestCase):

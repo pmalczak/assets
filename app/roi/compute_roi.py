@@ -11,8 +11,9 @@ from evaluators.valuation_date import filter_excel_rows_on_or_before
 from roi.categories import CAPEX, OPEX, REVENUES
 from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
+from nbp_pl_api.nbp_gold_repository import gold_price_as_of
 from roi.gold_terminal import is_gold_roi_asset
-from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
+from roi.statement_valuation_date import attach_evaluation_date
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
@@ -103,14 +104,17 @@ def _catalog_evaluation_date(
     valuations: pd.DataFrame | None,
     valuation_date: date,
 ) -> str | None:
-    """Data wyceny katalogu: ostatni wiersz asset-evaluation / inventory złota ≤ data obliczenia."""
+    """Data wyceny katalogu: asset-evaluation, a dla złota data publikacji NBP."""
     if is_gold_roi_asset(asset_id):
         from importers.assets.data_model import Inventory
         from importers.assets.read_assets import read_inventory
 
         inventory = read_inventory()
         used = filter_excel_rows_on_or_before(inventory, Inventory.DATE, valuation_date)
-        return evaluation_date_from_frame(used, Inventory.DATE, valuation_date)
+        if used.empty:
+            return None
+        price_date, _pln_per_gram = gold_price_as_of(valuation_date)
+        return price_date.isoformat()
 
     if valuations is None or valuations.empty:
         return None

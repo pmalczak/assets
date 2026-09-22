@@ -51,22 +51,18 @@ def _resolve_portfolio_value(
     valuation_date: date,
     warnings: list[str],
 ) -> tuple[float, str | None]:
-    """Σ qty×cena z inventory + unit-price-evaluation; brak inventory → 0."""
+    """Σ sztuki × 1oz × NBP × 0,99. Data wyceny = data publikacji NBP."""
     inventory_as_of = filter_excel_rows_on_or_before(
         inventory, Inventory.DATE, valuation_date
     )
     holdings = holdings_from_inventory(inventory_as_of, valuation_date)
-    mtm_value, mtm_warnings = resolve_gold_terminal_unrealized(
+    mtm_value, price_date, mtm_warnings = resolve_gold_terminal_unrealized(
         valuation_date,
         holdings=holdings,
     )
     warnings.extend(mtm_warnings)
-    if not inventory_as_of.empty:
-        last_inventory_date = pd.to_datetime(
-            inventory_as_of[Inventory.DATE], errors="coerce"
-        ).max()
-        if not pd.isna(last_inventory_date):
-            return mtm_value, last_inventory_date.date().isoformat()
+    if price_date is not None:
+        return mtm_value, price_date.isoformat()
 
     warnings.append("Brak inventory — wartość = 0.")
     return 0.0, None

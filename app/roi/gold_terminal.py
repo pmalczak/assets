@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Terminal ROI dla złoto-monety: CAPEX z analyse rules + inventory po dacie → Σ qty×cena."""
+"""Terminal ROI dla złoto-monety: CAPEX + inventory po dacie → sztuki × 1oz × NBP × 0,99."""
 from __future__ import annotations
 
 from datetime import date
@@ -7,12 +7,17 @@ from datetime import date
 import pandas as pd
 
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import Inventory, UnitPriceEvaluation
-from importers.assets.read_assets import read_inventory, read_unit_price_evaluation
+from importers.assets.data_model import Inventory
+from importers.assets.read_assets import read_inventory
+from nbp_pl_api.nbp_gold_repository import gold_price_as_of
 from roi.categories import CAPEX
 from roi.data_model import CashFlowEvent
 
 GOLD_COINS_ROI_ASSET_ID = "zloto-monety"
+TROY_OUNCE_GRAMS = 31.1034768
+# Szacunek wartości bieżącej: kurs NBP minus 1%, nie cena dilera.
+GOLD_VALUE_FACTOR = 0.99
+_ONE_OUNCE = "1oz"
 
 
 class GoldInventoryJoinError(ValueError):
@@ -21,6 +26,16 @@ class GoldInventoryJoinError(ValueError):
 
 def is_gold_roi_asset(asset_id: str | None) -> bool:
     return asset_id == GOLD_COINS_ROI_ASSET_ID
+
+
+def require_one_ounce(weight) -> float:
+    """Waga monety. Tylko zapis ``1oz``; inaczej twardy błąd. Zwraca gramy."""
+    token = str(weight).strip().lower().replace(" ", "")
+    if token != _ONE_OUNCE:
+        raise ValueError(
+            f"Nieobsługiwana waga złota {weight!r}; dozwolone jest tylko '1oz'."
+        )
+    return TROY_OUNCE_GRAMS
 
 
 def _normalize_day(value) -> pd.Timestamp | None:
@@ -62,6 +77,7 @@ def holdings_from_inventory(
         qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
         if not instrument or pd.isna(qty):
             continue
+        require_one_ounce(row[Inventory.WEIGHT])
         holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
     return holdings
 
@@ -125,59 +141,27 @@ def holdings_from_capex_and_inventory(
             raise GoldInventoryJoinError(
                 _missing_inventory_message(ctx, "incomplete_inventory_row")
             )
+        require_one_ounce(row[Inventory.WEIGHT])
         holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
 
     return holdings, []
 
 
-def latest_unit_price(
-    unit_prices: pd.DataFrame,
-    instrument: str,
-    valuation_date: date,
-) -> float | None:
-    if unit_prices is None or unit_prices.empty:
-        return None
-
-    filtered = filter_excel_rows_on_or_before(
-        unit_prices, UnitPriceEvaluation.DATE, valuation_date
-    )
-    if filtered.empty:
-        return None
-
-    instrument_rows = filtered[
-        filtered[UnitPriceEvaluation.INSTRUMENT].astype("string").str.strip() == instrument
-    ]
-    if instrument_rows.empty:
-        return None
-
-    latest = instrument_rows.sort_values(UnitPriceEvaluation.DATE, ascending=False).iloc[0]
-    price = pd.to_numeric(latest[UnitPriceEvaluation.UNIT_PRICE], errors="coerce")
-    if pd.isna(price):
-        return None
-    return float(price)
-
-
 def mark_to_market(
     holdings: dict[str, float],
-    unit_prices: pd.DataFrame,
     valuation_date: date,
-) -> tuple[float, list[str]]:
-    """Σ qty × cena; brak ceny → warning i 0 dla tego instrumentu."""
+    *,
+    gold_prices: pd.DataFrame | None = None,
+) -> tuple[float, date | None, list[str]]:
+    """Σ sztuki × 31,1034768 g × NBP (PLN/g) × 0,99. Pusta pozycja → 0."""
     warnings: list[str] = []
     if not holdings:
-        return 0.0, warnings
+        return 0.0, None, warnings
 
-    total = 0.0
-    for instrument, qty in holdings.items():
-        price = latest_unit_price(unit_prices, instrument, valuation_date)
-        if price is None:
-            warnings.append(
-                f"Brak ceny jednostkowej dla instrumentu {instrument!r} "
-                f"na date {valuation_date}."
-            )
-            continue
-        total += qty * price
-    return total, warnings
+    price_date, pln_per_gram = gold_price_as_of(valuation_date, series=gold_prices)
+    pieces = sum(holdings.values())
+    value = pieces * TROY_OUNCE_GRAMS * pln_per_gram * GOLD_VALUE_FACTOR
+    return value, price_date, warnings
 
 
 def resolve_gold_terminal_unrealized(
@@ -185,14 +169,15 @@ def resolve_gold_terminal_unrealized(
     *,
     cashflows: pd.DataFrame | None = None,
     holdings: dict[str, float] | None = None,
-    unit_prices: pd.DataFrame | None = None,
     inventory: pd.DataFrame | None = None,
-) -> tuple[float, list[str]]:
+    gold_prices: pd.DataFrame | None = None,
+) -> tuple[float, date | None, list[str]]:
     """
     Terminal unrealized dla złoto-monety.
 
-    Produkcja: CAPEX cashflows + inventory (join po dacie) + unit-price-evaluation.
-    Testy mogą podać `holdings` / `unit_prices` bezpośrednio.
+    Produkcja: CAPEX cashflows + inventory (join po dacie) + cena NBP × 0,99.
+    Testy mogą podać `holdings` / `gold_prices` bezpośrednio.
+    Zwraca (wartość, data publikacji NBP, ostrzeżenia).
     """
     warnings: list[str] = []
 
@@ -201,7 +186,7 @@ def resolve_gold_terminal_unrealized(
             inventory = read_inventory()
         if cashflows is None:
             warnings.append(
-                "Brak cashflow CAPEX dla zloto-monety — terminal qty×cena = 0."
+                "Brak cashflow CAPEX dla zloto-monety — terminal NBP×0,99 = 0."
             )
             holdings = {}
         else:
@@ -210,17 +195,10 @@ def resolve_gold_terminal_unrealized(
             )
             warnings.extend(join_warnings)
 
-    if unit_prices is None:
-        unit_prices = read_unit_price_evaluation()
-        if unit_prices.empty:
-            warnings.append(
-                "Brak arkusza unit-price-evaluation (ceny jednostkowe) — terminal = 0."
-            )
-            return 0.0, warnings
-
-    if not unit_prices.empty:
-        UnitPriceEvaluation.check_structure(unit_prices)
-
-    value, mtm_warnings = mark_to_market(holdings, unit_prices, valuation_date)
+    value, price_date, mtm_warnings = mark_to_market(
+        holdings,
+        valuation_date,
+        gold_prices=gold_prices,
+    )
     warnings.extend(mtm_warnings)
-    return value, warnings
+    return value, price_date, warnings
