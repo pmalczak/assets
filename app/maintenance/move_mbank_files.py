@@ -35,14 +35,26 @@ def get_target_dirs(cash_pool_root: Path) -> dict:
     return result
 
 
-def move_file(f: Path, cash_pool_root, target_dirs: dict) -> MoveResult:
-    segments = f.stem.split('_')
+def account_key_from_stem(stem: str) -> str:
+    """Ostatnie 4 znaki pierwszego segmentu nazwy wyciągu mBank (`XXXXXXXX_od_do`)."""
+    segments = stem.split('_')
     if len(segments) != 3:
-        raise ValueError(f)
+        raise ValueError(stem)
+    key = segments[0]
+    if len(key) != 8:
+        raise ValueError(stem)
+    return key[4:]
 
-    key = f.stem.split('_')[0]
-    assert len(key) == 8
-    key = key[4:]
+
+def move_file(f: Path, cash_pool_root, target_dirs: dict) -> MoveResult:
+    key = account_key_from_stem(f.stem)
+    if key not in target_dirs:
+        known = ", ".join(sorted(target_dirs)) or "(brak)"
+        raise ValueError(
+            f"Brak katalogu w cash_pool dla rachunku mBank …{key} "
+            f"(plik: {f.name}). Oczekiwany katalog z 4. segmentem '{key}' "
+            f"(np. p_m_XX_{key}). Znane rachunki: {known}."
+        )
     target_dir = cash_pool_root / target_dirs[key]
     dst = target_dir / f.name
     f.replace(dst)
