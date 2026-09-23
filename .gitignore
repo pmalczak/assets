@@ -6,6 +6,8 @@ __pycache__/
 
 # Local DATA_STEP cache — never on GitHub (see Cursor_rules.md)
 /data_steps/**/*.parquet
+/data_steps/**/*.xls
+/data_steps/**/*.xlsx
 
 # ROI config lives next to assets_1.xlsx in Dropbox, not in repo
 app/analyse_assets/analyse_assets_config.xlsx
