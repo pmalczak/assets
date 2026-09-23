@@ -229,6 +229,7 @@ Pozostaje:
 
 - Python przez `uv run` z katalogu `app/`.
 - Nie commitować bez prośby; nie pushować bez prośby.
+- **`data_steps/**/*.parquet` — nigdy na GitHub.** Lokalny cache DATA_STEP (snapshoty, FX, Yahoo, `01 source`, ROI…). Nie `git add` / commit / push. Fixtures w `app/unit_testing/data_steps/` wolno. Regeneracja: UI / pipeline, nie klon repo.
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zadania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
