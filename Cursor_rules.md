@@ -113,7 +113,7 @@ Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 - Terminal / snapshot NAV = ostatnie `Saldo` ≤ data wyceny.
 - Zobowiązanie podatkowe Belka 19%: osobne `asset_id` `{deposit_id}_zobowiazanie_podatkowe_{Y}` — OPEX `−0.19×` oprocentowania brutto tylko dla odsetek z roku `Y` (rok daty wyceny); w snapshocie wartość ujemna = zaległość YTD.
 
-mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu numeru rachunku.
+mBank: pliki `*_ *_ *.csv` (stem 22 znaki) z `~/Downloads` oraz luźne CSV w `assets/` → katalogi kont w `cash_pool/` po kluczu = ostatnie 4 znaki pierwszego segmentu nazwy (= 4. segment katalogu, np. `p_m_23_2330` ↔ `…2330_…`). Brak katalogu = twardy błąd z listą znanych rachunków (nie `KeyError`).
 
 **Data wyciągu (wszystkie importy):** `ref_date` / `FILE_DATE` = **data pobrania pliku** (`mtime` źródła; w nazwie kanonicznej trzecia data, gdy okres `{od}_{do}` jest rekonstruowany z transakcji). **Nigdy** data ostatniej transakcji ani sam `period_end` ledgeru. Okres `{od}_{do}` zostaje osobno (nazwa banku albo min/max txn). DEGIRO / Trade Republic / historia PKO: `{kind}_{od}_{do}_{data_wyciągu}`. Katalog ROI (`roi_def`) poza zakresem.
 
