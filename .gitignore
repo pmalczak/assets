@@ -8,6 +8,8 @@ __pycache__/
 /data_steps/**/*.parquet
 /data_steps/**/*.xls
 /data_steps/**/*.xlsx
+/data_steps/_metadata.json
+/data_steps/_metadata.lock
 
 # ROI config lives next to assets_1.xlsx in Dropbox, not in repo
 app/analyse_assets/analyse_assets_config.xlsx
