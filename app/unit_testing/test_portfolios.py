@@ -14,9 +14,10 @@ from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
 from portfolios.assignment import (
     DEFAULT_PORTFOLIO,
+    PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
+    PORTFOLIO_KROTKOTERMINOWY,
     PORTFOLIO_NIERUCHOMOSCI,
-    PORTFOLIO_OGOLNY,
     PORTFOLIO_REVOLUT_ROBO,
     ROLE_EXECUTION,
     assets_in_portfolio,
@@ -37,13 +38,13 @@ class PortfolioAssignmentTests(unittest.TestCase):
     def test_known_membership_and_default(self):
         self.assertEqual(portfolio_for_asset_id(DEFAULT_DEGIRO_ASSET_ID), PORTFOLIO_GM)
         self.assertEqual(portfolio_for_asset_id(DEFAULT_XTB_ASSET_ID), PORTFOLIO_GM)
-        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_OGOLNY)
+        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(
             portfolio_for_asset_id(DEFAULT_REVOLUT_ROBO_ASSET_ID),
             PORTFOLIO_REVOLUT_ROBO,
         )
-        self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_OGOLNY)
-        self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_OGOLNY)
+        self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(portfolio_for_asset_id("nowe-aktywo"), DEFAULT_PORTFOLIO)
 
     def test_gm_roles_execution_only(self):
@@ -53,9 +54,9 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertIsNone(gm_asset_role("obligacjeskarbowe"))
         self.assertIsNone(gm_asset_role(DEFAULT_REVOLUT_ROBO_ASSET_ID))
 
-    def test_cash_pool_defaults_to_ogolny(self):
-        self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_OGOLNY)
-        self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_OGOLNY)
+    def test_cash_pool_defaults_to_krotkoterminowy(self):
+        self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(
             portfolio_for_row("properties", "investment.property"),
             PORTFOLIO_NIERUCHOMOSCI,
@@ -103,7 +104,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
         stamped = attach_portfolio_column(snapshot)
         self.assertEqual(
             stamped.loc[stamped[AssetsDef.ID] == "p_m_23_2330", AssetsDef.PORTFOLIO].iloc[0],
-            PORTFOLIO_OGOLNY,
+            PORTFOLIO_KROTKOTERMINOWY,
         )
         investments = investments_with_portfolio(snapshot)
         self.assertNotIn("p_m_23_2330", investments[AssetsDef.ID].tolist())
@@ -112,7 +113,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
             [
                 PORTFOLIO_GM,
                 PORTFOLIO_REVOLUT_ROBO,
-                PORTFOLIO_OGOLNY,
+                PORTFOLIO_KROTKOTERMINOWY,
                 PORTFOLIO_NIERUCHOMOSCI,
             ],
         )
@@ -120,10 +121,11 @@ class PortfolioAssignmentTests(unittest.TestCase):
         by_name = dict(zip(nav[AssetsDef.PORTFOLIO], nav[AssetsDef.VALUE_PLN]))
         self.assertAlmostEqual(float(by_name[PORTFOLIO_GM]), 400.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_REVOLUT_ROBO]), 100.0)
-        self.assertAlmostEqual(float(by_name[PORTFOLIO_OGOLNY]), 1049.0)
+        self.assertAlmostEqual(float(by_name[PORTFOLIO_KROTKOTERMINOWY]), 1049.0)
+        self.assertAlmostEqual(float(by_name[PORTFOLIO_DLUGOTERMINOWY]), 0.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_NIERUCHOMOSCI]), 700.0)
 
-    def test_investments_split_into_four_portfolio_tables(self):
+    def test_investments_split_into_five_portfolio_tables(self):
         snapshot = pd.DataFrame(
             [
                 {
@@ -163,14 +165,16 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(
             names,
             [
-                PORTFOLIO_OGOLNY,
-                PORTFOLIO_NIERUCHOMOSCI,
+                PORTFOLIO_KROTKOTERMINOWY,
                 PORTFOLIO_REVOLUT_ROBO,
                 PORTFOLIO_GM,
+                PORTFOLIO_DLUGOTERMINOWY,
+                PORTFOLIO_NIERUCHOMOSCI,
             ],
         )
         by_name = {name: frame for name, frame in tables}
-        self.assertEqual(list(by_name[PORTFOLIO_OGOLNY][AssetsDef.ID]), ["cash"])
+        self.assertEqual(list(by_name[PORTFOLIO_KROTKOTERMINOWY][AssetsDef.ID]), ["cash"])
+        self.assertTrue(by_name[PORTFOLIO_DLUGOTERMINOWY].empty)
         self.assertEqual(
             list(by_name[PORTFOLIO_NIERUCHOMOSCI][AssetsDef.ID]),
             ["properties"],
@@ -217,12 +221,13 @@ class PortfolioAssignmentTests(unittest.TestCase):
         )
         tables = investments_by_portfolio(snapshot)
         by_name = {name: frame for name, frame in tables}
-        self.assertEqual(len(by_name[PORTFOLIO_OGOLNY]), 1)
-        self.assertTrue(by_name[PORTFOLIO_NIERUCHOMOSCI].empty)
+        self.assertEqual(len(by_name[PORTFOLIO_KROTKOTERMINOWY]), 1)
         self.assertTrue(by_name[PORTFOLIO_REVOLUT_ROBO].empty)
         self.assertTrue(by_name[PORTFOLIO_GM].empty)
+        self.assertTrue(by_name[PORTFOLIO_DLUGOTERMINOWY].empty)
+        self.assertTrue(by_name[PORTFOLIO_NIERUCHOMOSCI].empty)
 
-    def test_ogolny_composition_includes_cash_pool(self):
+    def test_krotkoterminowy_composition_includes_cash_pool(self):
         snapshot = pd.DataFrame(
             [
                 {
@@ -248,14 +253,14 @@ class PortfolioAssignmentTests(unittest.TestCase):
                 },
             ]
         )
-        ogolny = assets_in_portfolio(snapshot, PORTFOLIO_OGOLNY)
-        self.assertEqual(set(ogolny[AssetsDef.ID]), {"cash", "p_m_23_2330"})
+        krotko = assets_in_portfolio(snapshot, PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(set(krotko[AssetsDef.ID]), {"cash", "p_m_23_2330"})
         gm = assets_in_portfolio(snapshot, PORTFOLIO_GM)
         self.assertEqual(list(gm[AssetsDef.ID]), [DEFAULT_DEGIRO_ASSET_ID])
 
 
 class PortfolioNavHistoryTests(unittest.TestCase):
-    def test_nav_history_splits_ogolny_vs_gm(self):
+    def test_nav_history_splits_krotkoterminowy_vs_gm(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_snapshot(
@@ -281,10 +286,10 @@ class PortfolioNavHistoryTests(unittest.TestCase):
                 ],
             )
             gm = load_portfolio_nav_history(PORTFOLIO_GM, root)
-            ogolny = load_portfolio_nav_history(PORTFOLIO_OGOLNY, root)
+            krotko = load_portfolio_nav_history(PORTFOLIO_KROTKOTERMINOWY, root)
             robo = load_portfolio_nav_history(PORTFOLIO_REVOLUT_ROBO, root)
         self.assertEqual(list(gm.values), [100.0, 150.0])
-        self.assertEqual(list(ogolny.values), [70.0, 80.0])
+        self.assertEqual(list(krotko.values), [70.0, 80.0])
         self.assertEqual(list(robo.values), [0.0, 800.0])
 
     def test_nav_history_without_typ_column_still_assigns_by_id(self):
@@ -301,10 +306,10 @@ class PortfolioNavHistoryTests(unittest.TestCase):
                 ]
             ).to_parquet(root / "2026-08-01.parquet")
             gm = load_portfolio_nav_history(PORTFOLIO_GM, root)
-            ogolny = load_portfolio_nav_history(PORTFOLIO_OGOLNY, root)
+            krotko = load_portfolio_nav_history(PORTFOLIO_KROTKOTERMINOWY, root)
             robo = load_portfolio_nav_history(PORTFOLIO_REVOLUT_ROBO, root)
         self.assertEqual(list(gm.values), [100.0])
-        self.assertEqual(list(ogolny.values), [20.0])
+        self.assertEqual(list(krotko.values), [20.0])
         self.assertEqual(list(robo.values), [800.0])
 
 

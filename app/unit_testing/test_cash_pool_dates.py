@@ -240,7 +240,7 @@ class CashPoolDisplayColumnsTests(unittest.TestCase):
                     AssetsDef.STATEMENT_DATE: "2026-08-01",
                     AssetsDef.VALUE_DATE: "2026-09-11",
                     AssetsDef.DAYS_AFTER_VALUATION: 41,
-                    AssetsDef.PORTFOLIO: "0 OGÓLNY",
+                    AssetsDef.PORTFOLIO: "0 KRÓTKOTERMINOWY",
                     AssetsDef.EVALUATION_DATE: "2026-09-01",
                     "data_wyceny_portfela": "2026-09-11",
                 }

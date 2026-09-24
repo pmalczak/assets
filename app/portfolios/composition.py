@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Skład portfela 3 G-MOMENTUM: pozycje instrumentów + gotówka brokerów."""
+"""Skład portfela 2 G-MOMENTUM: pozycje instrumentów + gotówka brokerów."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -179,7 +179,7 @@ def compose_gm_instrument_composition(
     """
     Skład per instrument (+ gotówka).
 
-    Udział = wartość-pln / NAV portfela 3 G-MOMENTUM ze snapshota.
+    Udział = wartość-pln / NAV portfela 2 G-MOMENTUM ze snapshota.
     Pozycje tego samego instrumentu z różnych kont są scalane.
     """
     lines = list(lines or [])
