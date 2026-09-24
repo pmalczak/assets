@@ -37,6 +37,23 @@ KNOWN_PORTFOLIOS: tuple[str, ...] = (
     PORTFOLIO_NIERUCHOMOSCI,
 )
 
+_BLANK_TYPE_TOKENS = frozenset({"", "nan", "none", "<na>", "nat"})
+
+
+def _clean_typ(typ: object) -> str:
+    """Znormalizuj `typ` z parquet/Excela (NaN / <NA> nie mogą dawać pustego portfela)."""
+    if typ is None:
+        return ""
+    try:
+        if pd.isna(typ):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(typ).strip()
+    if text.lower() in _BLANK_TYPE_TOKENS:
+        return ""
+    return text
+
 
 def portfolio_for_asset_id(asset_id: str | None) -> str:
     key = str(asset_id or "").strip()
@@ -57,8 +74,8 @@ def gm_asset_role(asset_id: str | None) -> str | None:
     return None
 
 
-def portfolio_for_row(asset_id: str | None, typ: str | None) -> str:
-    kind = str(typ or "").strip()
+def portfolio_for_row(asset_id: str | None, typ: object = None) -> str:
+    kind = _clean_typ(typ)
     if kind == "investment.property":
         return PORTFOLIO_NIERUCHOMOSCI
     if kind.startswith("cash_pool.") or kind.startswith("investment."):

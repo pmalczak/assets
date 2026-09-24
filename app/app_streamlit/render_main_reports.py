@@ -164,7 +164,7 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     )
 
     st.markdown("**Inwestycje**")
-    for name, table in investments_by_portfolio(assets):
+    for index, (name, table) in enumerate(investments_by_portfolio(assets)):
         st.markdown(f"**{name}**")
         display = dataframe_for_streamlit(
             with_value_currency_pln_order(_drop_statement_columns(table))
@@ -178,5 +178,5 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
             height=height,
             column_order=list(display.columns) if display is not None else None,
             column_config=amount_column_config(display),
-            key=f"investments_{name}_v2",
+            key=f"investments_portfolio_{index}_v3",
         )

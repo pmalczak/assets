@@ -20,7 +20,7 @@ def build_data(days: int = PORTFOLIO_WINDOW_DAYS) -> dict[str, object]:
     data = build_portfolio_history_from_snapshots(
         days=days,
         end_date_iso=date.today().isoformat(),
-        _schema=2,
+        _schema=3,
     )
     data["timeline_events"] = _read_timeline_events_cached()
 

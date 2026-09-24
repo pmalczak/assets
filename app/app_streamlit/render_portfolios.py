@@ -29,8 +29,10 @@ from portfolios.composition import (
 )
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
-_PORTFOLIO_NAV_SCHEMA = 1
+_PORTFOLIO_NAV_SCHEMA = 2
 _GM_POSITIONS_SCHEMA = 1
+_PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
+_LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
 _COMPOSITION_COLUMNS = (
     AssetsDef.ID,
     AssetsDef.DESCR,
@@ -57,6 +59,15 @@ def _load_gm_positions(
     return load_gm_position_lines(valuation_date)
 
 
+def _purge_stale_portfolio_selection() -> None:
+    """Po zmianie etykiet portfeli stary wybór w session_state wywala pills."""
+    for key in _LEGACY_PORTFOLIOS_SELECTED_KEYS:
+        st.session_state.pop(key, None)
+    current = st.session_state.get(_PORTFOLIOS_SELECTED_KEY)
+    if current is not None and current not in KNOWN_PORTFOLIOS:
+        st.session_state.pop(_PORTFOLIOS_SELECTED_KEY, None)
+
+
 def render_portfolios() -> None:
     from app_streamlit.build_data import build_data
 
@@ -79,12 +90,13 @@ def render_portfolios() -> None:
         _load_benchmarks.clear()
         st.rerun()
 
+    _purge_stale_portfolio_selection()
     selected = st.pills(
         "Portfel",
         options=list(KNOWN_PORTFOLIOS),
         default=PORTFOLIO_GM,
         required=True,
-        key="portfolios_selected",
+        key=_PORTFOLIOS_SELECTED_KEY,
         width="stretch",
     )
 

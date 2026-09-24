@@ -57,7 +57,15 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertIsNone(gm_asset_role("obligacjeskarbowe"))
         self.assertIsNone(gm_asset_role(DEFAULT_REVOLUT_ROBO_ASSET_ID))
 
-    def test_cash_pool_defaults_to_krotkoterminowy(self):
+    def test_blank_or_na_type_falls_back_to_asset_id(self):
+        self.assertEqual(portfolio_for_row("cash", None), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("cash", float("nan")), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("rocky-iv", float("nan")), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(portfolio_for_row("cash", pd.NA), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(
+            portfolio_for_row(DEFAULT_DEGIRO_ASSET_ID, pd.NA),
+            PORTFOLIO_GM,
+        )
         self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(
