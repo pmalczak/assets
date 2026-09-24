@@ -18,7 +18,7 @@ from importers.assets.data_model import AssetsDef
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_GM,
-    PORTFOLIO_KROTKOTERMINOWY,
+    PORTFOLIO_PLYNNY,
     assets_in_portfolio,
     load_portfolio_nav_history,
     nav_pln_for_portfolio,
@@ -151,7 +151,7 @@ def _render_gm_composition(
     st.caption(
         f"Alokacja per instrument (DEGIRO + XTB). Cel U7 ≈ 1/3 NAV na aktywo. "
         f"Data snapshotu ≠ data sygnału U7. Portfel {PORTFOLIO_GM} bez złota "
-        f"(złoto w {PORTFOLIO_KROTKOTERMINOWY})."
+        f"(złoto w {PORTFOLIO_PLYNNY})."
     )
 
     lines: list = []

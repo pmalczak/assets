@@ -9,45 +9,6 @@ from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
-from app_streamlit.column_layout import amount_column_config, with_value_currency_pln_order
-from app_streamlit.safe_download import dataframe_for_streamlit
-from importers.assets.data_model import AssetsDef, AssetsFile
-from portfolios.assignment import investments_by_portfolio, rows_with_portfolio
-
-_HIDDEN_STATEMENT_COLUMNS = (
-    AssetsDef.STATEMENT_DATE,
-    AssetsDef.LAST_TRANSACTION_DATE,
-)
-
-CASH_POOL_DISPLAY_COLUMNS = [
-    AssetsFile.ID,
-    AssetsFile.DESCR,
-    AssetsDef.VALUE,
-    AssetsFile.CURRENCY,
-    AssetsDef.VALUE_PLN,
-    AssetsDef.EVALUATION_DATE,
-    AssetsDef.VALUE_DATE,
-    AssetsDef.DAYS_AFTER_VALUATION,
-    AssetsDef.STATEMENT_DATE,
-    AssetsDef.PORTFOLIO,
-]
-
-
-def _drop_statement_columns(table: pd.DataFrame) -> pd.DataFrame:
-    if table is None:
-        return table
-    drop = [c for c in table.columns if str(c) in _HIDDEN_STATEMENT_COLUMNS]
-    if not drop:
-        return table
-    return table.drop(columns=drop)
-
-
-def cash_pool_table_for_display(cash_pool: pd.DataFrame) -> pd.DataFrame:
-    """Cash pool: wartość/waluta/PLN, potem data wyceny/waluty/dni; data-wyciągu; bez last txn."""
-    if cash_pool is None or cash_pool.empty:
-        return pd.DataFrame(columns=CASH_POOL_DISPLAY_COLUMNS)
-    cols = [c for c in CASH_POOL_DISPLAY_COLUMNS if c in cash_pool.columns]
-    return cash_pool.loc[:, cols].copy()
 
 
 @st.cache_data(show_spinner=False)
@@ -63,21 +24,44 @@ def _clear_reports_related_cache() -> None:
     load_snapshot_for_date.clear()
 
 
+def _run_generate_snapshot(today: date) -> None:
+    try:
+        with st.spinner(f"Generowanie snapshotu {today:%Y-%m-%d}..."):
+            results = run_snapshot_job_isolated(weekly=False, force_read_all_data=False)
+        if not results:
+            raise RuntimeError("Proces snapshotu nie zwrócił wyniku.")
+        result = results[0]
+        _clear_reports_related_cache()
+        st.session_state["reports_last_generated_snapshot"] = result.to_row()
+        st.success(
+            f"Snapshot {result.valuation_date:%Y-%m-%d}: "
+            f"{result.rows} wierszy, suma PLN {result.total_pln:,}".replace(",", " ")
+        )
+        st.rerun()
+    except Exception as exc:
+        st.error("Nie udało się wygenerować snapshotu na dziś.")
+        st.exception(exc)
+
+
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import format_rap_table, rap1, rap2
 
     st.subheader("Wartość aktywów")
 
     today = date.today()
-    btn_col, info_col = st.columns([1, 3])
-    with btn_col:
+    snapshot_files = list_snapshot_files(snapshots_directory())
+
+    # Góra: kontrolki + RAP1 obok siebie; dół: RAP2 na pełnej szerokości od lewej.
+    controls_col, rap1_col = st.columns([1, 1], vertical_alignment="top", gap="medium")
+
+    with controls_col:
         generate = st.button(
             f"Generuj snapshot ({today:%Y-%m-%d})",
             key="generate_today_snapshot_button",
             type="primary",
             help="Przelicza snapshot na dziś bezwarunkowo — także gdy plik już istnieje.",
+            width="stretch",
         )
-    with info_col:
         st.caption(
             "Przebudowuje snapshot na dziś w osobnym procesie "
             f"(`{ASSETS_SNAPSHOT_STEP}/{today:%Y-%m-%d}.parquet`). "
@@ -85,38 +69,24 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         )
 
     if generate:
-        try:
-            with st.spinner(f"Generowanie snapshotu {today:%Y-%m-%d}..."):
-                results = run_snapshot_job_isolated(weekly=False, force_read_all_data=False)
-            if not results:
-                raise RuntimeError("Proces snapshotu nie zwrócił wyniku.")
-            result = results[0]
-            _clear_reports_related_cache()
-            st.session_state["reports_last_generated_snapshot"] = result.to_row()
-            st.success(
-                f"Snapshot {result.valuation_date:%Y-%m-%d}: "
-                f"{result.rows} wierszy, suma PLN {result.total_pln:,}".replace(",", " ")
+        _run_generate_snapshot(today)
+        return
+
+    with controls_col:
+        last_generated = st.session_state.get("reports_last_generated_snapshot")
+        if last_generated:
+            st.caption(
+                f"Ostatnio wygenerowano w tej sesji: {last_generated['valuation_date']} "
+                f"({last_generated['rows']} wierszy)."
             )
-            st.rerun()
-        except Exception as exc:
-            st.error("Nie udało się wygenerować snapshotu na dziś.")
-            st.exception(exc)
-            return
 
-    last_generated = st.session_state.get("reports_last_generated_snapshot")
-    if last_generated:
-        st.caption(
-            f"Ostatnio wygenerowano w tej sesji: {last_generated['valuation_date']} "
-            f"({last_generated['rows']} wierszy)."
-        )
-
-    snapshot_files = list_snapshot_files(snapshots_directory())
     if not snapshot_files:
-        st.warning(
-            f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
-            "Użyj przycisku powyżej albo uruchom "
-            "`maintenance/recalculate_weekly_assets_snapshots.py`."
-        )
+        with controls_col:
+            st.warning(
+                f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
+                "Użyj przycisku powyżej albo uruchom "
+                "`maintenance/recalculate_weekly_assets_snapshots.py`."
+            )
         return
 
     available_dates = [item[0] for item in snapshot_files]
@@ -126,57 +96,30 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     if today in available_dates:
         default_index = available_dates.index(today)
 
-    selected_date = st.selectbox(
-        "Data snapshotu",
-        options=available_dates,
-        index=default_index,
-        format_func=lambda d: d.isoformat(),
-    )
+    with controls_col:
+        selected_date = st.selectbox(
+            "Data snapshotu",
+            options=available_dates,
+            index=default_index,
+            format_func=lambda d: d.isoformat(),
+        )
+
     if selected_date != snapshot_date:
         assets = load_snapshot_for_date(selected_date)
 
     if assets.empty:
-        st.warning(f"Brak danych w snapshotcie {selected_date:%Y-%m-%d}.")
+        with controls_col:
+            st.warning(f"Brak danych w snapshotcie {selected_date:%Y-%m-%d}.")
         return
 
-    st.caption(f"Zrodlo: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`")
+    with controls_col:
+        st.caption(
+            f"Źródło: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`. "
+            "Skład portfeli — zakładka Portfele."
+        )
 
-    cash_pool = rows_with_portfolio(assets, "cash_pool.")
-
-    rap1_col, rap2_col = st.columns(2)
     with rap1_col:
-        st.markdown("**RAP 1**")
         st.code(format_rap_table(rap1(assets)), language=None)
-    with rap2_col:
-        st.markdown("**RAP 2**")
-        st.code(format_rap_table(rap2(assets)), language=None)
 
-    st.markdown("**Cash pool**")
-    cash_display = dataframe_for_streamlit(cash_pool_table_for_display(cash_pool))
-    st.dataframe(
-        cash_display,
-        width="stretch",
-        hide_index=True,
-        height=360,
-        column_order=list(cash_display.columns),
-        column_config=amount_column_config(cash_display),
-        key="cash_pool_table_v2",
-    )
-
-    st.markdown("**Inwestycje**")
-    for index, (name, table) in enumerate(investments_by_portfolio(assets)):
-        st.markdown(f"**{name}**")
-        display = dataframe_for_streamlit(
-            with_value_currency_pln_order(_drop_statement_columns(table))
-        )
-        n_rows = 0 if display is None or display.empty else len(display)
-        height = min(360, 38 + max(n_rows, 1) * 35)
-        st.dataframe(
-            display,
-            width="stretch",
-            hide_index=True,
-            height=height,
-            column_order=list(display.columns) if display is not None else None,
-            column_config=amount_column_config(display),
-            key=f"investments_portfolio_{index}_v3",
-        )
+    st.markdown("**RAP 2**")
+    st.code(format_rap_table(rap2(assets)), language=None)

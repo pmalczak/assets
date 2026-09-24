@@ -14,9 +14,10 @@ from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
 from portfolios.assignment import (
     DEFAULT_PORTFOLIO,
+    PORTFOLIO_CASH_POOL,
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
-    PORTFOLIO_KROTKOTERMINOWY,
+    PORTFOLIO_PLYNNY,
     PORTFOLIO_NIERUCHOMOSCI,
     PORTFOLIO_REVOLUT_ROBO,
     ROLE_EXECUTION,
@@ -38,13 +39,13 @@ class PortfolioAssignmentTests(unittest.TestCase):
     def test_known_membership_and_default(self):
         self.assertEqual(portfolio_for_asset_id(DEFAULT_DEGIRO_ASSET_ID), PORTFOLIO_GM)
         self.assertEqual(portfolio_for_asset_id(DEFAULT_XTB_ASSET_ID), PORTFOLIO_GM)
-        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id(GOLD_COINS_ROI_ASSET_ID), PORTFOLIO_PLYNNY)
         self.assertEqual(
             portfolio_for_asset_id(DEFAULT_REVOLUT_ROBO_ASSET_ID),
             PORTFOLIO_REVOLUT_ROBO,
         )
-        self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_KROTKOTERMINOWY)
-        self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_PLYNNY)
+        self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_PLYNNY)
         self.assertEqual(portfolio_for_asset_id("gm_ike"), PORTFOLIO_DLUGOTERMINOWY)
         self.assertEqual(portfolio_for_asset_id("pm_ike"), PORTFOLIO_DLUGOTERMINOWY)
         self.assertEqual(portfolio_for_asset_id("rocky-iv"), PORTFOLIO_DLUGOTERMINOWY)
@@ -58,16 +59,16 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertIsNone(gm_asset_role(DEFAULT_REVOLUT_ROBO_ASSET_ID))
 
     def test_blank_or_na_type_falls_back_to_asset_id(self):
-        self.assertEqual(portfolio_for_row("cash", None), PORTFOLIO_KROTKOTERMINOWY)
-        self.assertEqual(portfolio_for_row("cash", float("nan")), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("cash", None), PORTFOLIO_PLYNNY)
+        self.assertEqual(portfolio_for_row("cash", float("nan")), PORTFOLIO_PLYNNY)
         self.assertEqual(portfolio_for_row("rocky-iv", float("nan")), PORTFOLIO_DLUGOTERMINOWY)
-        self.assertEqual(portfolio_for_row("cash", pd.NA), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("cash", pd.NA), PORTFOLIO_PLYNNY)
         self.assertEqual(
             portfolio_for_row(DEFAULT_DEGIRO_ASSET_ID, pd.NA),
             PORTFOLIO_GM,
         )
-        self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_KROTKOTERMINOWY)
-        self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_row("p_m_23_2330", "cash_pool.ror"), PORTFOLIO_CASH_POOL)
+        self.assertEqual(portfolio_for_row("cash", "investment.cash"), PORTFOLIO_PLYNNY)
         self.assertEqual(
             portfolio_for_row("properties", "investment.property"),
             PORTFOLIO_NIERUCHOMOSCI,
@@ -118,7 +119,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
         stamped = attach_portfolio_column(snapshot)
         self.assertEqual(
             stamped.loc[stamped[AssetsDef.ID] == "p_m_23_2330", AssetsDef.PORTFOLIO].iloc[0],
-            PORTFOLIO_KROTKOTERMINOWY,
+            PORTFOLIO_CASH_POOL,
         )
         investments = investments_with_portfolio(snapshot)
         self.assertNotIn("p_m_23_2330", investments[AssetsDef.ID].tolist())
@@ -127,15 +128,16 @@ class PortfolioAssignmentTests(unittest.TestCase):
             [
                 PORTFOLIO_GM,
                 PORTFOLIO_REVOLUT_ROBO,
-                PORTFOLIO_KROTKOTERMINOWY,
+                PORTFOLIO_PLYNNY,
                 PORTFOLIO_NIERUCHOMOSCI,
             ],
         )
         nav = portfolio_nav_pln(snapshot)
         by_name = dict(zip(nav[AssetsDef.PORTFOLIO], nav[AssetsDef.VALUE_PLN]))
+        self.assertAlmostEqual(float(by_name[PORTFOLIO_CASH_POOL]), 999.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_GM]), 400.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_REVOLUT_ROBO]), 100.0)
-        self.assertAlmostEqual(float(by_name[PORTFOLIO_KROTKOTERMINOWY]), 1049.0)
+        self.assertAlmostEqual(float(by_name[PORTFOLIO_PLYNNY]), 50.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_DLUGOTERMINOWY]), 0.0)
         self.assertAlmostEqual(float(by_name[PORTFOLIO_NIERUCHOMOSCI]), 700.0)
 
@@ -185,7 +187,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
         self.assertEqual(
             names,
             [
-                PORTFOLIO_KROTKOTERMINOWY,
+                PORTFOLIO_PLYNNY,
                 PORTFOLIO_REVOLUT_ROBO,
                 PORTFOLIO_GM,
                 PORTFOLIO_DLUGOTERMINOWY,
@@ -193,7 +195,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
             ],
         )
         by_name = {name: frame for name, frame in tables}
-        self.assertEqual(list(by_name[PORTFOLIO_KROTKOTERMINOWY][AssetsDef.ID]), ["cash"])
+        self.assertEqual(list(by_name[PORTFOLIO_PLYNNY][AssetsDef.ID]), ["cash"])
         self.assertEqual(list(by_name[PORTFOLIO_DLUGOTERMINOWY][AssetsDef.ID]), ["rocky-iv"])
         self.assertEqual(
             list(by_name[PORTFOLIO_NIERUCHOMOSCI][AssetsDef.ID]),
@@ -241,13 +243,13 @@ class PortfolioAssignmentTests(unittest.TestCase):
         )
         tables = investments_by_portfolio(snapshot)
         by_name = {name: frame for name, frame in tables}
-        self.assertEqual(len(by_name[PORTFOLIO_KROTKOTERMINOWY]), 1)
+        self.assertEqual(len(by_name[PORTFOLIO_PLYNNY]), 1)
         self.assertTrue(by_name[PORTFOLIO_REVOLUT_ROBO].empty)
         self.assertTrue(by_name[PORTFOLIO_GM].empty)
         self.assertTrue(by_name[PORTFOLIO_DLUGOTERMINOWY].empty)
         self.assertTrue(by_name[PORTFOLIO_NIERUCHOMOSCI].empty)
 
-    def test_krotkoterminowy_composition_includes_cash_pool(self):
+    def test_cash_pool_composition_is_own_portfolio(self):
         snapshot = pd.DataFrame(
             [
                 {
@@ -273,8 +275,10 @@ class PortfolioAssignmentTests(unittest.TestCase):
                 },
             ]
         )
-        krotko = assets_in_portfolio(snapshot, PORTFOLIO_KROTKOTERMINOWY)
-        self.assertEqual(set(krotko[AssetsDef.ID]), {"cash", "p_m_23_2330"})
+        cash_pool = assets_in_portfolio(snapshot, PORTFOLIO_CASH_POOL)
+        self.assertEqual(list(cash_pool[AssetsDef.ID]), ["p_m_23_2330"])
+        plynny = assets_in_portfolio(snapshot, PORTFOLIO_PLYNNY)
+        self.assertEqual(list(plynny[AssetsDef.ID]), ["cash"])
         gm = assets_in_portfolio(snapshot, PORTFOLIO_GM)
         self.assertEqual(list(gm[AssetsDef.ID]), [DEFAULT_DEGIRO_ASSET_ID])
 
@@ -306,10 +310,12 @@ class PortfolioNavHistoryTests(unittest.TestCase):
                 ],
             )
             gm = load_portfolio_nav_history(PORTFOLIO_GM, root)
-            krotko = load_portfolio_nav_history(PORTFOLIO_KROTKOTERMINOWY, root)
+            plynny = load_portfolio_nav_history(PORTFOLIO_PLYNNY, root)
+            cash_pool = load_portfolio_nav_history(PORTFOLIO_CASH_POOL, root)
             robo = load_portfolio_nav_history(PORTFOLIO_REVOLUT_ROBO, root)
         self.assertEqual(list(gm.values), [100.0, 150.0])
-        self.assertEqual(list(krotko.values), [70.0, 80.0])
+        self.assertEqual(list(plynny.values), [50.0, 50.0])
+        self.assertEqual(list(cash_pool.values), [20.0, 30.0])
         self.assertEqual(list(robo.values), [0.0, 800.0])
 
     def test_nav_history_without_typ_column_still_assigns_by_id(self):
@@ -326,7 +332,7 @@ class PortfolioNavHistoryTests(unittest.TestCase):
                 ]
             ).to_parquet(root / "2026-08-01.parquet")
             gm = load_portfolio_nav_history(PORTFOLIO_GM, root)
-            krotko = load_portfolio_nav_history(PORTFOLIO_KROTKOTERMINOWY, root)
+            krotko = load_portfolio_nav_history(PORTFOLIO_PLYNNY, root)
             robo = load_portfolio_nav_history(PORTFOLIO_REVOLUT_ROBO, root)
         self.assertEqual(list(gm.values), [100.0])
         self.assertEqual(list(krotko.values), [20.0])

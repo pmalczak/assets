@@ -13,7 +13,7 @@ from app_streamlit.column_layout import (
 )
 from app_streamlit.render_portfolios import _composition_table
 from importers.assets.data_model import AssetsDef
-from portfolios.assignment import PORTFOLIO_KROTKOTERMINOWY, PORTFOLIO_REVOLUT_ROBO
+from portfolios.assignment import PORTFOLIO_PLYNNY, PORTFOLIO_REVOLUT_ROBO
 
 
 class ValueCurrencyPlnOrderTests(unittest.TestCase):
@@ -76,11 +76,11 @@ class ValueCurrencyPlnOrderTests(unittest.TestCase):
                     AssetsDef.EVALUATION_DATE: "2026-09-01",
                     AssetsDef.VALUE_DATE: "2026-09-11",
                     AssetsDef.DAYS_AFTER_VALUATION: 10,
-                    AssetsDef.PORTFOLIO: PORTFOLIO_KROTKOTERMINOWY,
+                    AssetsDef.PORTFOLIO: PORTFOLIO_PLYNNY,
                 }
             ]
         )
-        table = _composition_table(snapshot, PORTFOLIO_KROTKOTERMINOWY)
+        table = _composition_table(snapshot, PORTFOLIO_PLYNNY)
         cols = list(table.columns)
         self.assertEqual(
             cols[cols.index(AssetsDef.VALUE) : cols.index(AssetsDef.DAYS_AFTER_VALUATION) + 1],

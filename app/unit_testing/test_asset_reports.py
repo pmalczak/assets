@@ -8,7 +8,12 @@ import pandas as pd
 from asset_reports import format_rap_table, rap1, rap2
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
-from portfolios.assignment import PORTFOLIO_GM, PORTFOLIO_KROTKOTERMINOWY, PORTFOLIO_REVOLUT_ROBO
+from portfolios.assignment import (
+    PORTFOLIO_CASH_POOL,
+    PORTFOLIO_GM,
+    PORTFOLIO_PLYNNY,
+    PORTFOLIO_REVOLUT_ROBO,
+)
 
 
 def _row(asset_id: str, typ: str, group: str, currency: str, value: float, value_pln: float) -> dict:
@@ -33,20 +38,31 @@ class RapPortfolioIndexTests(unittest.TestCase):
             ]
         )
 
-    def test_rap1_index_is_portfolio_and_group(self):
+    def test_rap1_is_portfolio_razem_and_share(self):
         table = rap1(self.snapshot)
-        self.assertEqual(list(table.index.names), [AssetsDef.PORTFOLIO, AssetsDef.GROUP])
-        self.assertIn((PORTFOLIO_KROTKOTERMINOWY, "1 konta bankowe"), table.index)
-        self.assertIn((PORTFOLIO_GM, "5 inwestycje finansowe"), table.index)
-        self.assertIn((PORTFOLIO_REVOLUT_ROBO, "5 inwestycje finansowe"), table.index)
-        self.assertIn(("Z RAZEM", "Z RAZEM"), table.index)
-        krotko_bank = table.loc[(PORTFOLIO_KROTKOTERMINOWY, "1 konta bankowe")]
-        self.assertEqual(str(krotko_bank["PLN"]).strip(), "999")
+        self.assertEqual(list(table.columns), ["RAZEM", "udział"])
+        self.assertEqual(table.index.name, AssetsDef.PORTFOLIO)
+        self.assertIn(PORTFOLIO_CASH_POOL, table.index)
+        self.assertIn(PORTFOLIO_GM, table.index)
+        self.assertIn(PORTFOLIO_REVOLUT_ROBO, table.index)
+        self.assertIn(PORTFOLIO_PLYNNY, table.index)
+        self.assertIn("Z RAZEM", table.index)
+        # 999 + 400 + 200 + 40 = 1639
+        self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "RAZEM"]).strip(), "999")
+        self.assertEqual(str(table.loc[PORTFOLIO_GM, "RAZEM"]).strip(), "400")
+        self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "RAZEM"]).strip(), "200")
+        self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "RAZEM"]).strip(), "40")
+        self.assertEqual(str(table.loc["Z RAZEM", "RAZEM"]).strip(), "1 639")
+        self.assertEqual(str(table.loc["Z RAZEM", "udział"]).strip(), "100.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "udział"]).strip(), "61.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_GM, "udział"]).strip(), "24.4%")
+        self.assertNotIn("EUR", table.columns)
+        self.assertNotIn("PLN", table.columns)
 
     def test_rap2_index_is_portfolio_and_type(self):
         table = rap2(self.snapshot)
         self.assertEqual(list(table.index.names), [AssetsDef.PORTFOLIO, AssetsDef.TYPE])
-        self.assertIn((PORTFOLIO_KROTKOTERMINOWY, "cash_pool.ror"), table.index)
+        self.assertIn((PORTFOLIO_CASH_POOL, "cash_pool.ror"), table.index)
         self.assertIn((PORTFOLIO_GM, "investment.udziały"), table.index)
         self.assertIn(("Z RAZEM", "Z RAZEM"), table.index)
 
@@ -75,14 +91,17 @@ class RapPortfolioIndexTests(unittest.TestCase):
         self.assertEqual(str(gm["wartość_pln"]).strip(), "0")
         self.assertEqual(str(gm["wartość-pln_eur"]).strip(), "400")
         self.assertEqual(str(gm["wartość-pln_pln"]).strip(), "0")
-        bonds = table.loc[(PORTFOLIO_KROTKOTERMINOWY, "investment.obligacje")]
+        bonds = table.loc[(PORTFOLIO_PLYNNY, "investment.obligacje")]
         self.assertEqual(str(bonds["wartość_pln"]).strip(), "1 234")
         self.assertEqual(str(gm["RAZEM-PLN"]).strip(), "400")
         self.assertEqual(str(bonds["RAZEM-PLN"]).strip(), "1 234")
-        mixed = table.loc[(PORTFOLIO_KROTKOTERMINOWY, "Z RAZEM")]
+        mixed = table.loc[(PORTFOLIO_PLYNNY, "Z RAZEM")]
         self.assertEqual(str(mixed["wartość-pln_eur"]).strip(), "40")
-        self.assertEqual(str(mixed["wartość-pln_pln"]).strip(), "2 233")
-        self.assertEqual(str(mixed["RAZEM-PLN"]).strip(), "2 273")
+        self.assertEqual(str(mixed["wartość-pln_pln"]).strip(), "1 234")
+        self.assertEqual(str(mixed["RAZEM-PLN"]).strip(), "1 274")
+        cash_pool = table.loc[(PORTFOLIO_CASH_POOL, "Z RAZEM")]
+        self.assertEqual(str(cash_pool["wartość-pln_pln"]).strip(), "999")
+        self.assertEqual(str(cash_pool["RAZEM-PLN"]).strip(), "999")
         self.assertEqual(list(table.columns)[-1], "RAZEM-PLN")
         self.assertNotIn("nan", " ".join(str(v) for v in table.to_numpy().ravel()))
         self.assertNotIn(".0", " ".join(str(v) for v in table.to_numpy().ravel()))
@@ -94,7 +113,7 @@ class RapPortfolioIndexTests(unittest.TestCase):
                 "RAZEM-PLN": ["2 273"],
             },
             index=pd.MultiIndex.from_tuples(
-                [("0 KRÓTKOTERMINOWY", "investment.cash")],
+                [("0 PŁYNNY", "investment.cash")],
                 names=["portfel", "typ"],
             ),
         )

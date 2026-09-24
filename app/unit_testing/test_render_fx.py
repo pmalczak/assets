@@ -45,11 +45,16 @@ class FxGoldChartTests(unittest.TestCase):
 
         self.assertEqual(spec["resolve"]["scale"]["y"], "independent")
         self.assertEqual(spec["height"], CHART_HEIGHT)
+        # Płaskie warstwy: rule + EUR + złoto (bez zagnieżdżonego layer).
+        self.assertEqual(len(spec["layer"]), 3)
+        self.assertFalse(any("layer" in child for child in spec["layer"]))
         y_axes = [axis for axis in _y_encodings(spec) if axis.get("title")]
         self.assertEqual(len(y_axes), 2)
         titles = [axis["title"] for axis in y_axes]
         self.assertIn("EUR/PLN", titles)
         self.assertIn(f"Złoto {GOLD_UNIT}", titles)
+        eur_axis = next(axis for axis in y_axes if axis["title"] == "EUR/PLN")
+        self.assertEqual(eur_axis["axis"]["orient"], "left")
         gold_axis = next(axis for axis in y_axes if axis["title"] == f"Złoto {GOLD_UNIT}")
         self.assertEqual(gold_axis["axis"]["orient"], "right")
 
@@ -75,7 +80,9 @@ class FxGoldChartTests(unittest.TestCase):
         self.assertNotIn("resolve", spec)
         self.assertEqual(spec["height"], CHART_HEIGHT)
         self.assertEqual(len(spec["layer"]), 1)
-        self.assertEqual(spec["layer"][0]["encoding"]["y"]["title"], "EUR/PLN")
+        eur_y = spec["layer"][0]["encoding"]["y"]
+        self.assertEqual(eur_y["title"], "EUR/PLN")
+        self.assertEqual(eur_y["axis"]["orient"], "left")
 
 
 if __name__ == "__main__":

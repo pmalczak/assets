@@ -11,12 +11,13 @@ from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
 
-PORTFOLIO_KROTKOTERMINOWY = "0 KRÓTKOTERMINOWY"
+PORTFOLIO_CASH_POOL = "0 CASH-POOL"
+PORTFOLIO_PLYNNY = "0 PŁYNNY"
 PORTFOLIO_REVOLUT_ROBO = "1 REVOLUT-ROBO"
 PORTFOLIO_GM = "2 G-MOMENTUM"
 PORTFOLIO_DLUGOTERMINOWY = "3 DŁUGOTERMINOWY"
 PORTFOLIO_NIERUCHOMOSCI = "4 NIERUCHOMOSCI"
-DEFAULT_PORTFOLIO = PORTFOLIO_KROTKOTERMINOWY
+DEFAULT_PORTFOLIO = PORTFOLIO_PLYNNY
 
 PORTFOLIO_GM_ORDER: tuple[str, ...] = (
     DEFAULT_DEGIRO_ASSET_ID,
@@ -30,11 +31,16 @@ PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS = frozenset({"gm_ike", "pm_ike", "rocky-iv"})
 ROLE_EXECUTION = "wykonanie"
 
 KNOWN_PORTFOLIOS: tuple[str, ...] = (
-    PORTFOLIO_KROTKOTERMINOWY,
+    PORTFOLIO_CASH_POOL,
+    PORTFOLIO_PLYNNY,
     PORTFOLIO_REVOLUT_ROBO,
     PORTFOLIO_GM,
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_NIERUCHOMOSCI,
+)
+# Tabele Inwestycje (helpers) — bez CASH-POOL; cash_pool ma własny portfel w Portfele / RAP.
+INVESTMENT_PORTFOLIOS: tuple[str, ...] = tuple(
+    name for name in KNOWN_PORTFOLIOS if name != PORTFOLIO_CASH_POOL
 )
 
 _BLANK_TYPE_TOKENS = frozenset({"", "nan", "none", "<na>", "nat"})
@@ -76,9 +82,11 @@ def gm_asset_role(asset_id: str | None) -> str | None:
 
 def portfolio_for_row(asset_id: str | None, typ: object = None) -> str:
     kind = _clean_typ(typ)
+    if kind.startswith("cash_pool."):
+        return PORTFOLIO_CASH_POOL
     if kind == "investment.property":
         return PORTFOLIO_NIERUCHOMOSCI
-    if kind.startswith("cash_pool.") or kind.startswith("investment."):
+    if kind.startswith("investment."):
         return portfolio_for_asset_id(asset_id)
     if not kind:
         return portfolio_for_asset_id(asset_id)
@@ -128,12 +136,12 @@ _INVESTMENT_TABLE_HIDDEN = (
 
 
 def investments_by_portfolio(assets: pd.DataFrame) -> list[tuple[str, pd.DataFrame]]:
-    """Inwestycje w kolejności KNOWN_PORTFOLIOS; bez `portfel` i dat wyciągu."""
+    """Inwestycje w kolejności INVESTMENT_PORTFOLIOS; bez `portfel` i dat wyciągu."""
     work = investments_with_portfolio(assets)
     if work is None:
         work = pd.DataFrame()
     tables: list[tuple[str, pd.DataFrame]] = []
-    for name in KNOWN_PORTFOLIOS:
+    for name in INVESTMENT_PORTFOLIOS:
         if AssetsDef.PORTFOLIO in work.columns:
             part = work.loc[work[AssetsDef.PORTFOLIO] == name].copy()
         else:

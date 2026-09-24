@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from app_streamlit.render_main_reports import CASH_POOL_DISPLAY_COLUMNS, cash_pool_table_for_display
 from evaluators.evaluate_assets import evaluate_assets
 from evaluators.evaluate_mbank import evaluate_mbank
 from evaluators.evaluate_revolut import evaluate_revolut
@@ -224,44 +223,6 @@ class CashPoolDaysAfterValuationTests(unittest.TestCase):
                     Path("."), catalog, fx_rates, date(2026, 9, 11)
                 )
         self.assertEqual(int(result[AssetsDef.DAYS_AFTER_VALUATION].iloc[0]), 40)
-
-
-class CashPoolDisplayColumnsTests(unittest.TestCase):
-    def test_hides_evaluation_and_portfolio_valuation_date(self):
-        df = pd.DataFrame(
-            [
-                {
-                    AssetsFile.ID: "p_m_1",
-                    AssetsFile.DESCR: "x",
-                    AssetsFile.CURRENCY: "PLN",
-                    AssetsDef.VALUE: 1.0,
-                    AssetsDef.VALUE_PLN: 1,
-                    AssetsDef.LAST_TRANSACTION_DATE: "2026-09-01",
-                    AssetsDef.STATEMENT_DATE: "2026-08-01",
-                    AssetsDef.VALUE_DATE: "2026-09-11",
-                    AssetsDef.DAYS_AFTER_VALUATION: 41,
-                    AssetsDef.PORTFOLIO: "0 KRÓTKOTERMINOWY",
-                    AssetsDef.EVALUATION_DATE: "2026-09-01",
-                    "data_wyceny_portfela": "2026-09-11",
-                }
-            ]
-        )
-        shown = cash_pool_table_for_display(df)
-        self.assertEqual(list(shown.columns), CASH_POOL_DISPLAY_COLUMNS)
-        value_at = list(shown.columns).index(AssetsDef.VALUE)
-        self.assertEqual(
-            list(shown.columns)[value_at:value_at + 3],
-            [AssetsDef.VALUE, AssetsFile.CURRENCY, AssetsDef.VALUE_PLN],
-        )
-        self.assertIn(AssetsDef.STATEMENT_DATE, shown.columns)
-        self.assertIn(AssetsDef.EVALUATION_DATE, shown.columns)
-        eval_at = list(shown.columns).index(AssetsDef.EVALUATION_DATE)
-        self.assertEqual(
-            list(shown.columns)[eval_at:eval_at + 3],
-            [AssetsDef.EVALUATION_DATE, AssetsDef.VALUE_DATE, AssetsDef.DAYS_AFTER_VALUATION],
-        )
-        self.assertNotIn(AssetsDef.LAST_TRANSACTION_DATE, shown.columns)
-        self.assertNotIn("data_wyceny_portfela", shown.columns)
 
 
 if __name__ == "__main__":

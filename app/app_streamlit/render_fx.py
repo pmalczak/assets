@@ -84,8 +84,20 @@ def build_fx_chart(
     gold: pd.DataFrame,
     month_lines: pd.DataFrame,
 ) -> alt.LayerChart:
-    """EUR/PLN na lewej osi, złoto NBP (PLN/oz) na prawej. Skale Y niezależne."""
-    eur_line = (
+    """EUR/PLN na lewej osi, złoto NBP (PLN/oz) na prawej. Skale Y niezależne.
+
+    Warstwy muszą być płaskie (siblings). Zagnieżdżony ``alt.layer(eur+rules, gold)``
+    z ``resolve_scale(y=independent)`` w Streamlit/Vega-Lite gubi lewą oś EUR.
+    Pionowe linie miesięcy: tylko ``x`` (pełna wysokość widoku) — bez ``y``/``y2``.
+    """
+    layers: list[alt.Chart] = []
+    if not month_lines.empty:
+        layers.append(
+            alt.Chart(month_lines)
+            .mark_rule(color="#666666", strokeWidth=1, opacity=0.45)
+            .encode(x=alt.X(f"{DATE_COL}:T", title="Data"))
+        )
+    layers.append(
         alt.Chart(eur)
         .mark_line(color=EUR_COLOR)
         .encode(
@@ -94,7 +106,7 @@ def build_fx_chart(
                 f"{RATE_COL}:Q",
                 title="EUR/PLN",
                 scale=alt.Scale(zero=False),
-                axis=alt.Axis(titleColor=EUR_COLOR),
+                axis=alt.Axis(orient="left", titleColor=EUR_COLOR),
             ),
             tooltip=[
                 alt.Tooltip(f"{DATE_COL}:T", title="Data"),
@@ -102,28 +114,10 @@ def build_fx_chart(
             ],
         )
     )
-    # Linie miesięcy zostają w tej samej skali co EUR. Osobna warstwa bez osi Y
-    # obok resolve_scale(y=independent) daje w Streamlit pusty wykres.
-    eur_layers: list[alt.Chart] = []
-    if not month_lines.empty and not eur.empty:
-        rules = month_lines.copy()
-        rules[RATE_COL] = float(eur[RATE_COL].min())
-        rules["_hi"] = float(eur[RATE_COL].max())
-        eur_layers.append(
-            alt.Chart(rules)
-            .mark_rule(color="#666666", strokeWidth=1, opacity=0.45)
-            .encode(
-                x=f"{DATE_COL}:T",
-                y=alt.Y(f"{RATE_COL}:Q", axis=None),
-                y2="_hi:Q",
-            )
-        )
-    eur_layers.append(eur_line)
-    left = alt.layer(*eur_layers)
     if gold.empty:
-        return left.properties(height=CHART_HEIGHT)
+        return alt.layer(*layers).properties(height=CHART_HEIGHT)
 
-    gold_line = (
+    layers.append(
         alt.Chart(gold)
         .mark_line(color=GOLD_COLOR)
         .encode(
@@ -141,7 +135,7 @@ def build_fx_chart(
         )
     )
     return (
-        alt.layer(left, gold_line)
+        alt.layer(*layers)
         .resolve_scale(y="independent")
         .properties(height=CHART_HEIGHT)
     )
@@ -184,12 +178,10 @@ def render_fx() -> None:
     delta = latest_rate - first_rate
     delta_pct = (delta / first_rate * 100) if first_rate else 0.0
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Ostatni kurs EUR", f"{latest_rate:.4f} PLN")
-    c2.metric("Data ostatniego kursu", pd.Timestamp(latest[DATE_COL]).date().isoformat())
-    c3.metric(f"Zmiana EUR ({CHART_MONTHS} mies.)", f"{delta:+.4f} PLN", f"{delta_pct:+.1f}%")
-    c4.metric("Notowania EUR w oknie", f"{len(chart_history):,}".replace(",", " "))
-
+    gold_latest_price = None
+    gold_latest_date = None
+    gold_delta = None
+    gold_delta_pct = None
     if gold_warning is not None:
         st.warning("Nie udało się wczytać ceny złota NBP. Wykres pokazuje tylko EUR/PLN.")
         st.exception(gold_warning)
@@ -197,19 +189,50 @@ def render_fx() -> None:
         gold_latest = gold_window.iloc[-1]
         gold_first = gold_window.iloc[0]
         gold_latest_price = float(gold_latest[GOLD_COL])
+        gold_latest_date = pd.Timestamp(gold_latest[DATE_COL]).date().isoformat()
         gold_first_price = float(gold_first[GOLD_COL])
         gold_delta = gold_latest_price - gold_first_price
         gold_delta_pct = (gold_delta / gold_first_price * 100) if gold_first_price else 0.0
-        with st.container(horizontal=True):
-            st.metric("Ostatnia cena złota", _pln_oz(gold_latest_price))
+
+    st.markdown(
+        """
+        <style>
+        .st-key-fx_metrics [data-testid="stMetricLabel"] { font-size: 0.75rem; }
+        .st-key-fx_metrics [data-testid="stMetricValue"] { font-size: 1.75rem; }
+        .st-key-fx_metrics [data-testid="stMetricDelta"] { font-size: 0.8rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(key="fx_metrics"):
+        col_rate, col_date, col_delta, col_count = st.columns(4)
+        with col_rate:
+            st.metric("Ostatni kurs EUR", f"{latest_rate:.4f} PLN")
+            if gold_latest_price is not None:
+                st.metric("Ostatnia cena złota", _pln_oz(gold_latest_price))
+        with col_date:
             st.metric(
-                "Data ceny złota",
-                pd.Timestamp(gold_latest[DATE_COL]).date().isoformat(),
+                "Data ostatniego kursu",
+                pd.Timestamp(latest[DATE_COL]).date().isoformat(),
             )
+            if gold_latest_date is not None:
+                st.metric("Data ceny złota", gold_latest_date)
+        with col_delta:
             st.metric(
-                f"Zmiana złota ({CHART_MONTHS} mies.)",
-                _pln_oz(gold_delta, signed=True),
-                f"{gold_delta_pct:+.1f}%",
+                f"Zmiana EUR ({CHART_MONTHS} mies.)",
+                f"{delta:+.4f} PLN",
+                f"{delta_pct:+.1f}%",
+            )
+            if gold_delta is not None and gold_delta_pct is not None:
+                st.metric(
+                    f"Zmiana złota ({CHART_MONTHS} mies.)",
+                    _pln_oz(gold_delta, signed=True),
+                    f"{gold_delta_pct:+.1f}%",
+                )
+        with col_count:
+            st.metric(
+                "Notowania EUR w oknie",
+                f"{len(chart_history):,}".replace(",", " "),
             )
 
     st.caption(
