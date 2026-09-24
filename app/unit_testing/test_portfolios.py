@@ -45,6 +45,9 @@ class PortfolioAssignmentTests(unittest.TestCase):
         )
         self.assertEqual(portfolio_for_asset_id("cash"), PORTFOLIO_KROTKOTERMINOWY)
         self.assertEqual(portfolio_for_asset_id("obligacjeskarbowe"), PORTFOLIO_KROTKOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id("gm_ike"), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id("pm_ike"), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(portfolio_for_asset_id("rocky-iv"), PORTFOLIO_DLUGOTERMINOWY)
         self.assertEqual(portfolio_for_asset_id("nowe-aktywo"), DEFAULT_PORTFOLIO)
 
     def test_gm_roles_execution_only(self):
@@ -65,6 +68,9 @@ class PortfolioAssignmentTests(unittest.TestCase):
             portfolio_for_row(DEFAULT_REVOLUT_ROBO_ASSET_ID, "investment.udziały"),
             PORTFOLIO_REVOLUT_ROBO,
         )
+        self.assertEqual(portfolio_for_row("rocky-iv", "investment.cash"), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(portfolio_for_row("gm_ike", "investment.udziały"), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(portfolio_for_row("pm_ike", "investment.udziały"), PORTFOLIO_DLUGOTERMINOWY)
 
     def test_attach_and_nav_by_portfolio(self):
         snapshot = pd.DataFrame(
@@ -153,6 +159,12 @@ class PortfolioAssignmentTests(unittest.TestCase):
                     AssetsDef.VALUE_PLN: 700,
                 },
                 {
+                    AssetsDef.ID: "rocky-iv",
+                    AssetsDef.TYPE: "investment.cash",
+                    AssetsDef.GROUP: "0 gotówka",
+                    AssetsDef.VALUE_PLN: 250,
+                },
+                {
                     AssetsDef.ID: "p_m_23_2330",
                     AssetsDef.TYPE: "cash_pool.ror",
                     AssetsDef.GROUP: "1 konta bankowe",
@@ -174,7 +186,7 @@ class PortfolioAssignmentTests(unittest.TestCase):
         )
         by_name = {name: frame for name, frame in tables}
         self.assertEqual(list(by_name[PORTFOLIO_KROTKOTERMINOWY][AssetsDef.ID]), ["cash"])
-        self.assertTrue(by_name[PORTFOLIO_DLUGOTERMINOWY].empty)
+        self.assertEqual(list(by_name[PORTFOLIO_DLUGOTERMINOWY][AssetsDef.ID]), ["rocky-iv"])
         self.assertEqual(
             list(by_name[PORTFOLIO_NIERUCHOMOSCI][AssetsDef.ID]),
             ["properties"],

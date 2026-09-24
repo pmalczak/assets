@@ -25,6 +25,7 @@ PORTFOLIO_GM_ORDER: tuple[str, ...] = (
 PORTFOLIO_GM_ASSET_IDS = frozenset(PORTFOLIO_GM_ORDER)
 PORTFOLIO_GM_BROKER_ASSET_IDS = frozenset({DEFAULT_DEGIRO_ASSET_ID, DEFAULT_XTB_ASSET_ID})
 PORTFOLIO_REVOLUT_ROBO_ASSET_IDS = frozenset({DEFAULT_REVOLUT_ROBO_ASSET_ID})
+PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS = frozenset({"gm_ike", "pm_ike", "rocky-iv"})
 
 ROLE_EXECUTION = "wykonanie"
 
@@ -43,6 +44,8 @@ def portfolio_for_asset_id(asset_id: str | None) -> str:
         return PORTFOLIO_GM
     if key in PORTFOLIO_REVOLUT_ROBO_ASSET_IDS:
         return PORTFOLIO_REVOLUT_ROBO
+    if key in PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS:
+        return PORTFOLIO_DLUGOTERMINOWY
     return DEFAULT_PORTFOLIO
 
 
