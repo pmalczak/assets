@@ -152,5 +152,5 @@ def render_sold_filter_control() -> None:
         options=SOLD_FILTER_LABELS,
         key=SOLD_FILTER_STATE_KEY,
         on_change=on_sold_filter_changed,
-        help="Filtruje tabele ROI według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
+        help="Filtruje tabele ROI i CF/XIRR w Portfelach według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
     )

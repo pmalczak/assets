@@ -12,11 +12,25 @@ from app_streamlit.column_layout import (
     format_amount_columns,
     with_value_currency_pln_order,
 )
-from app_streamlit.safe_download import dataframe_for_streamlit
+from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download_button
 from global_momentum.global_momentum_benchmarks import GM_U7_LABEL
 from importers.assets.data_model import AssetsDef
+from portfolio_cf.allocate import allocate_ledger_to_portfolio
+from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
+from portfolio_cf.coverage import CoverageStatus
+from portfolio_cf.data_model import InstrumentCashFlow
+from portfolio_cf.export_excel import portfolio_cf_excel_filename, portfolio_cf_to_excel_bytes
+from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO, portfolio_for_instrument
+from portfolio_cf.sold_status import (
+    filter_coverage_by_sold,
+    filter_ledger_by_sold,
+    is_instrument_sold,
+)
+from portfolio_cf.xirr import compute_named_portfolio_xirr
+from app_proc.ui_prefs import current_sold_filter
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
+    PORTFOLIO_CASH_POOL,
     PORTFOLIO_GM,
     PORTFOLIO_PLYNNY,
     assets_in_portfolio,
@@ -31,6 +45,7 @@ from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 2
 _GM_POSITIONS_SCHEMA = 1
+_LEDGER_SCHEMA = 4
 _PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
 _LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
 _COMPOSITION_COLUMNS = (
@@ -79,8 +94,8 @@ def render_portfolios() -> None:
 
     st.subheader("Portfele")
     st.caption(
-        "NAV i skład nazwanych portfeli ze snapshotów. "
-        "NAV zawiera dopłaty — to nie XIRR i nie czysty TWR. "
+        "NAV i skład ze snapshotów. XIRR portfela (nowe, dual-run) = concat CF instrumentów "
+        "w PLN (NBP z dnia transakcji) + terminal NAV — równolegle do legacy ROI w zakładce ROI. "
         f"Porównanie do backtestu U7 tylko dla {PORTFOLIO_GM}."
     )
 
@@ -88,6 +103,7 @@ def render_portfolios() -> None:
         _load_portfolio_nav.clear()
         _load_gm_positions.clear()
         _load_benchmarks.clear()
+        _load_instrument_ledger_cached.clear()
         st.rerun()
 
     _purge_stale_portfolio_selection()
@@ -106,12 +122,243 @@ def render_portfolios() -> None:
 
     st.markdown(f"**Snapshot:** {latest_snapshot_date.isoformat()}")
 
+    assembly = _render_portfolio_xirr(selected, latest_snapshot, latest_snapshot_date)
+
     if selected == PORTFOLIO_GM:
         _render_gm_composition(latest_snapshot, latest_snapshot_date)
     else:
         _render_generic_composition(latest_snapshot, selected)
 
+    _render_cf_browser(selected, assembly, latest_snapshot_date)
     _render_nav_path(selected)
+
+
+@st.cache_data(show_spinner=False)
+def _load_instrument_ledger_cached(
+    valuation_date: date,
+    _schema: int = _LEDGER_SCHEMA,
+) -> tuple[pd.DataFrame, pd.DataFrame, tuple[str, ...], dict[str, bool]]:
+    from app_proc.snapshots import list_snapshot_files, load_snapshot, snapshots_directory
+
+    snapshot = pd.DataFrame()
+    for snap_date, path in list_snapshot_files(snapshots_directory()):
+        if snap_date == valuation_date:
+            snapshot = load_snapshot(path)
+            break
+    assembly = build_instrument_ledger(valuation_date, snapshot=snapshot)
+    return (
+        assembly.ledger,
+        assembly.coverage_frame(),
+        tuple(assembly.warnings),
+        dict(assembly.is_sold_by_instrument),
+    )
+
+
+def _load_instrument_ledger(valuation_date: date) -> AssemblyResult:
+    from portfolio_cf.coverage import InstrumentCoverage
+
+    ledger, coverage_df, warnings, sold_map = _load_instrument_ledger_cached(valuation_date)
+    coverage: list = []
+    if coverage_df is not None and not coverage_df.empty:
+        for _, row in coverage_df.iterrows():
+            coverage.append(
+                InstrumentCoverage(
+                    instrument_id=str(row["instrument_id"]),
+                    status=CoverageStatus(str(row["status"])),
+                    reason=str(row.get("reason") or ""),
+                    venue=str(row.get("venue") or ""),
+                )
+            )
+    return AssemblyResult(
+        ledger=ledger,
+        coverage=coverage,
+        warnings=list(warnings),
+        is_sold_by_instrument=dict(sold_map or {}),
+    )
+
+
+def _render_portfolio_xirr(
+    portfolio_name: str,
+    snapshot: pd.DataFrame,
+    valuation_date: date,
+) -> AssemblyResult | None:
+    if portfolio_name == PORTFOLIO_CASH_POOL or portfolio_name == XIRR_EXCLUDED_PORTFOLIO:
+        st.info("XIRR portfela: `0 CASH-POOL` poza zakresem v1 (źródło finansowania).")
+        return None
+
+    try:
+        with st.spinner("Ledger CF + XIRR portfela..."):
+            assembly = _load_instrument_ledger(valuation_date)
+            result = compute_named_portfolio_xirr(
+                portfolio_name,
+                valuation_date,
+                assembly=assembly,
+                snapshot=snapshot,
+                sold_filter=current_sold_filter(),
+            )
+    except Exception as exc:
+        st.warning(f"Nie udało się policzyć XIRR portfela: {exc}")
+        return None
+
+    for msg in result.warnings:
+        st.warning(msg)
+
+    c1, c2, c3 = st.columns(3)
+    xirr_label = "XIRR (PLN)"
+    if result.incomplete:
+        xirr_label = "XIRR (PLN, niekompletne CF)"
+    c1.metric(
+        xirr_label,
+        f"{result.xirr:.2%}" if result.xirr is not None else "—",
+    )
+    c2.metric("Terminal NAV", f"{result.terminal_pln:,.0f} PLN".replace(",", " "))
+    c3.metric("ROI nominalny", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
+    st.caption(
+        f"XIRR = jeden compute_xirr na CF instrumentów (amount_pln) + terminal. "
+        f"Filtr pozycji (sidebar): **{current_sold_filter()}**. "
+        "Dual-run względem zakładki ROI."
+    )
+    if result.uncovered:
+        lines = [
+            f"`{item.instrument_id}` — {item.reason or item.status.value}"
+            for item in result.uncovered
+        ]
+        st.info(
+            "Instrumenty portfela **bez CF** (UNCOVERED; w XIRR brak ich przepływów, "
+            "NAV terminala i tak z całego portfela):\n\n- " + "\n- ".join(lines)
+        )
+    return assembly
+
+
+def _render_cf_browser(
+    portfolio_name: str,
+    assembly: AssemblyResult | None,
+    valuation_date: date,
+) -> None:
+    if assembly is None or portfolio_name == PORTFOLIO_CASH_POOL:
+        return
+
+    with st.expander("CF instrumentów (ledger)", expanded=False):
+        mode = current_sold_filter()
+        st.caption(f"Filtr pozycji (sidebar): **{mode}**")
+        subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
+        subset = filter_ledger_by_sold(
+            subset, assembly.is_sold_by_instrument, sold_filter=mode
+        )
+        coverage_visible = filter_coverage_by_sold(
+            [
+                item
+                for item in assembly.coverage
+                if portfolio_for_instrument(item.instrument_id) == portfolio_name
+                and item.status != CoverageStatus.EXCLUDED
+            ],
+            assembly.is_sold_by_instrument,
+            sold_filter=mode,
+        )
+        uncovered = [
+            item for item in coverage_visible if item.status == CoverageStatus.UNCOVERED
+        ]
+        covered_ids = (
+            sorted(subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str).unique())
+            if not subset.empty
+            else []
+        )
+        uncovered_ids = [item.instrument_id for item in uncovered]
+        instruments = sorted(set(covered_ids) | set(uncovered_ids))
+
+        opt_in_download_button(
+            prepare_label="Przygotuj pobieranie CF portfela (Excel)",
+            prepare_key=f"prepare_portfolio_cf_xlsx_{portfolio_name}",
+            button_label="Pobierz CF portfela (Excel)",
+            data_factory=lambda: portfolio_cf_to_excel_bytes(
+                assembly,
+                portfolio_name,
+                valuation_date,
+                sold_filter=mode,
+            ),
+            file_name=portfolio_cf_excel_filename(portfolio_name, valuation_date),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            download_key=f"portfolio_cf_xlsx_{portfolio_name}",
+            disabled=subset.empty and not uncovered,
+            help_prepare=(
+                "Excel w perspektywie portfela (po filtrze pozycji): arkusz cf, coverage, meta. "
+                "Na Python 3.14 włącz tylko na czas pobrania."
+            ),
+        )
+
+        coverage_rows = []
+        for item in coverage_visible:
+            coverage_rows.append(
+                {
+                    "instrument_id": item.instrument_id,
+                    "status": item.status.value,
+                    "is_sold": is_instrument_sold(
+                        item.instrument_id, assembly.is_sold_by_instrument
+                    ),
+                    "reason": item.reason,
+                    "venue": item.venue,
+                }
+            )
+        if coverage_rows:
+            st.caption("Pokrycie CF instrumentów tego portfela")
+            st.dataframe(
+                dataframe_for_streamlit(pd.DataFrame(coverage_rows).sort_values("instrument_id")),
+                width="stretch",
+                hide_index=True,
+            )
+        elif not instruments:
+            st.info(f"Brak instrumentów dla filtra: {mode}.")
+            return
+
+        if not instruments:
+            st.info(f"Brak instrumentów z coverage/ledger dla filtra: {mode}.")
+            return
+
+        chosen = st.selectbox(
+            "Instrument",
+            options=["(wszystkie z CF)"] + instruments,
+            key=f"portfolio_cf_instrument_{portfolio_name}",
+        )
+        if chosen != "(wszystkie z CF)" and chosen in uncovered_ids and chosen not in covered_ids:
+            item = next(u for u in uncovered if u.instrument_id == chosen)
+            st.warning(
+                f"`{chosen}` jest UNCOVERED — brak przepływów w ledgerze "
+                f"({item.reason or 'brak adaptera CF'})."
+            )
+            return
+
+        view = subset
+        if chosen != "(wszystkie z CF)":
+            view = subset.loc[
+                subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str) == chosen
+            ]
+        if view.empty:
+            st.info("Brak wierszy CF dla wybranego filtra.")
+            return
+        cols = [
+            InstrumentCashFlow.DATE,
+            InstrumentCashFlow.INSTRUMENT_ID,
+            InstrumentCashFlow.CATEGORY,
+            InstrumentCashFlow.AMOUNT,
+            InstrumentCashFlow.CURRENCY,
+            InstrumentCashFlow.AMOUNT_PLN,
+            InstrumentCashFlow.FX_RATE,
+            InstrumentCashFlow.FX_DATE,
+            InstrumentCashFlow.DESCRIPTION,
+        ]
+        display = view[[c for c in cols if c in view.columns]].copy()
+        display[InstrumentCashFlow.DATE] = pd.to_datetime(
+            display[InstrumentCashFlow.DATE], errors="coerce"
+        )
+        display = display.sort_values(InstrumentCashFlow.DATE, ascending=False)
+        display[InstrumentCashFlow.DATE] = display[InstrumentCashFlow.DATE].dt.strftime(
+            "%Y-%m-%d"
+        )
+        st.dataframe(
+            dataframe_for_streamlit(display),
+            width="stretch",
+            hide_index=True,
+        )
 
 
 def _render_generic_composition(snapshot: pd.DataFrame, portfolio_name: str) -> None:
