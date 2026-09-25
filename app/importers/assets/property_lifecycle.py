@@ -22,21 +22,6 @@ def cash_owned_asset_ids(assets_catalog: pd.DataFrame) -> set[str]:
     return set(assets_catalog.loc[mask, AssetsFile.ID].astype(str))
 
 
-def investment_property_ids(assets_catalog: pd.DataFrame | None = None) -> set[str]:
-    """Id z katalogu assets o typ=investment.property."""
-    from importers.assets.data_model import TypeDomain
-    from importers.assets.read_assets import read_assets
-
-    if assets_catalog is None:
-        assets_catalog = read_assets()
-    if assets_catalog is None or assets_catalog.empty:
-        return set()
-    if AssetsFile.TYPE not in assets_catalog.columns or AssetsFile.ID not in assets_catalog.columns:
-        return set()
-    mask = assets_catalog[AssetsFile.TYPE].astype(str) == TypeDomain.PROPERTY
-    return set(assets_catalog.loc[mask, AssetsFile.ID].astype(str))
-
-
 def earliest_divestment_dates(events: pd.DataFrame) -> dict[str, date]:
     """Najwcześniejsza data DIVESTMENT per asset_id z cashflowów ROI."""
     from roi.categories import DIVESTMENT, normalize_roi_category

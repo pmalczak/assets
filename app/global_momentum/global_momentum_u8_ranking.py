@@ -425,18 +425,6 @@ def annotate_asset_top3_drift(
     return annotated
 
 
-def compute_current_universe8_ranking(
-    monthly: pd.DataFrame,
-    universe8: list[str],
-    as_of_limit: pd.Timestamp | None = None,
-) -> dict:
-    return compute_current_universe7_ranking(
-        monthly,
-        universe8,
-        as_of_limit=as_of_limit,
-    )
-
-
 def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
     monthly = load_current_ranking_prices(
         START,
@@ -468,10 +456,6 @@ def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
                 official["ranking"],
             )
     return result
-
-
-def run_u8_ranking() -> dict:
-    return run_u7_ranking()
 
 
 def print_current_universe7_ranking(
@@ -543,13 +527,6 @@ def print_current_universe7_ranking(
 def main() -> None:
     monthly = load_current_ranking_prices(START)
     print_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
-
-
-def print_current_universe8_ranking(
-    monthly: pd.DataFrame,
-    universe8: list[str],
-) -> None:
-    print_current_universe7_ranking(monthly, universe8)
 
 
 if __name__ == "__main__":

@@ -69,7 +69,6 @@ Arkusze `a_config.xlsx`:
     - `download/pm|gm/` — źródło importu Revolut
     - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`)
     - Wyciąg, którego okres z nazwy **całkowicie zawiera się** w innym pliku tego samego rodzaju (to samo konto mBank / ten sam prefix Revolut `account-statement` lub `savings-statement`) jest zbędny — `maintenance/prune_contained_statements.py` (domyślnie dry-run; `--delete` kasuje). Równe okresy: zostaje jeden plik. UUID depozytów (bez dat w nazwie) poza tą regułą. Ten sam skrypt raportuje **luki** między pozostałymi okresami (next.start > prev.end + 1 dzień), np. `…_200101_200228` i `…_200315_200630`.
-    - Migrator: `app/maintenance/migrate_to_a_config.py`
 11. **Portfel** — każde `investment.*` i `cash_pool.*` ma dokładnie jeden: `0 CASH-POOL` (cały `cash_pool.*`), `0 PŁYNNY` (default inwestycji poza wyjątkami), `1 REVOLUT-ROBO`, `2 G-MOMENTUM`, `3 DŁUGOTERMINOWY` (`gm_ike` / `pm_ike` / `rocky-iv`) albo `4 NIERUCHOMOSCI` (każde `investment.property`). Nie jest to `grupa` ani osobny wiersz katalogu. RAP 1 = portfel → `RAZEM` (PLN, bez podziału na walutę/grupę) + `udział` % w sumie; RAP 2 = portfel × typ (+ `RAZEM-PLN` = `wartość-pln_eur` + `wartość-pln_pln`).
 12. **Kolejność i format kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. `wartość` i `wartość-pln` jak kwoty: spacje tysięcy, bez części dziesiętnej, wyrównane do prawej (`column_config` z `alignment="right"`, bo kwoty idą do UI jako tekst). Dotyczy tabel składu w zakładce Portfele i ewaluacji w Waliduj.
 
@@ -86,8 +85,6 @@ Arkusze `a_config.xlsx`:
 | `udziały` | `investment.udziały` |
 | `obligacje` | `investment.obligacje` |
 | `property` | `investment.property` |
-
-Migrator: `app/maintenance/migrate_assets_typ_prefix.py`.
 
 ---
 
@@ -229,12 +226,12 @@ Pozostaje:
 
 - Python przez `uv run` z katalogu `app/`.
 - Nie commitować bez prośby; nie pushować bez prośby.
-- **`data_steps/` cache — nigdy na GitHub** (m.in. `*.parquet`, `*.xls`, `*.xlsx`, `_metadata.json`, `_metadata.lock`: snapshoty, FX, Yahoo, `01 source`, ROI, przypadkowe wyciągi). Nie `git add` / commit / push. Fixtures w `app/unit_testing/data_steps/` wolno. Regeneracja: UI / pipeline, nie klon repo.
+- **`data_steps/` cache — nigdy na GitHub** (m.in. `*.parquet`, `*.xls`, `*.xlsx`, `_metadata.json`, `_metadata.lock`, cały `_ui/`: snapshoty, FX, Yahoo, `01 source`, ROI, przypadkowe wyciągi, lokalne preferencje UI). Nie `git add` / commit / push. Fixtures w `app/unit_testing/data_steps/` wolno. Regeneracja: UI / pipeline, nie klon repo.
 - **Git ↔ GitHub:** gałęzie synchronizowane z remote to **`main`** i **`maintenance`**. Inne gałęzie zostają lokalne — bez `push` / `pull` / `-u` / trackingu na GitHub, chyba że użytkownik wyraźnie każe inaczej w bieżącej rozmowie.
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zastosowania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
-- Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele ROI wg `is_sold`. Preferencja w `_ui/sold_filter.txt`. Snapshoty i tak pomijają `VALUE=0`.
+- Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele ROI wg `is_sold`. Preferencja lokalna w `data_steps/_ui/sold_filter.txt` (nie w git). Snapshoty i tak pomijają `VALUE=0`.
 - Zakładka **Waliduj**: walidacja ROI (`roi_def`/`roi_rules`/`roi_manual` / `instruments`) + ewaluacja katalogu `assets` w `a_config.xlsx` (dry-run, bez zapisu snapshotu).
 - Zakładka **ROI**: jedno miejsce z pills (Katalog / Revolut robo / depozyty Revolut / depozyty mBank / obligacje / DEGIRO / XTB) — soczewka operacji na koncie; bez zmiany semantyki XIRR. Wspólny wybór **„Data obliczenia ROI”** oznacza datę graniczną, na którą liczone są wskaźniki i wybierany terminal; nie nazywać go „datą wyceny ROI” ani `data-waluty` (ta w snapshotach oznacza datę kursu NBP). Tabele (także **Katalog**) mają kolumnę **„Data wyceny”** zaraz po „Wycena (nerealiz.)”, per aktywo. Dla wyciągów: `min(data obliczenia ROI, data pobrania użytego pliku)` (`FILE_DATE`). Dla katalogu: data wiersza `asset-evaluation` użytego jako terminal, a dla złota data publikacji NBP użytej ceny (`cenyzlota`), nie data ostatniej transakcji w `inventory`. W każdej pilli ponad tabelą szczegółową: wiersz **`Razem`** (te same kolumny) — kwoty = suma widocznych wierszy (po filtrze Sprzedane), XIRR = jeden `compute_xirr` na połączonych CF soczewki + Σ wycen nerealiz. (nie suma/średnia XIRR wierszy); **Data wyceny Razem = min** dat wyceny elementów (najsłabsze ogniwo). Bez XIRR między pillami / Portfele. Tabele przepływów per ticker/aktywo: od najnowszej do najstarszej. Wynik strategii GM jest w **Portfele** (`2 G-MOMENTUM`), nie tu.
 - Zakładka **Portfele**: NAV i skład nazwanych portfeli (`0 CASH-POOL` / `0 PŁYNNY` / `1 REVOLUT-ROBO` / `2 G-MOMENTUM` / `3 DŁUGOTERMINOWY` / `4 NIERUCHOMOSCI`) ze snapshotów. W tabelach składu: `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. Ścieżka NAV zawiera dopłaty — to nie XIRR i nie czysty TWR. TWR/XIRR całego portfela — później. Tylko `2 G-MOMENTUM`: skład **per instrument** (DEGIRO+XTB, gotówka osobno; udział vs NAV portfela do kontroli ≈1/3) oraz NAV vs backtest U7 (serie = 100 na wspólnym starcie). Snapshot brokerów nadal 1 wiersz.

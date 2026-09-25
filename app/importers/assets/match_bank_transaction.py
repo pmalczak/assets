@@ -6,8 +6,6 @@ from dataclasses import dataclass
 import pandas as pd
 
 from importers.assets.data_model import PurchaseRules, TitleMatchDomain
-from importers.mbank.data_model import MBankFile
-from importers.revolut.account_data_model import RevolutAccountFile
 
 
 @dataclass(frozen=True)
@@ -16,40 +14,6 @@ class RuleMatchOutcome:
     status: str
     matches: pd.DataFrame
     message: str
-
-
-def normalize_mbank_transactions(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame(columns=_normalized_columns())
-
-    result = pd.DataFrame(
-        {
-            "date": pd.to_datetime(df[MBankFile.MBANK_TRANSACTION_DATE], errors="coerce"),
-            "title": df[MBankFile.MBANK_TITLE].astype("string").fillna(""),
-            "counterparty": df[MBankFile.MBANK_TRANSACTION_PARTY].astype("string").fillna(""),
-            "counterparty_account": df[MBankFile.MBANK_ACCOUNT_NUMBER].astype("string").fillna(""),
-            "amount": pd.to_numeric(df[MBankFile.MBANK_AMOUNT], errors="coerce"),
-            "operation_description": df[MBankFile.MBANK_DESCRIPTION].astype("string").fillna(""),
-        }
-    )
-    return result.dropna(subset=["date", "amount"]).reset_index(drop=True)
-
-
-def normalize_revolut_transactions(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame(columns=_normalized_columns())
-
-    result = pd.DataFrame(
-        {
-            "date": pd.to_datetime(df[RevolutAccountFile.DATE], errors="coerce"),
-            "title": df[RevolutAccountFile.DESCRIPTION].astype("string").fillna(""),
-            "counterparty": pd.Series([""] * len(df), dtype="string"),
-            "counterparty_account": pd.Series([""] * len(df), dtype="string"),
-            "amount": pd.to_numeric(df[RevolutAccountFile.AMOUNT], errors="coerce"),
-            "operation_description": df[RevolutAccountFile.KIND].astype("string").fillna(""),
-        }
-    )
-    return result.dropna(subset=["date", "amount"]).reset_index(drop=True)
 
 
 def match_purchase_rules(
@@ -164,14 +128,3 @@ def _match_title(series: pd.Series, expected: str, rule: pd.Series) -> pd.Series
 
 def _normalize_account(value: str) -> str:
     return "".join(ch for ch in value.upper() if ch.isalnum())
-
-
-def _normalized_columns() -> list[str]:
-    return [
-        "date",
-        "title",
-        "counterparty",
-        "counterparty_account",
-        "amount",
-        "operation_description",
-    ]

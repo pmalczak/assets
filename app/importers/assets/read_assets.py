@@ -13,10 +13,8 @@ from importers.assets.data_model import (
     LEGACY_ASSET_EVALUATION_SHEET,
     LEGACY_INVENTORY_SHEET,
     LEGACY_PROPERTIES_SHEET,
-    LEGACY_UNIT_PRICE_EVALUATION_SHEET,
     PropertyValuations,
     UNIT_PRICE_EVALUATION_SHEET,
-    UnitPriceEvaluation,
 )
 from importers.assets.pool_id import (
     MBANK_EUR,
@@ -49,12 +47,10 @@ __all__ = [
     "get_assets_file",
     "read_assets",
     "read_asset_sheet",
-    "read_asset_sheet_optional",
     "INVENTORY_SHEET",
     "UNIT_PRICE_EVALUATION_SHEET",
     "ASSET_EVALUATION_SHEET",
     "read_inventory",
-    "read_unit_price_evaluation",
     "read_property_valuations",
 ]
 
@@ -84,16 +80,6 @@ def read_asset_sheet(sheet_name: str) -> pd.DataFrame:
     return pd.read_excel(source_file, sheet_name=sheet_name)
 
 
-def read_asset_sheet_optional(sheet_name: str) -> pd.DataFrame:
-    """Jak read_asset_sheet, ale brak zakładki → pusta ramka (bez wyjątku)."""
-    source_file = get_assets_file()
-    assert source_file.is_file(), source_file
-    try:
-        return pd.read_excel(source_file, sheet_name=sheet_name)
-    except ValueError:
-        return pd.DataFrame()
-
-
 def _first_existing_sheet(source_file: Path, candidates: tuple[str, ...]) -> str | None:
     sheet_names = set(pd.ExcelFile(source_file).sheet_names)
     for name in candidates:
@@ -116,22 +102,6 @@ def read_inventory() -> pd.DataFrame:
     if not inventory.empty:
         Inventory.check_structure(inventory, file=source_file)
     return inventory
-
-
-def read_unit_price_evaluation() -> pd.DataFrame:
-    """Ceny jednostkowe instrumentow (ROI / MTM). Brak zakladki → pusta ramka."""
-    source_file = get_assets_file()
-    sheet = _first_existing_sheet(
-        source_file, (UNIT_PRICE_EVALUATION_SHEET, LEGACY_UNIT_PRICE_EVALUATION_SHEET)
-    )
-    if sheet is None:
-        return pd.DataFrame()
-    prices = pd.read_excel(source_file, sheet_name=sheet)
-    if sheet == LEGACY_UNIT_PRICE_EVALUATION_SHEET and "moneta" in prices.columns and UnitPriceEvaluation.INSTRUMENT not in prices.columns:
-        prices = prices.rename(columns={"moneta": UnitPriceEvaluation.INSTRUMENT})
-    if not prices.empty:
-        UnitPriceEvaluation.check_structure(prices, file=source_file)
-    return prices
 
 
 def read_property_valuations() -> pd.DataFrame:

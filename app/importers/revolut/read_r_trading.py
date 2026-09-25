@@ -246,15 +246,3 @@ def parse_trading_pnl_csv(path: Path) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = ""
     return df[cols]
-
-
-def isin_by_symbol(pnl_df: pd.DataFrame) -> dict[str, str]:
-    if pnl_df is None or pnl_df.empty:
-        return {}
-    result: dict[str, str] = {}
-    for _, row in pnl_df.iterrows():
-        symbol = str(row.get(RevolutTradingPnlFile.SYMBOL) or "").strip()
-        isin = str(row.get(RevolutTradingPnlFile.ISIN) or "").strip()
-        if symbol and re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}\d", isin):
-            result[symbol] = isin
-    return result

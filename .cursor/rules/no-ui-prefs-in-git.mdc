@@ -1,0 +1,15 @@
+---
+description: Never commit local Streamlit UI prefs under data_steps/_ui
+alwaysApply: true
+---
+
+# Brak `data_steps/_ui/` w repozytorium
+
+`data_steps/_ui/` trzyma **lokalne preferencje UI** Streamlit (np. `last_tab.txt`, `sold_filter.txt`). Tworzone/aktualizowane w runtime przez `app_proc/ui_prefs.py`. **Nie wolno** ich commitować ani pushować na GitHub.
+
+## Required behavior
+
+1. **Nie dodawaj** niczego z `data_steps/_ui/` do stage. Katalog jest w `.gitignore`.
+2. Brak pliku = domyślna preferencja w kodzie; UI odtworzy plik przy zapisie.
+3. Jeśli są **już tracked** — `git rm -r --cached data_steps/_ui` (i usunięcie z dysku gdy użytkownik o to prosi); nie przywracaj w PR.
+4. Fixtures testowe UI prefs trzymaj poza `data_steps/_ui/` (np. temp dir w teście).

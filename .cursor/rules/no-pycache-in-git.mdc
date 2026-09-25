@@ -1,0 +1,15 @@
+---
+description: Never commit Python __pycache__ or bytecode to git
+alwaysApply: true
+---
+
+# Brak `__pycache__` w repozytorium
+
+Katalogi `__pycache__/` i pliki `*.pyc` / `*.pyo` / `*.pyd` powstają w runtime (interpreter Python). **Nie wolno** ich commitować ani pushować na GitHub.
+
+## Required behavior
+
+1. **Nie dodawaj** `__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd` do stage (`git add`). Są w `.gitignore`.
+2. Jeśli znajdziesz je w working tree — **usuń lokalnie** (`rm -rf …/__pycache__`); nie commituj usunięcia jako „feature”, tylko jako cleanup gdy użytkownik o to prosi albo gdy są już tracked.
+3. Jeśli są **już tracked** (mimo `.gitignore`) — `git rm -r --cached` + usunięcie z dysku; nie przywracaj ich w PR.
+4. Nie proponuj commitów, których jedyną treścią są artefakty bytecode, chyba że użytkownik chce wyczyścić historię indeksu.

@@ -50,18 +50,9 @@ def disposition_date_range_from_df(df: pd.DataFrame) -> tuple[date, date]:
     return dates.min().date(), dates.max().date()
 
 
-def disposition_date_range(path: Path) -> tuple[date, date]:
-    """Pierwsza i ostatnia DATA DYSPOZYCJI z pliku Excel."""
-    return disposition_date_range_from_df(read_historia_excel(path))
-
-
 def dated_historia_filename_from_df(df: pd.DataFrame, fetched: date | None = None) -> str:
     first, last = disposition_date_range_from_df(df)
     return dated_historia_filename(first, last, fetched)
-
-
-def dated_historia_filename_from_excel(path: Path) -> str:
-    return dated_historia_filename_from_df(read_historia_excel(path))
 
 
 def list_historia_files(directory: Path) -> list[Path]:
