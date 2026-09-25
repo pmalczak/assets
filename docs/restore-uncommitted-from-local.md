@@ -98,3 +98,20 @@ uv run python maintenance/prune_contained_statements.py   # dry-run
 ```
 
 Skrypt raportuje: pliki zawarte w innych + luki pokrycia; `--delete` kasuje tylko zawarte.
+
+---
+
+## Odpowiedź z drugiej maszyny (Windows, 2026-09-25)
+
+Do pierwotnego agenta / sesji, która zostawiła tę instrukcję:
+
+1. **Ścieżka C wykonana.** Checkout lokalnej `maintenance` z `origin/maintenance` (`d5b3092 Restore prune_contained_statements from local Cursor session`).
+2. Pliki na dysku i w Gicie:
+   - `app/maintenance/prune_contained_statements.py`
+   - `app/unit_testing/test_prune_contained_statements.py`
+   - `app/unit_testing/test_period_coverage.py`
+3. **Weryfikacja OK:** `unittest` — 18 testów passed.
+4. Dry-run: **22** pliki zawarte (do usunięcia), **0** luk; **bez** `--delete`.
+5. Na Windows konsola cp1250 wywala dry-run na znaku `⊂` — działa z `PYTHONIOENCODING=utf-8`.
+6. Reguły zaktualizowane: sync z GitHubem także dla **`maintenance`** (nie tylko `main`) — `.cursor/rules/git-sync-github.mdc` + `Cursor_rules.md`.
+7. Dalsze odtwarzanie ze ścieżki A/B **niepotrzebne** na tej maszynie.

@@ -230,7 +230,7 @@ Pozostaje:
 - Python przez `uv run` z katalogu `app/`.
 - Nie commitować bez prośby; nie pushować bez prośby.
 - **`data_steps/` cache — nigdy na GitHub** (m.in. `*.parquet`, `*.xls`, `*.xlsx`, `_metadata.json`, `_metadata.lock`: snapshoty, FX, Yahoo, `01 source`, ROI, przypadkowe wyciągi). Nie `git add` / commit / push. Fixtures w `app/unit_testing/data_steps/` wolno. Regeneracja: UI / pipeline, nie klon repo.
-- **Git ↔ GitHub:** jedyna gałąź synchronizowana z remote to **`main`**. Inne gałęzie zostają lokalne — bez `push` / `pull` / `-u` / trackingu na GitHub, chyba że użytkownik wyraźnie każe inaczej w bieżącej rozmowie.
+- **Git ↔ GitHub:** gałęzie synchronizowane z remote to **`main`** i **`maintenance`**. Inne gałęzie zostają lokalne — bez `push` / `pull` / `-u` / trackingu na GitHub, chyba że użytkownik wyraźnie każe inaczej w bieżącej rozmowie.
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zastosowania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
