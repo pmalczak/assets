@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
@@ -13,6 +12,7 @@ from importers.assets.data_model import AssetsDef, AssetsFile
 from importers.assets.read_assets import read_assets
 from app_proc.check_wrong_catalogs import check_wrong_catalogs
 from app_proc.data_root import get_online_data_root
+from app_proc.data_steps_root import get_nbp_fx_cache_dir
 from app_proc.export_product_excel import export_assets_evaluation
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 
@@ -48,11 +48,7 @@ def calculate_assets(
 def _build_assets_snapshot(valuation_date: date) -> pd.DataFrame:
     data_root = get_online_data_root()
 
-    metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / "fx"
-    if not metadata_root.is_dir():
-        metadata_root.mkdir()
-
-    fx_repo = NbpFxRepository(target_directory=metadata_root, min_year=2005)
+    fx_repo = NbpFxRepository(target_directory=get_nbp_fx_cache_dir(), min_year=2005)
     fx_rates = fx_repo.update_to_date()
     fx_rates = fx_rates[[NBP_API_EUR]]
 
@@ -70,11 +66,7 @@ def evaluate_assets_file_for_ui(valuation_date: date) -> tuple[pd.DataFrame, lis
     """
     data_root = get_online_data_root()
 
-    metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / "fx"
-    if not metadata_root.is_dir():
-        metadata_root.mkdir()
-
-    fx_repo = NbpFxRepository(target_directory=metadata_root, min_year=2005)
+    fx_repo = NbpFxRepository(target_directory=get_nbp_fx_cache_dir(), min_year=2005)
     fx_rates = fx_repo.update_to_date()
     fx_rates = fx_rates[[NBP_API_EUR]]
 

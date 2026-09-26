@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
-from pathlib import Path
 
 import pandas as pd
 
@@ -48,10 +47,9 @@ def to_pln(
 
 @lru_cache(maxsize=1)
 def _default_fx_rates() -> pd.DataFrame:
-    from app_proc.data_steps_root import get_data_steps_root
+    from app_proc.data_steps_root import get_nbp_fx_cache_dir
 
-    metadata = Path(get_data_steps_root())
-    repo = NbpFxRepository(target_directory=metadata, min_year=2005)
+    repo = NbpFxRepository(target_directory=get_nbp_fx_cache_dir(), min_year=2005)
     rates = repo.update_to_date()
     return rates[[NBP_API_EUR]].copy()
 

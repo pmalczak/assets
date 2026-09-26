@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-from data_step.data_step import DATA_STEP
+from app_proc.data_steps_root import get_nbp_fx_cache_dir
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
 from nbp_pl_api.nbp_gold_fetch import NBP_GOLD_DATE, NBP_GOLD_PRICE, fetch_nbp_gold
 from roi.gold_terminal import TROY_OUNCE_GRAMS
@@ -29,15 +28,9 @@ def _pln_oz(value: float, *, signed: bool = False) -> str:
     return f"{number.replace(',', ' ')} {GOLD_UNIT}"
 
 
-def _fx_cache_directory() -> Path:
-    metadata_root: Path = DATA_STEP.metadata.get_metadata_root() / "fx"
-    metadata_root.mkdir(parents=True, exist_ok=True)
-    return metadata_root
-
-
 @st.cache_data(show_spinner=False)
 def _load_eur_fx_history() -> pd.DataFrame:
-    fx_repo = NbpFxRepository(target_directory=_fx_cache_directory(), min_year=FX_MIN_YEAR)
+    fx_repo = NbpFxRepository(target_directory=get_nbp_fx_cache_dir(), min_year=FX_MIN_YEAR)
     fx_rates = fx_repo.update_to_date()
     if NBP_API_EUR not in fx_rates.columns:
         return pd.DataFrame(columns=[DATE_COL, RATE_COL])

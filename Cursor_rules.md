@@ -240,6 +240,7 @@ Pozostaje:
 - **Portfel** — każde `investment.*` i `cash_pool.*` należy do dokładnie jednego: **`0 CASH-POOL`** (cały `cash_pool.*`), **`0 PŁYNNY`** (reszta, w tym `zloto-monety`; default), **`1 REVOLUT-ROBO`** (`p_re_robo` + instrumenty `p_re_robo:*` w tym CASH), **`2 G-MOMENTUM`** (`p_degiro`/`p_xtb` + instrumenty `p_degiro:*`/`p_xtb:*` w tym CASH), **`3 DŁUGOTERMINOWY`** (`gm_ike`, `pm_ike`, `rocky-iv`), **`4 NIERUCHOMOSCI`** (wszystkie `investment.property`). Jednostka ledger/XIRR = **instrument**; mapa startowa = stan obecny (całe ROBO→ROBO, DEGIRO/XTB→GM). Przypisanie w kodzie (v1). RAP 1/2 bez zmian. Widok GM = **Portfele** / `2 G-MOMENTUM`.
 - **DATA_STEP** — jedyna warstwa cache i łańcucha zależności. Korzystamy **tylko z API wysokopoziomowego** — w praktyce wyłącznie z metod klasy `DataStep` (np. `init_steps`, `obtain`, `obtain_dependent`, `force_read_data`). Nie wywoływać prywatnych pól/metod (`_dependencies_stack`, `_dependencies`, …) i nie omijać DATA_STEP własnym cache. `roi/cache.py` to produkt domenowy (`10 roi_events`) na DATA_STEP, nie osobny system cache.
 - **Yahoo Close** — serie dzienne w `data_steps/yahoo/{ticker}/{as_of}.parquet` przez DATA_STEP (`yahoo_finance.download_yahoo`). Nie do snapshotu / ROI brokerów (MTM online nadal non-goal).
+- **NBP FX** — cache kursów wyłącznie w `data_steps/fx/` (`NBP_FX_RATES.*.parquet`); nie w root `data_steps/`. Ścieżka: `get_nbp_fx_cache_dir()`.
 - Komunikacja z użytkownikiem: zwięźle, po polsku jeśli pyta po polsku.
 
 ---
