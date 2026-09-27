@@ -14,7 +14,7 @@ def get_data_steps_root(start: Path | None = None) -> Path:
 
 
 def init_app_data_step(start: Path | None = None) -> Path:
-    """Jedyna inicjalizacja DATA_STEP w procesie — wołać z entrypointu (main / CLI).
+    """Jedyna inicjalizacja DATA_STEP w procesie — wołać z entrypointu (app_assets / CLI).
 
     Idempotentne dla tego samego roota. Nie wywoływać z adapterów / downloadów.
     """

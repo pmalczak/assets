@@ -84,8 +84,8 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         with controls_col:
             st.warning(
                 f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
-                "Użyj przycisku powyżej albo uruchom "
-                "`maintenance/recalculate_weekly_assets_snapshots.py`."
+                "Użyj przycisku powyżej albo "
+                "`uv run python -m app_proc.snapshot_cli --weekly`."
             )
         return
 

@@ -16,7 +16,8 @@ def render_portfolio_history(history: pd.DataFrame, timeline_events: pd.DataFram
     if history.empty:
         st.warning(
             f"Brak snapshotow w katalogu `{snapshots_directory()}`. "
-            "Uruchom `maintenance/recalculate_weekly_assets_snapshots.py`."
+            "Użyj przycisku Generuj snapshot albo "
+            "`uv run python -m app_proc.snapshot_cli --weekly`."
         )
         return
 

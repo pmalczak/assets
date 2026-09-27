@@ -5,8 +5,14 @@ from datetime import date
 
 import pandas as pd
 
-from evaluators.valuation_date import filter_excel_rows_on_or_before, format_date_columns
+from evaluators.valuation_date import format_date_columns
 from importers.assets.data_model import AssetsDef, Properties, PropertyValuations
+from importers.assets.ike import (
+    account_for_kind,
+    ike_terminal_value,
+    read_ike_inventory,
+    read_ike_kurs,
+)
 from importers.assets.property_lifecycle import (
     cash_owned_asset_ids,
     latest_valuation_on_date,
@@ -14,7 +20,7 @@ from importers.assets.property_lifecycle import (
     property_ids_in_scope,
     valuation_rows_on_date,
 )
-from importers.assets.read_assets import get_assets_file, read_assets, read_property_valuations
+from importers.assets.read_assets import read_assets, read_property_valuations
 from roi.config import read_analyse_config
 from roi.terminal_value import load_roi_aware_close_dates
 
@@ -29,25 +35,8 @@ def evaluate_assets_file(rodzaj_importu, assets_file_row, valuation_date: date):
             stacklevel=2,
         )
 
-    f = get_assets_file()
-
-    if rodzaj_importu.startswith('assets.IKE-'):
-        df = _read_content(f, assets_file_row)
-        df = filter_excel_rows_on_or_before(df, 'Data', valuation_date)
-        if df.empty:
-            return None
-        df['Data'] = df['Data'].dt.strftime('%Y-%m-%d')
-        last = df[-1:]
-        for _, row in last.iterrows():
-            assets_row = AssetsDef.as_assets_row(assets_file_row)
-            assets_row[AssetsDef.EVALUATION_DATE] = row['Data']
-            assets_row[AssetsDef.VALUE] = row['wartość']
-            break
-        data = [assets_row]
-
-        result = pd.DataFrame(data=data)
-        AssetsDef.check_structure(result)
-        return format_date_columns(result, AssetsDef.EVALUATION_DATE)
+    if rodzaj_importu.startswith("assets.IKE-"):
+        return _evaluate_ike(assets_file_row, valuation_date, rodzaj_importu)
 
     if rodzaj_importu in ('assets.properties-wyceny', 'assets.properties'):
         return _evaluate_property_valuations(assets_file_row, valuation_date)
@@ -57,6 +46,33 @@ def evaluate_assets_file(rodzaj_importu, assets_file_row, valuation_date: date):
 
     else:
         raise ValueError(f'brakujący typ: {rodzaj_importu}')
+
+
+def _evaluate_ike(
+    assets_file_row: pd.Series,
+    valuation_date: date,
+    rodzaj_importu: str,
+) -> pd.DataFrame | None:
+    """NAV IKE = Σ_Produkt (Σ jednostek × ostatni kurs); data wyceny = data kursu."""
+    account = account_for_kind(rodzaj_importu)
+    if account is None:
+        raise ValueError(f"Nieznany RODZAJ* IKE: {rodzaj_importu!r}")
+
+    inventory = read_ike_inventory(account)
+    kurs = read_ike_kurs()
+    terminal = ike_terminal_value(inventory, kurs, valuation_date)
+    if terminal is None:
+        return None
+
+    value, evaluation_date = terminal
+    assets_row = AssetsDef.as_assets_row(assets_file_row)
+    assets_row[AssetsDef.EVALUATION_DATE] = evaluation_date
+    assets_row[AssetsDef.VALUE] = value
+    assets_row[AssetsDef.CURRENCY] = "PLN"
+
+    result = pd.DataFrame([assets_row])
+    AssetsDef.check_structure(result)
+    return format_date_columns(result, AssetsDef.EVALUATION_DATE)
 
 
 def _evaluate_single_property_id(
@@ -124,11 +140,3 @@ def _evaluate_property_valuations(assets_file_row: pd.Series, valuation_date: da
     result = pd.DataFrame(data=result)
     AssetsDef.check_structure(result)
     return format_date_columns(result, AssetsDef.EVALUATION_DATE)
-
-
-def _read_content(f, assets_file_row: pd.Series = None):
-    kind: str = assets_file_row[AssetsDef.KIND]
-    sheet = kind.split('.')[1]
-
-    df = pd.read_excel(f, sheet_name=sheet)
-    return df

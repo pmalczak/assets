@@ -45,7 +45,7 @@ from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 2
 _GM_POSITIONS_SCHEMA = 1
-_LEDGER_SCHEMA = 5
+_LEDGER_SCHEMA = 6
 _PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
 _LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
 _COMPOSITION_COLUMNS = (

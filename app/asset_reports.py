@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Raporty tekstowe uzywane przez main.py i app_assets.py."""
+"""Raporty tekstowe używane przez app_assets.py."""
 
 from __future__ import annotations
 

@@ -179,6 +179,20 @@ class XirrTests(unittest.TestCase):
         self.assertIsNotNone(xirr)
         self.assertAlmostEqual(xirr, 0.1, places=3)
 
+    def test_bracket_fallback_when_newton_fails(self):
+        """Gdy Newton nie zbiega, bisekcja na zmianie znaku NPV daje wynik."""
+        from unittest.mock import patch
+
+        from roi.xirr import compute_xirr
+
+        dates = [date(2004 + i, 1, 15) for i in range(22)]
+        amounts = [-5000.0] * 21 + [180_000.0]
+        with patch("roi.xirr._newton_xirr", return_value=None):
+            xirr = compute_xirr(dates, amounts, guess=0.1)
+        self.assertIsNotNone(xirr)
+        self.assertGreater(xirr, 0.0)
+        self.assertLess(xirr, 0.5)
+
 
 class AllocateCatalogTests(unittest.TestCase):
     def test_allocate_catalog_returns_unallocated_rows(self):
