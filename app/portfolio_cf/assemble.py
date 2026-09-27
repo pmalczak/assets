@@ -67,6 +67,9 @@ def build_instrument_ledger(
     for adapter in adapters:
         try:
             ledger, cov, warn = adapter(valuation_date, fx_rates=fx_rates)
+        except ReferenceError:
+            # DATA_STEP nie zainicjalizowany — nie maskować jako UNCOVERED.
+            raise
         except Exception as exc:
             warnings.append(f"{adapter.__name__}: {exc}")
             continue

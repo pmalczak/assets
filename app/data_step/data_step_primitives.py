@@ -42,10 +42,12 @@ class DataStepPrimitives:
 
     def is_initialised(self):
         if not self._initialised:
-            s = (f'{self.__class__.__name__} not initialised\n'
-                 f'include following code snippet\n'
-                 f'local_data_steps_root = Path(__file__).parent.parent\n'
-                 f'DATA_STEP.init_steps(root=local_data_steps_root)')
+            s = (
+                f'{self.__class__.__name__} not initialised\n'
+                f'call once at process entrypoint:\n'
+                f'from app_proc.data_steps_root import init_app_data_step\n'
+                f'init_app_data_step()'
+            )
             raise ReferenceError(s)
 
     def _reset_dependency_stack(self) -> None:

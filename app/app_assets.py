@@ -10,7 +10,6 @@ Uruchomienie:
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -26,7 +25,7 @@ from app_proc.ui_prefs import (
 )
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_root import get_cash_pool_root, get_online_data_root
-from app_proc.data_steps_root import get_data_steps_root
+from app_proc.data_steps_root import init_app_data_step
 from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
 from app_streamlit.render_diagnostics import render_diagnostics
 from app_streamlit.render_fx import render_fx
@@ -39,7 +38,7 @@ from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_validate import render_validate
 from app_streamlit.safe_download import opt_in_download_button
-from data_step.data_step import DATA_STEP
+
 
 from maintenance.move_downloaded_results import (
     ACTION_DELETED_EMPTY,
@@ -167,8 +166,7 @@ def render_import_wyciagow() -> None:
 
 
 def main():
-    snapshot_path = get_data_steps_root()
-    DATA_STEP.init_steps(root=snapshot_path)
+    init_app_data_step()
 
     st.title("Assets Dashboard (snapshoty DATA_STEP)")
     render_sold_filter_control()

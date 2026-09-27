@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -13,7 +14,7 @@ from portfolio_cf.adapters.base import (
     legacy_events_to_ledger,
 )
 from portfolio_cf.allocate import allocate_ledger_to_portfolio
-from portfolio_cf.assemble import AssemblyResult
+from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow, cash_instrument_id
 from portfolio_cf.fx import to_pln
@@ -310,6 +311,16 @@ def _fx_frame() -> pd.DataFrame:
         {"EUR": [4.0, 4.2]},
         index=pd.to_datetime(["2024-05-31", "2024-06-01"]),
     )
+
+
+class PortfolioCfAssembleInitTests(unittest.TestCase):
+    def test_datastep_not_initialised_is_not_swallowed(self):
+        with patch(
+            "portfolio_cf.assemble.adapt_catalog_ledger",
+            side_effect=ReferenceError("DataStep not initialised"),
+        ):
+            with self.assertRaises(ReferenceError):
+                build_instrument_ledger(date(2026, 9, 25), snapshot=pd.DataFrame())
 
 
 if __name__ == "__main__":

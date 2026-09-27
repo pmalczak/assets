@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, timedelta
-from pathlib import Path
 
-from data_step.data_step import DATA_STEP
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.data_steps_root import init_app_data_step
 from app_proc.recalculate_snapshots import (
     PORTFOLIO_WINDOW_DAYS,
     recalculate_weekly_snapshots,
@@ -27,8 +26,7 @@ from app_proc.recalculate_snapshots import (
 
 
 def main() -> int:
-    local_data_steps_root = Path(__file__)
-    DATA_STEP.init_steps(root=local_data_steps_root)
+    init_app_data_step()
 
     parser = argparse.ArgumentParser(
         description=(

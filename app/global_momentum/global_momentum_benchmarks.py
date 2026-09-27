@@ -213,6 +213,9 @@ def format_percent_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    from app_proc.data_steps_root import init_app_data_step
+
+    init_app_data_step()
     result = run_benchmarks()
 
     print("\n")

@@ -525,6 +525,9 @@ def print_current_universe7_ranking(
 
 
 def main() -> None:
+    from app_proc.data_steps_root import init_app_data_step
+
+    init_app_data_step()
     monthly = load_current_ranking_prices(START)
     print_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
 

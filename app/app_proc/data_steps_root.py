@@ -13,6 +13,16 @@ def get_data_steps_root(start: Path | None = None) -> Path:
     return DATA_STEP.find_data_step_root(start=start or _APP_ROOT)
 
 
+def init_app_data_step(start: Path | None = None) -> Path:
+    """Jedyna inicjalizacja DATA_STEP w procesie — wołać z entrypointu (main / CLI).
+
+    Idempotentne dla tego samego roota. Nie wywoływać z adapterów / downloadów.
+    """
+    root = get_data_steps_root(start=start)
+    DATA_STEP.init_steps(root=root)
+    return root
+
+
 def get_nbp_fx_cache_dir(start: Path | None = None) -> Path:
     """Katalog cache kursów NBP: ``data_steps/fx`` (nie root ``data_steps``)."""
     path = get_data_steps_root(start=start) / "fx"

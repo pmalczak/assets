@@ -19,7 +19,6 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-from data_step.data_step import DATA_STEP
 from yahoo_finance.repository import download_yahoo as _download_yahoo
 
 
@@ -120,7 +119,7 @@ def download_yahoo(
     start: str = START,
     end: str | None = END,
 ) -> pd.DataFrame:
-    DATA_STEP.init_steps(root=Path(__file__).resolve().parent.parent)
+    # DATA_STEP musi być zainicjalizowany w entrypoincie procesu (app_assets / CLI).
     return _download_yahoo(tickers, start=start, end=end)
 
 

@@ -7,11 +7,13 @@ import pandas as pd
 
 from asset_reports import format_rap_table, rap1, rap2
 from app_proc.calculate_assets import calculate_assets
+from app_proc.data_steps_root import init_app_data_step
 
 s = '________________________________________________\n'
 
 
 def main():
+    init_app_data_step()
     valuation_date = date.today()
 
     assets = calculate_assets(valuation_date=valuation_date, force_read_all_data=False)

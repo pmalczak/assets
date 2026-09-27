@@ -17,13 +17,12 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from app_proc.data_steps_root import get_data_steps_root
+from app_proc.data_steps_root import init_app_data_step
 from app_proc.recalculate_snapshots import (
     encode_snapshot_job_results,
     recalculate_today_snapshot,
     recalculate_weekly_snapshots,
 )
-from data_step.data_step import DATA_STEP
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    DATA_STEP.init_steps(root=get_data_steps_root())
+    # Osobny proces — własny init (Streamlit już zainicjalizował swój).
+    init_app_data_step()
     if args.today:
         results = [recalculate_today_snapshot(force_read_all_data=args.force)]
     else:
