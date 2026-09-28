@@ -323,5 +323,151 @@ class PortfolioCfAssembleInitTests(unittest.TestCase):
                 build_instrument_ledger(date(2026, 9, 25), snapshot=pd.DataFrame())
 
 
+class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
+    def test_summary_matches_roi_columns_in_pln(self):
+        from importers.assets.data_model import AssetsDef
+        from portfolio_cf.instrument_summary import (
+            aggregate_portfolio_instrument_summary,
+            build_portfolio_instrument_summary,
+        )
+        from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID
+
+        rows = [
+            build_ledger_row(
+                instrument_id="horbaczewskiego",
+                event_date="2020-01-01",
+                category=CAPEX,
+                amount=-100000.0,
+                currency="PLN",
+                venue="catalog",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="horbaczewskiego",
+                event_date="2021-06-01",
+                category=REVENUES,
+                amount=5000.0,
+                currency="PLN",
+                venue="catalog",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="p_xtb:A",
+                event_date="2024-01-01",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="PLN",
+                venue="xtb",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        ledger = pd.DataFrame(rows)
+        assembly = AssemblyResult(
+            ledger=ledger,
+            coverage=[
+                InstrumentCoverage("horbaczewskiego", CoverageStatus.COVERED, venue="catalog"),
+                InstrumentCoverage("p_xtb:A", CoverageStatus.COVERED, venue="xtb"),
+            ],
+            is_sold_by_instrument={"horbaczewskiego": False, "p_xtb:A": False},
+        )
+        snapshot = pd.DataFrame(
+            [
+                {
+                    AssetsDef.ID: "horbaczewskiego",
+                    AssetsDef.VALUE_PLN: 150000.0,
+                    AssetsDef.EVALUATION_DATE: "2025-01-01",
+                }
+            ]
+        )
+        with (
+            patch(
+                "portfolio_cf.instrument_summary.load_gm_position_lines",
+                return_value=([], []),
+            ),
+            patch(
+                "portfolio_cf.instrument_summary._fill_terminals_from_venue_roi",
+            ),
+            patch(
+                "portfolio_cf.instrument_summary._instrument_labels",
+                return_value={
+                    "horbaczewskiego": "horbaczewskiego",
+                    "p_xtb:A": "Asset A",
+                },
+            ),
+        ):
+            summary, events = build_portfolio_instrument_summary(
+                assembly,
+                PORTFOLIO_NIERUCHOMOSCI,
+                date(2025, 1, 1),
+                snapshot=snapshot,
+                sold_filter="Wszystkie",
+            )
+
+        self.assertEqual(list(summary["asset_id"]), ["horbaczewskiego"])
+        self.assertEqual(float(summary.iloc[0]["capex"]), -100000.0)
+        self.assertEqual(float(summary.iloc[0]["revenue"]), 5000.0)
+        self.assertEqual(float(summary.iloc[0]["terminal_unrealized"]), 150000.0)
+        self.assertEqual(float(summary.iloc[0]["roi_nominal"]), 55000.0)
+        self.assertIn("horbaczewskiego", events)
+
+        total = aggregate_portfolio_instrument_summary(summary, events, date(2025, 1, 1))
+        self.assertEqual(total.iloc[0]["asset_id"], VENUE_TOTAL_ASSET_ID)
+        self.assertEqual(float(total.iloc[0]["capex"]), -100000.0)
+
+    def test_sold_instrument_has_zero_unrealized_terminal(self):
+        from portfolio_cf.instrument_summary import build_portfolio_instrument_summary
+
+        rows = [
+            build_ledger_row(
+                instrument_id="horbaczewskiego",
+                event_date="2020-01-01",
+                category=CAPEX,
+                amount=-100000.0,
+                currency="PLN",
+                venue="catalog",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="horbaczewskiego",
+                event_date="2024-06-01",
+                category=DIVESTMENT,
+                amount=120000.0,
+                currency="PLN",
+                venue="catalog",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        assembly = AssemblyResult(
+            ledger=pd.DataFrame(rows),
+            coverage=[
+                InstrumentCoverage("horbaczewskiego", CoverageStatus.COVERED, venue="catalog"),
+            ],
+            is_sold_by_instrument={"horbaczewskiego": True},
+        )
+        with (
+            patch(
+                "portfolio_cf.instrument_summary.load_gm_position_lines",
+                return_value=([], []),
+            ),
+            patch(
+                "portfolio_cf.instrument_summary._fill_terminals_from_venue_roi",
+            ),
+            patch(
+                "portfolio_cf.instrument_summary._instrument_labels",
+                return_value={"horbaczewskiego": "horbaczewskiego"},
+            ),
+        ):
+            summary, _events = build_portfolio_instrument_summary(
+                assembly,
+                PORTFOLIO_NIERUCHOMOSCI,
+                date(2025, 1, 1),
+                snapshot=pd.DataFrame(),
+                sold_filter="Wszystkie",
+            )
+        self.assertEqual(float(summary.iloc[0]["terminal_unrealized"]), 0.0)
+        self.assertEqual(float(summary.iloc[0]["terminal_realized"]), 120000.0)
+        self.assertTrue(bool(summary.iloc[0]["is_sold"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -20,14 +20,17 @@ from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus
 from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.export_excel import portfolio_cf_excel_filename, portfolio_cf_to_excel_bytes
-from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO, portfolio_for_instrument
+from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
+from portfolio_cf.instrument_summary import (
+    aggregate_portfolio_instrument_summary,
+    build_portfolio_instrument_summary,
+)
 from portfolio_cf.sold_status import (
-    filter_coverage_by_sold,
     filter_ledger_by_sold,
-    is_instrument_sold,
 )
 from portfolio_cf.xirr import compute_named_portfolio_xirr
 from app_proc.ui_prefs import current_sold_filter
+from app_streamlit.render_roi import _format_roi_summary_display
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_CASH_POOL,
@@ -129,7 +132,7 @@ def render_portfolios() -> None:
     else:
         _render_generic_composition(latest_snapshot, selected)
 
-    _render_cf_browser(selected, assembly, latest_snapshot_date)
+    _render_cf_browser(selected, assembly, latest_snapshot, latest_snapshot_date)
     _render_nav_path(selected)
 
 
@@ -235,132 +238,128 @@ def _render_portfolio_xirr(
 def _render_cf_browser(
     portfolio_name: str,
     assembly: AssemblyResult | None,
+    snapshot: pd.DataFrame,
     valuation_date: date,
 ) -> None:
     if assembly is None or portfolio_name == PORTFOLIO_CASH_POOL:
         return
 
-    with st.expander("CF instrumentów (ledger)", expanded=False):
-        mode = current_sold_filter()
-        st.caption(f"Filtr pozycji (sidebar): **{mode}**")
-        subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
-        subset = filter_ledger_by_sold(
-            subset, assembly.is_sold_by_instrument, sold_filter=mode
-        )
-        coverage_visible = filter_coverage_by_sold(
-            [
-                item
-                for item in assembly.coverage
-                if portfolio_for_instrument(item.instrument_id) == portfolio_name
-                and item.status != CoverageStatus.EXCLUDED
-            ],
-            assembly.is_sold_by_instrument,
+    st.subheader("CF instrumentów (ledger)")
+    mode = current_sold_filter()
+    st.caption(
+        f"Filtr pozycji (sidebar): **{mode}**. "
+        "Tabela per instrument jak w ROI — kwoty i XIRR w PLN (kurs NBP z dnia CF)."
+    )
+    subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
+    subset = filter_ledger_by_sold(
+        subset, assembly.is_sold_by_instrument, sold_filter=mode
+    )
+
+    opt_in_download_button(
+        prepare_label="Przygotuj pobieranie CF portfela (Excel)",
+        prepare_key=f"prepare_portfolio_cf_xlsx_{portfolio_name}",
+        button_label="Pobierz CF portfela (Excel)",
+        data_factory=lambda: portfolio_cf_to_excel_bytes(
+            assembly,
+            portfolio_name,
+            valuation_date,
+            sold_filter=mode,
+        ),
+        file_name=portfolio_cf_excel_filename(portfolio_name, valuation_date),
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        download_key=f"portfolio_cf_xlsx_{portfolio_name}",
+        disabled=subset.empty,
+        help_prepare=(
+            "Excel w perspektywie portfela (po filtrze pozycji): arkusz cf, coverage, meta. "
+            "Na Python 3.14 włącz tylko na czas pobrania."
+        ),
+    )
+
+    if subset.empty:
+        st.info(f"Brak instrumentów z CF dla filtra: {mode}.")
+        return
+
+    try:
+        summary, pln_events = build_portfolio_instrument_summary(
+            assembly,
+            portfolio_name,
+            valuation_date,
+            snapshot=snapshot,
             sold_filter=mode,
         )
-        uncovered = [
-            item for item in coverage_visible if item.status == CoverageStatus.UNCOVERED
-        ]
-        covered_ids = (
-            sorted(subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str).unique())
-            if not subset.empty
-            else []
-        )
-        uncovered_ids = [item.instrument_id for item in uncovered]
-        instruments = sorted(set(covered_ids) | set(uncovered_ids))
+    except Exception as exc:
+        st.warning(f"Nie udało się zbudować podsumowania per instrument: {exc}")
+        summary = pd.DataFrame()
+        pln_events = {}
 
-        opt_in_download_button(
-            prepare_label="Przygotuj pobieranie CF portfela (Excel)",
-            prepare_key=f"prepare_portfolio_cf_xlsx_{portfolio_name}",
-            button_label="Pobierz CF portfela (Excel)",
-            data_factory=lambda: portfolio_cf_to_excel_bytes(
-                assembly,
-                portfolio_name,
-                valuation_date,
-                sold_filter=mode,
-            ),
-            file_name=portfolio_cf_excel_filename(portfolio_name, valuation_date),
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            download_key=f"portfolio_cf_xlsx_{portfolio_name}",
-            disabled=subset.empty and not uncovered,
-            help_prepare=(
-                "Excel w perspektywie portfela (po filtrze pozycji): arkusz cf, coverage, meta. "
-                "Na Python 3.14 włącz tylko na czas pobrania."
-            ),
+    if not summary.empty:
+        total = aggregate_portfolio_instrument_summary(
+            summary, pln_events, valuation_date
         )
-
-        coverage_rows = []
-        for item in coverage_visible:
-            coverage_rows.append(
-                {
-                    "instrument_id": item.instrument_id,
-                    "status": item.status.value,
-                    "is_sold": is_instrument_sold(
-                        item.instrument_id, assembly.is_sold_by_instrument
-                    ),
-                    "reason": item.reason,
-                    "venue": item.venue,
-                }
-            )
-        if coverage_rows:
-            st.caption("Pokrycie CF instrumentów tego portfela")
+        if not total.empty:
             st.dataframe(
-                dataframe_for_streamlit(pd.DataFrame(coverage_rows).sort_values("instrument_id")),
+                dataframe_for_streamlit(_format_roi_summary_display(total)),
                 width="stretch",
                 hide_index=True,
             )
-        elif not instruments:
-            st.info(f"Brak instrumentów dla filtra: {mode}.")
-            return
-
-        if not instruments:
-            st.info(f"Brak instrumentów z coverage/ledger dla filtra: {mode}.")
-            return
-
-        chosen = st.selectbox(
-            "Instrument",
-            options=["(wszystkie z CF)"] + instruments,
-            key=f"portfolio_cf_instrument_{portfolio_name}",
-        )
-        if chosen != "(wszystkie z CF)" and chosen in uncovered_ids and chosen not in covered_ids:
-            item = next(u for u in uncovered if u.instrument_id == chosen)
-            st.warning(
-                f"`{chosen}` jest UNCOVERED — brak przepływów w ledgerze "
-                f"({item.reason or 'brak adaptera CF'})."
-            )
-            return
-
-        view = subset
-        if chosen != "(wszystkie z CF)":
-            view = subset.loc[
-                subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str) == chosen
-            ]
-        if view.empty:
-            st.info("Brak wierszy CF dla wybranego filtra.")
-            return
-        cols = [
-            InstrumentCashFlow.DATE,
-            InstrumentCashFlow.INSTRUMENT_ID,
-            InstrumentCashFlow.CATEGORY,
-            InstrumentCashFlow.AMOUNT,
-            InstrumentCashFlow.CURRENCY,
-            InstrumentCashFlow.AMOUNT_PLN,
-            InstrumentCashFlow.FX_RATE,
-            InstrumentCashFlow.FX_DATE,
-            InstrumentCashFlow.DESCRIPTION,
-        ]
-        display = view[[c for c in cols if c in view.columns]].copy()
-        display[InstrumentCashFlow.DATE] = pd.to_datetime(
-            display[InstrumentCashFlow.DATE], errors="coerce"
-        )
-        display = display.sort_values(InstrumentCashFlow.DATE, ascending=False)
-        display[InstrumentCashFlow.DATE] = display[InstrumentCashFlow.DATE].dt.strftime(
-            "%Y-%m-%d"
-        )
         st.dataframe(
-            dataframe_for_streamlit(display),
+            dataframe_for_streamlit(_format_roi_summary_display(summary)),
             width="stretch",
             hide_index=True,
         )
+    else:
+        st.info(f"Brak wierszy podsumowania CF dla filtra: {mode}.")
+
+    instruments = sorted(subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str).unique())
+    if not instruments:
+        return
+
+    label_by_id = {
+        str(row["asset_id"]): str(row["instrument"])
+        for _, row in summary.iterrows()
+        if "instrument" in summary.columns and str(row.get("instrument") or "").strip()
+    } if not summary.empty else {}
+    picker_labels = [label_by_id.get(iid, iid) for iid in instruments]
+    label_to_id = {label: iid for iid, label in zip(instruments, picker_labels)}
+
+    chosen_label = st.selectbox(
+        "Instrument",
+        options=["(wszystkie z CF)"] + picker_labels,
+        key=f"portfolio_cf_instrument_{portfolio_name}",
+    )
+    view = subset
+    if chosen_label != "(wszystkie z CF)":
+        chosen_id = label_to_id.get(chosen_label, chosen_label)
+        view = subset.loc[
+            subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str) == chosen_id
+        ]
+    if view.empty:
+        st.info("Brak wierszy CF dla wybranego filtra.")
+        return
+    cols = [
+        InstrumentCashFlow.DATE,
+        InstrumentCashFlow.INSTRUMENT_ID,
+        InstrumentCashFlow.CATEGORY,
+        InstrumentCashFlow.AMOUNT,
+        InstrumentCashFlow.CURRENCY,
+        InstrumentCashFlow.AMOUNT_PLN,
+        InstrumentCashFlow.FX_RATE,
+        InstrumentCashFlow.FX_DATE,
+        InstrumentCashFlow.DESCRIPTION,
+    ]
+    display = view[[c for c in cols if c in view.columns]].copy()
+    display[InstrumentCashFlow.DATE] = pd.to_datetime(
+        display[InstrumentCashFlow.DATE], errors="coerce"
+    )
+    display = display.sort_values(InstrumentCashFlow.DATE, ascending=False)
+    display[InstrumentCashFlow.DATE] = display[InstrumentCashFlow.DATE].dt.strftime(
+        "%Y-%m-%d"
+    )
+    st.dataframe(
+        dataframe_for_streamlit(display),
+        width="stretch",
+        hide_index=True,
+    )
 
 
 def _render_generic_composition(snapshot: pd.DataFrame, portfolio_name: str) -> None:

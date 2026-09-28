@@ -7,6 +7,10 @@ from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.instrument_portfolio import portfolio_for_instrument
+from portfolio_cf.instrument_summary import (
+    aggregate_portfolio_instrument_summary,
+    build_portfolio_instrument_summary,
+)
 from portfolio_cf.xirr import PortfolioXirrResult, compute_named_portfolio_xirr
 
 __all__ = [
@@ -16,7 +20,9 @@ __all__ = [
     "InstrumentCoverage",
     "PortfolioXirrResult",
     "allocate_ledger_to_portfolio",
+    "aggregate_portfolio_instrument_summary",
     "build_instrument_ledger",
+    "build_portfolio_instrument_summary",
     "compute_named_portfolio_xirr",
     "portfolio_for_instrument",
 ]
