@@ -40,7 +40,7 @@ class RapPortfolioIndexTests(unittest.TestCase):
 
     def test_rap1_is_portfolio_razem_and_share(self):
         table = rap1(self.snapshot)
-        self.assertEqual(list(table.columns), ["RAZEM", "udział", "XIRR"])
+        self.assertEqual(list(table.columns), ["RAZEM", "udział", "XIRR", "XIRR PLN"])
         self.assertEqual(table.index.name, AssetsDef.PORTFOLIO)
         self.assertIn(PORTFOLIO_CASH_POOL, table.index)
         self.assertIn(PORTFOLIO_GM, table.index)
@@ -58,6 +58,8 @@ class RapPortfolioIndexTests(unittest.TestCase):
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "udział"]).strip(), "24.4%")
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR"]).strip(), "—")
         self.assertEqual(str(table.loc["Z RAZEM", "XIRR"]).strip(), "—")
+        self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR PLN"]).strip(), "—")
+        self.assertEqual(str(table.loc["Z RAZEM", "XIRR PLN"]).strip(), "—")
         self.assertNotIn("EUR", table.columns)
         self.assertNotIn("PLN", table.columns)
 
@@ -69,13 +71,26 @@ class RapPortfolioIndexTests(unittest.TestCase):
                 PORTFOLIO_GM: 0.1234,
                 PORTFOLIO_REVOLUT_ROBO: -0.05,
                 PORTFOLIO_PLYNNY: 0.0,
+                "Z RAZEM": 0.08,
+            },
+            xirr_pln_by_portfolio={
+                PORTFOLIO_CASH_POOL: None,
+                PORTFOLIO_GM: 0.15,
+                PORTFOLIO_REVOLUT_ROBO: -0.08,
+                PORTFOLIO_PLYNNY: 0.01,
+                "Z RAZEM": 0.09,
             },
         )
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "XIRR"]).strip(), "—")
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR"]).strip(), "12.3%")
         self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "XIRR"]).strip(), "-5.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "XIRR"]).strip(), "0.0%")
-        self.assertEqual(str(table.loc["Z RAZEM", "XIRR"]).strip(), "—")
+        self.assertEqual(str(table.loc["Z RAZEM", "XIRR"]).strip(), "8.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR PLN"]).strip(), "15.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "XIRR PLN"]).strip(), "-8.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "XIRR PLN"]).strip(), "1.0%")
+        self.assertEqual(str(table.loc["Z RAZEM", "XIRR PLN"]).strip(), "9.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "XIRR PLN"]).strip(), "—")
 
     def test_rap2_index_is_portfolio_and_type(self):
         table = rap2(self.snapshot)

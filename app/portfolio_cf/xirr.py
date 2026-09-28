@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""XIRR nazwanego portfela na skonkatenowanych CF PLN + terminal NAV."""
+"""XIRR nazwanego portfela: lokalny (FX_T) + spot PLN + atrybucja FX."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,24 +12,35 @@ from portfolio_cf.allocate import allocate_ledger_to_portfolio
 from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
+from portfolio_cf.fx_attribution import (
+    local_pln_series,
+    roi_fx_components,
+    spot_pln_series,
+)
 from portfolio_cf.instrument_portfolio import portfolio_for_instrument
 from portfolio_cf.sold_status import (
     filter_coverage_by_sold,
     filter_ledger_by_sold,
     sold_filter_label,
 )
-from portfolios.assignment import nav_pln_for_portfolio
+from portfolios.assignment import KNOWN_PORTFOLIOS, nav_pln_for_portfolio
 from roi.xirr import compute_xirr
+
+RAP_TOTAL = "Z RAZEM"
 
 
 @dataclass
 class PortfolioXirrResult:
     portfolio: str
     valuation_date: date
-    xirr: float | None
+    xirr: float | None  # lokalny (constant FX_T) — kanoniczna rentowność
+    xirr_pln: float | None  # spot (FX_t)
     terminal_pln: float
     cf_pln_sum: float
     roi_nominal_pln: float
+    roi_local_pln: float
+    roi_fx_pln: float
+    fx_share: float | None
     n_cashflows: int
     incomplete: bool
     warnings: list[str] = field(default_factory=list)
@@ -46,7 +57,7 @@ def compute_named_portfolio_xirr(
     fx_rates: pd.DataFrame | None = None,
     sold_filter: str | None = None,
 ) -> PortfolioXirrResult:
-    """Jeden XIRR na CF PLN instrumentów portfela + terminal NAV PLN.
+    """XIRR lokalny + spot oraz ROI_PLN / ROI_local / ROI_FX na CF portfela.
 
     Uwzględnia globalny filtr sprzedane/niesprzedane (jak ROI Razem).
     UNCOVERED (po filtrze) z niezerowym NAV → warning + incomplete=True.
@@ -75,7 +86,6 @@ def compute_named_portfolio_xirr(
 
     if terminal_pln is None:
         if mode == SOLD_FILTER_SOLD:
-            # Sprzedane: terminal nerealiz. = 0 (jak w ROI per wiersz).
             terminal_pln = 0.0
         elif snapshot is not None and not snapshot.empty:
             terminal_pln = float(nav_pln_for_portfolio(snapshot, portfolio_name))
@@ -91,21 +101,90 @@ def compute_named_portfolio_xirr(
             f"XIRR {portfolio_name}: niekompletne CF (UNCOVERED z NAV): {ids}{more}"
         )
 
-    dates, amounts = _pln_series(subset, valuation_date, terminal_pln)
-    xirr = compute_xirr(dates, amounts) if dates else None
-    cf_sum = float(subset[InstrumentCashFlow.AMOUNT_PLN].sum()) if not subset.empty else 0.0
-
-    return PortfolioXirrResult(
-        portfolio=portfolio_name,
+    return _result_from_ledger(
+        portfolio_name=portfolio_name,
         valuation_date=valuation_date,
-        xirr=xirr,
+        ledger=subset,
         terminal_pln=float(terminal_pln),
-        cf_pln_sum=cf_sum,
-        roi_nominal_pln=cf_sum + float(terminal_pln),
-        n_cashflows=len(dates),
+        fx_rates=fx_rates,
         incomplete=incomplete,
         warnings=warnings,
         uncovered=uncovered_in_portfolio,
+    )
+
+
+def compute_total_portfolio_xirr(
+    valuation_date: date,
+    *,
+    assembly: AssemblyResult | None = None,
+    snapshot: pd.DataFrame | None = None,
+    fx_rates: pd.DataFrame | None = None,
+    sold_filter: str | None = None,
+) -> PortfolioXirrResult:
+    """XIRR / ROI FX dla Z RAZEM (wszystkie portfele poza 0 CASH-POOL)."""
+    from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
+
+    if assembly is None:
+        assembly = build_instrument_ledger(
+            valuation_date, fx_rates=fx_rates, snapshot=snapshot
+        )
+
+    mode = sold_filter if sold_filter is not None else sold_filter_label()
+    frames: list[pd.DataFrame] = []
+    terminal = 0.0
+    warnings = list(assembly.warnings)
+    uncovered: list[InstrumentCoverage] = []
+
+    for name in KNOWN_PORTFOLIOS:
+        if name == XIRR_EXCLUDED_PORTFOLIO:
+            continue
+        part = allocate_ledger_to_portfolio(assembly.ledger, name)
+        part = filter_ledger_by_sold(
+            part, assembly.is_sold_by_instrument, sold_filter=mode
+        )
+        if part is not None and not part.empty:
+            frames.append(part)
+        if mode == SOLD_FILTER_SOLD:
+            part_terminal = 0.0
+        elif snapshot is not None and not snapshot.empty:
+            part_terminal = float(nav_pln_for_portfolio(snapshot, name))
+        else:
+            part_terminal = 0.0
+        terminal += part_terminal
+        uncovered.extend(
+            filter_coverage_by_sold(
+                [
+                    item
+                    for item in assembly.coverage
+                    if item.status == CoverageStatus.UNCOVERED
+                    and portfolio_for_instrument(item.instrument_id) == name
+                ],
+                assembly.is_sold_by_instrument,
+                sold_filter=mode,
+            )
+        )
+
+    if frames:
+        ledger = pd.concat(frames, ignore_index=True)
+    else:
+        ledger = pd.DataFrame(columns=list(InstrumentCashFlow.COLUMN_ORDER))
+
+    incomplete = False
+    if uncovered and abs(terminal) > 1e-6:
+        incomplete = True
+        warnings.append(
+            f"XIRR {RAP_TOTAL}: niekompletne CF (UNCOVERED z NAV)"
+        )
+
+    return _result_from_ledger(
+        portfolio_name=RAP_TOTAL,
+        valuation_date=valuation_date,
+        ledger=ledger,
+        terminal_pln=float(terminal),
+        fx_rates=fx_rates,
+        incomplete=incomplete,
+        warnings=warnings,
+        uncovered=uncovered,
     )
 
 
@@ -115,58 +194,169 @@ def compute_named_portfolio_xirr_map(
     assembly: AssemblyResult | None = None,
     snapshot: pd.DataFrame | None = None,
     sold_filter: str | None = None,
+    fx_rates: pd.DataFrame | None = None,
 ) -> dict[str, float | None]:
-    """XIRR PLN per nazwany portfel (CASH-POOL → None). Jedno assembly na wszystkie."""
+    """XIRR lokalny per portfel (+ Z RAZEM). CASH-POOL → None."""
+    metrics = compute_named_portfolio_metrics_map(
+        valuation_date,
+        assembly=assembly,
+        snapshot=snapshot,
+        sold_filter=sold_filter,
+        fx_rates=fx_rates,
+    )
+    return {name: row.xirr for name, row in metrics.items()}
+
+
+def compute_named_portfolio_metrics_map(
+    valuation_date: date,
+    *,
+    assembly: AssemblyResult | None = None,
+    snapshot: pd.DataFrame | None = None,
+    sold_filter: str | None = None,
+    fx_rates: pd.DataFrame | None = None,
+) -> dict[str, PortfolioXirrResult]:
+    """Pełne metryki XIRR/FX per nazwany portfel + Z RAZEM."""
     from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
-    from portfolios.assignment import KNOWN_PORTFOLIOS
 
     if assembly is None:
         assembly = build_instrument_ledger(
-            valuation_date, fx_rates=None, snapshot=snapshot
+            valuation_date, fx_rates=fx_rates, snapshot=snapshot
         )
 
-    out: dict[str, float | None] = {}
+    out: dict[str, PortfolioXirrResult] = {}
     for name in KNOWN_PORTFOLIOS:
         if name == XIRR_EXCLUDED_PORTFOLIO:
-            out[name] = None
+            out[name] = _empty_excluded(name, valuation_date)
             continue
         try:
-            result = compute_named_portfolio_xirr(
+            out[name] = compute_named_portfolio_xirr(
                 name,
                 valuation_date,
                 assembly=assembly,
                 snapshot=snapshot,
                 sold_filter=sold_filter,
+                fx_rates=fx_rates,
             )
-            out[name] = result.xirr
         except Exception:
-            out[name] = None
+            out[name] = _empty_excluded(name, valuation_date)
+    try:
+        out[RAP_TOTAL] = compute_total_portfolio_xirr(
+            valuation_date,
+            assembly=assembly,
+            snapshot=snapshot,
+            sold_filter=sold_filter,
+            fx_rates=fx_rates,
+        )
+    except Exception:
+        out[RAP_TOTAL] = _empty_excluded(RAP_TOTAL, valuation_date)
     return out
 
 
-def _pln_series(
-    ledger: pd.DataFrame,
+def _result_from_ledger(
+    *,
+    portfolio_name: str,
     valuation_date: date,
+    ledger: pd.DataFrame,
     terminal_pln: float,
-) -> tuple[list[date], list[float]]:
-    dates: list[date] = []
-    amounts: list[float] = []
-    if ledger is not None and not ledger.empty:
-        for _, row in ledger.iterrows():
-            day = pd.Timestamp(row[InstrumentCashFlow.DATE]).date()
-            dates.append(day)
-            amounts.append(float(row[InstrumentCashFlow.AMOUNT_PLN]))
-    if terminal_pln > 0:
-        dates.append(valuation_date)
-        amounts.append(float(terminal_pln))
-    return _aggregate_by_date(dates, amounts)
+    fx_rates: pd.DataFrame | None,
+    incomplete: bool,
+    warnings: list[str],
+    uncovered: list[InstrumentCoverage],
+) -> PortfolioXirrResult:
+    local_dates, local_amounts = local_pln_series(
+        ledger, valuation_date, terminal_pln, fx_rates=fx_rates
+    )
+    spot_dates, spot_amounts = spot_pln_series(ledger, valuation_date, terminal_pln)
+    xirr_local = compute_xirr(local_dates, local_amounts) if local_dates else None
+    xirr_spot = compute_xirr(spot_dates, spot_amounts) if spot_dates else None
+    components = roi_fx_components(
+        ledger, terminal_pln, valuation_date, fx_rates=fx_rates
+    )
+    cf_sum = (
+        float(ledger[InstrumentCashFlow.AMOUNT_PLN].sum())
+        if ledger is not None and not ledger.empty
+        else 0.0
+    )
+    return PortfolioXirrResult(
+        portfolio=portfolio_name,
+        valuation_date=valuation_date,
+        xirr=xirr_local,
+        xirr_pln=xirr_spot,
+        terminal_pln=float(terminal_pln),
+        cf_pln_sum=cf_sum,
+        roi_nominal_pln=components.roi_pln,
+        roi_local_pln=components.roi_local,
+        roi_fx_pln=components.roi_fx,
+        fx_share=components.fx_share,
+        n_cashflows=len(local_dates),
+        incomplete=incomplete,
+        warnings=warnings,
+        uncovered=uncovered,
+    )
 
 
-def _aggregate_by_date(
-    dates: list[date], amounts: list[float]
-) -> tuple[list[date], list[float]]:
-    totals: dict[date, float] = {}
-    for day, amount in zip(dates, amounts):
-        totals[day] = totals.get(day, 0.0) + amount
-    ordered = sorted(totals)
-    return ordered, [totals[day] for day in ordered]
+def build_portfolio_razem_row(
+    summary: pd.DataFrame,
+    result: PortfolioXirrResult,
+) -> pd.DataFrame:
+    """Wiersz Razem portfela: suma CAPEX/… z wierszy + XIRR/ROI/terminal z ``result``.
+
+    Jedyna ścieżka metryk portfela — nie liczyć drugiego XIRR z Σ terminali
+    instrumentów (ROBO: MTM ≠ NAV snapshota).
+    """
+    from importers.assets.data_model import AssetsDef
+    from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID
+
+    if summary is None or summary.empty:
+        return pd.DataFrame()
+
+    def _sum(col: str) -> float:
+        if col not in summary.columns:
+            return 0.0
+        return float(pd.to_numeric(summary[col], errors="coerce").fillna(0).sum())
+
+    eval_date: str | None = None
+    if AssetsDef.EVALUATION_DATE in summary.columns:
+        parsed = pd.to_datetime(summary[AssetsDef.EVALUATION_DATE], errors="coerce")
+        valid = parsed.dropna()
+        if not valid.empty:
+            eval_date = valid.min().date().isoformat()
+
+    row: dict[str, object] = {
+        "asset_id": VENUE_TOTAL_ASSET_ID,
+        "capex": round(_sum("capex")),
+        "opex": round(_sum("opex")),
+        "revenue": round(_sum("revenue")),
+        "terminal_realized": round(_sum("terminal_realized")),
+        "terminal_unrealized": round(result.terminal_pln),
+        "roi_nominal": round(result.roi_nominal_pln),
+        "roi_local": round(result.roi_local_pln),
+        "roi_fx": round(result.roi_fx_pln),
+        "fx_share": result.fx_share,
+        "xirr": result.xirr,
+        "xirr_pln": result.xirr_pln,
+        "is_sold": bool(summary["is_sold"].all()) if "is_sold" in summary.columns else False,
+        "warnings": "",
+    }
+    if eval_date is not None:
+        row[AssetsDef.EVALUATION_DATE] = eval_date
+    if "instrument" in summary.columns:
+        row["instrument"] = VENUE_TOTAL_ASSET_ID
+    return pd.DataFrame([row])
+
+
+def _empty_excluded(portfolio_name: str, valuation_date: date) -> PortfolioXirrResult:
+    return PortfolioXirrResult(
+        portfolio=portfolio_name,
+        valuation_date=valuation_date,
+        xirr=None,
+        xirr_pln=None,
+        terminal_pln=0.0,
+        cf_pln_sum=0.0,
+        roi_nominal_pln=0.0,
+        roi_local_pln=0.0,
+        roi_fx_pln=0.0,
+        fx_share=None,
+        n_cashflows=0,
+        incomplete=False,
+    )

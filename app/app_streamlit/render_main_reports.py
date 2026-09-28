@@ -10,7 +10,7 @@ from app_proc.recalculate_snapshots import run_snapshot_job_isolated
 from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
 from app_proc.ui_prefs import current_sold_filter
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
-from portfolio_cf.products import invalidate_portfolio_cf, load_portfolio_xirr_map
+from portfolio_cf.products import invalidate_portfolio_cf, load_portfolio_metrics_map
 
 
 @st.cache_data(show_spinner=False)
@@ -24,6 +24,13 @@ def load_snapshot_for_date(snapshot_date: date) -> pd.DataFrame:
 def _clear_reports_related_cache() -> None:
     build_portfolio_history_from_snapshots.clear()
     load_snapshot_for_date.clear()
+    try:
+        from app_streamlit.render_portfolios import _load_gm_positions, _load_portfolio_nav
+
+        _load_portfolio_nav.clear()
+        _load_gm_positions.clear()
+    except Exception:
+        pass
 
 
 def _run_generate_snapshot(today: date) -> None:
@@ -34,6 +41,7 @@ def _run_generate_snapshot(today: date) -> None:
             raise RuntimeError("Proces snapshotu nie zwrócił wyniku.")
         result = results[0]
         _clear_reports_related_cache()
+        # Po zapisie parquet — wymuś przebudowę ledger/XIRR na tę datę.
         invalidate_portfolio_cf(result.valuation_date)
         st.session_state["reports_last_generated_snapshot"] = result.to_row()
         st.success(
@@ -119,20 +127,34 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         st.caption(
             f"Źródło: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`. "
             "Skład portfeli — zakładka Portfele. "
-            "XIRR w RAP 1 z DATA_STEP `11 portfolio_cf` (filtr pozycji z sidebara)."
+            "XIRR w RAP 1 = lokalny (constant FX_T) z DATA_STEP `11 portfolio_cf` "
+            "(filtr pozycji z sidebara); obok XIRR PLN (spot, FX_t)."
         )
 
     sold_filter = current_sold_filter()
     try:
         with st.spinner("XIRR portfeli do RAP 1..."):
-            xirr_by_portfolio = load_portfolio_xirr_map(selected_date, sold_filter)
+            metrics = load_portfolio_metrics_map(selected_date, sold_filter)
+            xirr_by_portfolio = {
+                name: row.get("xirr") for name, row in metrics.items()
+            }
+            xirr_pln_by_portfolio = {
+                name: row.get("xirr_pln") for name, row in metrics.items()
+            }
     except Exception as exc:
         st.warning(f"Nie udało się policzyć XIRR do RAP 1: {exc}")
         xirr_by_portfolio = {}
+        xirr_pln_by_portfolio = {}
 
     with rap1_col:
         st.code(
-            format_rap_table(rap1(assets, xirr_by_portfolio=xirr_by_portfolio)),
+            format_rap_table(
+                rap1(
+                    assets,
+                    xirr_by_portfolio=xirr_by_portfolio,
+                    xirr_pln_by_portfolio=xirr_pln_by_portfolio,
+                )
+            ),
             language=None,
         )
 

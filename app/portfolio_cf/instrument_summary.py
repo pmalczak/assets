@@ -12,6 +12,11 @@ from portfolio_cf.allocate import allocate_ledger_to_portfolio
 from portfolio_cf.assemble import AssemblyResult
 from portfolio_cf.data_model import InstrumentCashFlow, cash_instrument_id
 from portfolio_cf.fx import to_pln
+from portfolio_cf.fx_attribution import (
+    local_pln_series,
+    roi_fx_components,
+    spot_pln_series,
+)
 from portfolio_cf.sold_status import (
     filter_ledger_by_sold,
     is_instrument_sold,
@@ -21,7 +26,7 @@ from portfolios.composition import KIND_CASH, KIND_POSITION, load_gm_position_li
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, roi_summary_to_row
 from roi.data_model import CashFlowEvent
-from roi.xirr import cashflows_for_xirr, compute_xirr
+from roi.xirr import compute_xirr
 
 
 def _implied_fx_pln(snapshot: pd.DataFrame, broker_id: str, currency: str) -> float:
@@ -47,11 +52,14 @@ def build_portfolio_instrument_summary(
     *,
     snapshot: pd.DataFrame | None = None,
     sold_filter: str | None = None,
-) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-    """Tabela jak w ROI: CAPEX/OPEX/REVENUES/DIVESTMENT/terminal/XIRR w PLN.
+    fx_rates: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+    """Tabela jak w ROI: kwoty spot PLN + XIRR lokalny / ROI_FX.
 
-    Kwoty z ``amount_pln`` ledgera; terminal nerealiz. z snapshota / pozycji GM /
-    venue ROI (przeliczone na PLN). Wiersze posortowane po ``asset_id``.
+    CAPEX/OPEX/… i ``roi_nominal`` z ``amount_pln`` (FX_t); ``xirr`` = constant FX_T;
+    ``xirr_pln`` = spot; ``roi_local`` / ``roi_fx`` / ``fx_share`` z atrybucji FX.
+
+    Zwraca ``(summary, spot_events_by_asset, local_events_by_asset)``.
     """
     mode = sold_filter if sold_filter is not None else sold_filter_label()
     subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
@@ -59,7 +67,7 @@ def build_portfolio_instrument_summary(
         subset, assembly.is_sold_by_instrument, sold_filter=mode
     )
     if subset is None or subset.empty:
-        return pd.DataFrame(), {}
+        return pd.DataFrame(), {}, {}
 
     terminal_pln, eval_dates = resolve_terminal_pln_by_instrument(
         valuation_date,
@@ -70,20 +78,27 @@ def build_portfolio_instrument_summary(
 
     rows: list[dict] = []
     events_by_asset: dict[str, pd.DataFrame] = {}
+    local_events_by_asset: dict[str, pd.DataFrame] = {}
     for instrument_id, group in subset.groupby(
         subset[InstrumentCashFlow.INSTRUMENT_ID].astype(str), sort=True
     ):
         events = _ledger_group_to_pln_events(instrument_id, group)
+        local_events = _ledger_group_to_local_pln_events(
+            instrument_id, group, valuation_date, fx_rates=fx_rates
+        )
         events_by_asset[instrument_id] = events
+        local_events_by_asset[instrument_id] = local_events
         sold = is_instrument_sold(instrument_id, assembly.is_sold_by_instrument)
         terminal_unrealized = 0.0 if sold else float(terminal_pln.get(instrument_id, 0.0))
-        row = _summary_row_from_pln_events(
+        row = _summary_row_from_ledger_group(
             instrument_id,
+            group,
             events,
             valuation_date,
             terminal_unrealized=terminal_unrealized,
             is_sold=sold,
             evaluation_date=eval_dates.get(instrument_id) or "",
+            fx_rates=fx_rates,
         )
         label = instrument_labels.get(instrument_id)
         if label:
@@ -91,9 +106,9 @@ def build_portfolio_instrument_summary(
         rows.append(row)
 
     if not rows:
-        return pd.DataFrame(), {}
+        return pd.DataFrame(), {}, {}
     summary = pd.DataFrame(rows)
-    return summary.reset_index(drop=True), events_by_asset
+    return summary.reset_index(drop=True), events_by_asset, local_events_by_asset
 
 
 def resolve_terminal_pln_by_instrument(
@@ -247,7 +262,7 @@ def _guess_currency(instrument_id: str, row: pd.Series) -> str:
 
 
 def _ledger_group_to_pln_events(instrument_id: str, group: pd.DataFrame) -> pd.DataFrame:
-    """CashFlowEvent z AMOUNT = amount_pln (pod Razem / XIRR w PLN)."""
+    """CashFlowEvent z AMOUNT = amount_pln (spot FX_t)."""
     rows: list[dict] = []
     for _, row in group.iterrows():
         rows.append(
@@ -272,26 +287,81 @@ def _ledger_group_to_pln_events(instrument_id: str, group: pd.DataFrame) -> pd.D
     return out
 
 
-def _summary_row_from_pln_events(
+def _ledger_group_to_local_pln_events(
     instrument_id: str,
+    group: pd.DataFrame,
+    valuation_date: date,
+    *,
+    fx_rates: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """CashFlowEvent z AMOUNT = amount × FX_T (constant FX)."""
+    from portfolio_cf.fx_attribution import amount_local_pln, valuation_fx_rates
+
+    currencies = set()
+    if not group.empty and InstrumentCashFlow.CURRENCY in group.columns:
+        currencies = {
+            str(c).strip().upper()
+            for c in group[InstrumentCashFlow.CURRENCY].tolist()
+            if str(c).strip()
+        }
+    rates_t = valuation_fx_rates(
+        valuation_date, fx_rates=fx_rates, currencies=currencies
+    )
+    rows: list[dict] = []
+    for _, row in group.iterrows():
+        currency = str(row.get(InstrumentCashFlow.CURRENCY) or "PLN")
+        local = amount_local_pln(
+            float(row[InstrumentCashFlow.AMOUNT]), currency, rates_t
+        )
+        rows.append(
+            {
+                CashFlowEvent.ASSET_ID: instrument_id,
+                CashFlowEvent.DATE: row[InstrumentCashFlow.DATE],
+                CashFlowEvent.AMOUNT: local,
+                CashFlowEvent.CATEGORY: str(row[InstrumentCashFlow.CATEGORY]),
+                CashFlowEvent.SOURCE: str(row.get(InstrumentCashFlow.SOURCE) or ""),
+                CashFlowEvent.DESCRIPTION: str(row.get(InstrumentCashFlow.DESCRIPTION) or ""),
+                CashFlowEvent.TITLE: str(row.get(InstrumentCashFlow.TITLE) or ""),
+                CashFlowEvent.COUNTERPARTY: str(row.get(InstrumentCashFlow.COUNTERPARTY) or ""),
+                CashFlowEvent.ACCOUNT_NUMBER: str(
+                    row.get(InstrumentCashFlow.ACCOUNT_NUMBER) or ""
+                ),
+            }
+        )
+    if not rows:
+        return pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+    out = pd.DataFrame(rows, columns=list(CashFlowEvent.COLUMN_ORDER))
+    CashFlowEvent.check_structure(out)
+    return out
+
+
+def _summary_row_from_ledger_group(
+    instrument_id: str,
+    group: pd.DataFrame,
     events: pd.DataFrame,
     valuation_date: date,
     *,
     terminal_unrealized: float,
     is_sold: bool,
     evaluation_date: str,
+    fx_rates: pd.DataFrame | None,
 ) -> dict:
     filtered = filter_excel_rows_on_or_before(events, CashFlowEvent.DATE, valuation_date)
     capex = _sum_category(filtered, CAPEX)
     opex = _sum_category(filtered, OPEX)
     revenue = _sum_category(filtered, REVENUES)
     terminal_realized = _sum_category(filtered, DIVESTMENT)
-    flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
     terminal = 0.0 if is_sold else float(terminal_unrealized)
-    roi_nominal = flows_total + terminal
-    xirr_dates, xirr_amounts = cashflows_for_xirr(filtered, valuation_date, terminal)
-    xirr = compute_xirr(xirr_dates, xirr_amounts)
-    return roi_summary_to_row(
+    components = roi_fx_components(
+        group, terminal, valuation_date, fx_rates=fx_rates
+    )
+    local_dates, local_amounts = local_pln_series(
+        group, valuation_date, terminal, fx_rates=fx_rates
+    )
+    spot_dates, spot_amounts = spot_pln_series(group, valuation_date, terminal)
+    xirr_local = compute_xirr(local_dates, local_amounts) if local_dates else None
+    xirr_spot = compute_xirr(spot_dates, spot_amounts) if spot_dates else None
+    row = roi_summary_to_row(
         RoiSummary(
             asset_id=instrument_id,
             capex=capex,
@@ -299,12 +369,17 @@ def _summary_row_from_pln_events(
             revenue=revenue,
             terminal_realized=terminal_realized,
             terminal_unrealized=terminal,
-            roi_nominal=roi_nominal,
-            xirr=xirr,
+            roi_nominal=components.roi_pln,
+            xirr=xirr_local,
             is_sold=is_sold,
             evaluation_date=evaluation_date or None,
         )
     )
+    row["xirr_pln"] = xirr_spot
+    row["roi_local"] = round(components.roi_local)
+    row["roi_fx"] = round(components.roi_fx)
+    row["fx_share"] = components.fx_share
+    return row
 
 
 def _sum_category(cashflows: pd.DataFrame, category: str) -> float:

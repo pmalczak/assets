@@ -23,15 +23,15 @@ class PortfolioCfProductsTests(unittest.TestCase):
         day = date(2026, 9, 28)
         self.assertEqual(
             ledger_resource(day),
-            "11 portfolio_cf/2026-09-28/s2/_ledger.parquet",
+            "11 portfolio_cf/2026-09-28/s3/_ledger.parquet",
         )
         self.assertEqual(
             coverage_resource(day),
-            "11 portfolio_cf/2026-09-28/s2/_coverage.parquet",
+            "11 portfolio_cf/2026-09-28/s3/_coverage.parquet",
         )
         self.assertEqual(
             xirr_resource(day),
-            "11 portfolio_cf/2026-09-28/s2/_xirr.parquet",
+            "11 portfolio_cf/2026-09-28/s3/_xirr.parquet",
         )
 
     @patch("portfolio_cf.products.DATA_STEP")
@@ -75,14 +75,47 @@ class PortfolioCfProductsTests(unittest.TestCase):
     def test_load_portfolio_xirr_map_filters_sold_mode(self, table_mock):
         table_mock.return_value = pd.DataFrame(
             [
-                {"portfolio": PORTFOLIO_GM, "sold_filter": "Wszystkie", "xirr": 0.12},
-                {"portfolio": PORTFOLIO_GM, "sold_filter": "Niesprzedane", "xirr": 0.08},
-                {"portfolio": PORTFOLIO_CASH_POOL, "sold_filter": "Wszystkie", "xirr": None},
+                {
+                    "portfolio": PORTFOLIO_GM,
+                    "sold_filter": "Wszystkie",
+                    "xirr": 0.12,
+                    "xirr_pln": 0.11,
+                    "roi_pln": 100.0,
+                    "roi_local": 80.0,
+                    "roi_fx": 20.0,
+                    "fx_share": 0.2,
+                },
+                {
+                    "portfolio": PORTFOLIO_GM,
+                    "sold_filter": "Niesprzedane",
+                    "xirr": 0.08,
+                    "xirr_pln": 0.07,
+                    "roi_pln": 50.0,
+                    "roi_local": 40.0,
+                    "roi_fx": 10.0,
+                    "fx_share": 0.2,
+                },
+                {
+                    "portfolio": PORTFOLIO_CASH_POOL,
+                    "sold_filter": "Wszystkie",
+                    "xirr": None,
+                    "xirr_pln": None,
+                    "roi_pln": None,
+                    "roi_local": None,
+                    "roi_fx": None,
+                    "fx_share": None,
+                },
             ]
         )
         mapping = load_portfolio_xirr_map(date(2026, 9, 28), "Niesprzedane")
         self.assertEqual(mapping[PORTFOLIO_GM], 0.08)
         self.assertNotIn(PORTFOLIO_CASH_POOL, mapping)
+
+        from portfolio_cf.products import load_portfolio_metrics_map
+
+        metrics = load_portfolio_metrics_map(date(2026, 9, 28), "Niesprzedane")
+        self.assertAlmostEqual(metrics[PORTFOLIO_GM]["fx_share"], 0.2)
+        self.assertAlmostEqual(metrics[PORTFOLIO_GM]["xirr_pln"], 0.07)
 
 
 if __name__ == "__main__":

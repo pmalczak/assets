@@ -251,8 +251,132 @@ class PortfolioCfXirrTests(unittest.TestCase):
         )
         self.assertIsNotNone(result.xirr)
         self.assertAlmostEqual(result.xirr, 0.0199, places=3)
+        self.assertAlmostEqual(result.xirr_pln, 0.0199, places=3)
+        self.assertEqual(result.roi_fx_pln, 0.0)
+        self.assertEqual(result.fx_share, 0.0)
         average_wrong = (1.0 + 0.01) / 2
         self.assertNotAlmostEqual(result.xirr, average_wrong, places=2)
+
+    def test_pln_portfolio_fx_share_zero(self):
+        rows = [
+            build_ledger_row(
+                instrument_id="p_xtb:A",
+                event_date="2024-01-01",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="PLN",
+                venue="xtb",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        assembly = AssemblyResult(
+            ledger=pd.DataFrame(rows),
+            coverage=[InstrumentCoverage("p_xtb:A", CoverageStatus.COVERED, venue="xtb")],
+        )
+        result = compute_named_portfolio_xirr(
+            PORTFOLIO_GM,
+            date(2025, 1, 1),
+            assembly=assembly,
+            terminal_pln=1100.0,
+            fx_rates=_fx_frame(),
+        )
+        self.assertEqual(result.roi_fx_pln, 0.0)
+        self.assertEqual(result.fx_share, 0.0)
+        self.assertAlmostEqual(result.xirr, result.xirr_pln, places=6)
+
+    def test_eur_fx_share_above_100_percent(self):
+        """Strata lokalna skompensowana wzrostem kursu → udział FX > 100%."""
+        from portfolio_cf.fx_attribution import roi_fx_components
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_degiro:AAA",
+                event_date="2024-05-31",
+                category=CAPEX,
+                amount=-100.0,
+                currency="EUR",
+                venue="degiro",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        ledger = pd.DataFrame(rows)
+        # FX_t=4.0, FX_T(2024-06-01)=4.2; terminal 96 EUR × 4.2
+        components = roi_fx_components(
+            ledger, 96.0 * 4.2, date(2024, 6, 1), fx_rates=_fx_frame()
+        )
+        self.assertGreater(components.roi_pln, 0.0)
+        self.assertLess(components.roi_local, 0.0)
+        self.assertIsNotNone(components.fx_share)
+        self.assertGreater(components.fx_share, 1.0)
+
+    def test_eur_fx_share_negative(self):
+        """FX zjadł część zysku lokalnego → udział FX < 0%."""
+        from portfolio_cf.fx_attribution import roi_fx_components
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_degiro:AAA",
+                event_date="2024-06-01",
+                category=CAPEX,
+                amount=-100.0,
+                currency="EUR",
+                venue="degiro",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        ledger = pd.DataFrame(rows)
+        # FX_t=4.2, FX_T(2024-05-31)=4.0; terminal 110 EUR × 4.0
+        components = roi_fx_components(
+            ledger, 110.0 * 4.0, date(2024, 5, 31), fx_rates=_fx_frame()
+        )
+        self.assertGreater(components.roi_pln, 0.0)
+        self.assertGreater(components.roi_local, components.roi_pln)
+        self.assertIsNotNone(components.fx_share)
+        self.assertLess(components.fx_share, 0.0)
+
+    def test_portfolio_roi_fx_sums_instruments(self):
+        from portfolio_cf.fx_attribution import roi_fx_components
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_degiro:A",
+                event_date="2024-05-31",
+                category=CAPEX,
+                amount=-50.0,
+                currency="EUR",
+                venue="degiro",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="p_xtb:B",
+                event_date="2024-05-31",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="PLN",
+                venue="xtb",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        ledger = pd.DataFrame(rows)
+        terminal = 50.0 * 4.2 + 1100.0
+        total = roi_fx_components(
+            ledger, terminal, date(2024, 6, 1), fx_rates=_fx_frame()
+        )
+        part_a = roi_fx_components(
+            ledger.loc[ledger[InstrumentCashFlow.INSTRUMENT_ID] == "p_degiro:A"],
+            50.0 * 4.2,
+            date(2024, 6, 1),
+            fx_rates=_fx_frame(),
+        )
+        part_b = roi_fx_components(
+            ledger.loc[ledger[InstrumentCashFlow.INSTRUMENT_ID] == "p_xtb:B"],
+            1100.0,
+            date(2024, 6, 1),
+            fx_rates=_fx_frame(),
+        )
+        self.assertAlmostEqual(total.roi_fx, part_a.roi_fx + part_b.roi_fx, places=6)
+        self.assertAlmostEqual(total.roi_pln, part_a.roi_pln + part_b.roi_pln, places=6)
+        self.assertAlmostEqual(total.roi_local, part_a.roi_local + part_b.roi_local, places=6)
 
     def test_xirr_map_excludes_cash_pool(self):
         from importers.assets.data_model import AssetsDef
@@ -317,6 +441,68 @@ class PortfolioCfXirrTests(unittest.TestCase):
 
     def test_cash_instrument_id(self):
         self.assertEqual(cash_instrument_id("p_degiro"), "p_degiro:CASH")
+
+    def test_razem_matches_header_when_instrument_terminals_differ(self):
+        """ROBO-like: Σ MTM tickerów ≠ NAV snapshota → Razem z wyniku portfela."""
+        from portfolio_cf.xirr import build_portfolio_razem_row
+        from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_re_robo:PRAR",
+                event_date="2024-06-01",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="EUR",
+                venue="robo",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        ledger = pd.DataFrame(rows)
+        assembly = AssemblyResult(
+            ledger=ledger,
+            coverage=[
+                InstrumentCoverage("p_re_robo:PRAR", CoverageStatus.COVERED, venue="robo")
+            ],
+            is_sold_by_instrument={"p_re_robo:PRAR": False},
+        )
+        snapshot_nav = 5000.0
+        instrument_mtm = 4200.0
+        header = compute_named_portfolio_xirr(
+            PORTFOLIO_REVOLUT_ROBO,
+            date(2025, 1, 1),
+            assembly=assembly,
+            terminal_pln=snapshot_nav,
+            fx_rates=_fx_frame(),
+            sold_filter="Wszystkie",
+        )
+        summary = pd.DataFrame(
+            [
+                {
+                    "asset_id": "p_re_robo:PRAR",
+                    "capex": -4200.0,
+                    "opex": 0.0,
+                    "revenue": 0.0,
+                    "terminal_realized": 0.0,
+                    "terminal_unrealized": instrument_mtm,
+                    "roi_nominal": instrument_mtm - 4200.0,
+                    "roi_local": instrument_mtm - 4200.0,
+                    "roi_fx": 0.0,
+                    "fx_share": 0.0,
+                    "xirr": 0.01,
+                    "xirr_pln": 0.01,
+                    "is_sold": False,
+                }
+            ]
+        )
+        self.assertNotEqual(instrument_mtm, snapshot_nav)
+        razem = build_portfolio_razem_row(summary, header)
+        self.assertEqual(razem.iloc[0]["asset_id"], VENUE_TOTAL_ASSET_ID)
+        self.assertEqual(float(razem.iloc[0]["terminal_unrealized"]), round(snapshot_nav))
+        self.assertEqual(razem.iloc[0]["xirr"], header.xirr)
+        self.assertEqual(razem.iloc[0]["xirr_pln"], header.xirr_pln)
+        self.assertEqual(float(razem.iloc[0]["roi_nominal"]), round(header.roi_nominal_pln))
+        self.assertEqual(float(razem.iloc[0]["capex"]), -4200.0)
 
 
 class PortfolioCfExportTests(unittest.TestCase):
@@ -499,12 +685,13 @@ class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
                 },
             ),
         ):
-            summary, events = build_portfolio_instrument_summary(
+            summary, events, local_events = build_portfolio_instrument_summary(
                 assembly,
                 PORTFOLIO_NIERUCHOMOSCI,
                 date(2025, 1, 1),
                 snapshot=snapshot,
                 sold_filter="Wszystkie",
+                fx_rates=_fx_frame(),
             )
 
         self.assertEqual(list(summary["asset_id"]), ["horbaczewskiego"])
@@ -512,11 +699,20 @@ class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
         self.assertEqual(float(summary.iloc[0]["revenue"]), 5000.0)
         self.assertEqual(float(summary.iloc[0]["terminal_unrealized"]), 150000.0)
         self.assertEqual(float(summary.iloc[0]["roi_nominal"]), 55000.0)
+        self.assertEqual(float(summary.iloc[0]["roi_fx"]), 0.0)
+        self.assertEqual(float(summary.iloc[0]["fx_share"]), 0.0)
         self.assertIn("horbaczewskiego", events)
+        self.assertIn("horbaczewskiego", local_events)
 
-        total = aggregate_venue_roi(summary, events, date(2025, 1, 1))
+        total = aggregate_venue_roi(
+            summary,
+            events,
+            date(2025, 1, 1),
+            local_events_by_asset=local_events,
+        )
         self.assertEqual(total.iloc[0]["asset_id"], VENUE_TOTAL_ASSET_ID)
         self.assertEqual(float(total.iloc[0]["capex"]), -100000.0)
+        self.assertEqual(float(total.iloc[0]["roi_fx"]), 0.0)
 
     def test_sold_instrument_has_zero_unrealized_terminal(self):
         from portfolio_cf.instrument_summary import build_portfolio_instrument_summary
@@ -561,12 +757,13 @@ class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
                 return_value={"horbaczewskiego": "horbaczewskiego"},
             ),
         ):
-            summary, _events = build_portfolio_instrument_summary(
+            summary, _events, _local = build_portfolio_instrument_summary(
                 assembly,
                 PORTFOLIO_NIERUCHOMOSCI,
                 date(2025, 1, 1),
                 snapshot=pd.DataFrame(),
                 sold_filter="Wszystkie",
+                fx_rates=_fx_frame(),
             )
         self.assertEqual(float(summary.iloc[0]["terminal_unrealized"]), 0.0)
         self.assertEqual(float(summary.iloc[0]["terminal_realized"]), 120000.0)

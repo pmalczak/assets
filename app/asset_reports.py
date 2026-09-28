@@ -16,6 +16,7 @@ _RAZEM_PLN = "RAZEM-PLN"
 _RAZEM = "RAZEM"
 _SHARE = "udział"
 _XIRR = "XIRR"
+_XIRR_PLN = "XIRR PLN"
 _VALUE_PLN_EUR = f"{AssetsDef.VALUE_PLN}_eur".lower()
 _VALUE_PLN_PLN = f"{AssetsDef.VALUE_PLN}_pln".lower()
 
@@ -120,10 +121,11 @@ def rap1(
     assets: pd.DataFrame,
     *,
     xirr_by_portfolio: Mapping[str, float | None] | None = None,
+    xirr_pln_by_portfolio: Mapping[str, float | None] | None = None,
 ) -> pd.DataFrame:
-    """Jeden wiersz na portfel: RAZEM (PLN) + udział % + XIRR (z Portfele / portfolio_cf)."""
+    """Jeden wiersz na portfel: RAZEM + udział NAV% + XIRR lokalny + XIRR PLN (spot)."""
     work = attach_portfolio_column(assets)
-    empty = pd.DataFrame(columns=[_RAZEM, _SHARE, _XIRR])
+    empty = pd.DataFrame(columns=[_RAZEM, _SHARE, _XIRR, _XIRR_PLN])
     empty.index.name = AssetsDef.PORTFOLIO
     if work is None or work.empty or AssetsDef.VALUE_PLN not in work.columns:
         return empty
@@ -143,16 +145,29 @@ def rap1(
     total = float(by_portfolio.sum())
     share = (by_portfolio / total * 100.0) if total else by_portfolio * 0.0
     xirr_map = dict(xirr_by_portfolio or {})
+    xirr_pln_map = dict(xirr_pln_by_portfolio or {})
     xirr_series = pd.Series(
         {name: xirr_map.get(name) for name in by_portfolio.index},
         dtype=object,
     )
+    xirr_pln_series = pd.Series(
+        {name: xirr_pln_map.get(name) for name in by_portfolio.index},
+        dtype=object,
+    )
 
-    out = pd.DataFrame({_RAZEM: by_portfolio, _SHARE: share, _XIRR: xirr_series})
+    out = pd.DataFrame(
+        {
+            _RAZEM: by_portfolio,
+            _SHARE: share,
+            _XIRR: xirr_series,
+            _XIRR_PLN: xirr_pln_series,
+        }
+    )
     out.loc[_TOTAL] = {
         _RAZEM: total,
         _SHARE: 100.0 if total else 0.0,
         _XIRR: xirr_map.get(_TOTAL),
+        _XIRR_PLN: xirr_pln_map.get(_TOTAL),
     }
     out.index.name = AssetsDef.PORTFOLIO
 
@@ -162,4 +177,5 @@ def rap1(
     )
     formatted[_SHARE] = formatted[_SHARE].map(lambda value: f"{float(value):.1f}%")
     formatted[_XIRR] = formatted[_XIRR].map(format_xirr_cell)
+    formatted[_XIRR_PLN] = formatted[_XIRR_PLN].map(format_xirr_cell)
     return formatted

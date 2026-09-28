@@ -23,14 +23,22 @@ from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
 from portfolio_cf.instrument_summary import (
     build_portfolio_instrument_summary,
 )
-from portfolio_cf.products import invalidate_portfolio_cf, load_assembly
+from portfolio_cf.products import (
+    invalidate_portfolio_cf,
+    load_assembly,
+    snapshot_parquet_path,
+)
 from portfolio_cf.sold_status import (
     filter_ledger_by_sold,
 )
-from portfolio_cf.xirr import compute_named_portfolio_xirr
+from portfolio_cf.xirr import (
+    PortfolioXirrResult,
+    build_portfolio_razem_row,
+    compute_named_portfolio_xirr,
+)
 from app_proc.ui_prefs import current_sold_filter
 from app_streamlit.roi_display import format_roi_summary_display
-from roi.aggregate_venue_roi import aggregate_venue_roi
+from app_proc.snapshots import load_snapshot
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_CASH_POOL,
@@ -96,8 +104,9 @@ def render_portfolios() -> None:
 
     st.subheader("Portfele")
     st.caption(
-        "NAV i skład ze snapshotów. XIRR portfela (nowe, dual-run) = concat CF instrumentów "
-        "w PLN (NBP z dnia transakcji) + terminal NAV — równolegle do legacy ROI w zakładce ROI. "
+        "NAV i skład ze snapshotów. XIRR portfela = lokalny (CF × FX_T na datę wyceny) "
+        "+ terminal NAV; obok XIRR PLN (spot) i udział FX w P&L. "
+        "Równolegle do legacy ROI w zakładce ROI. "
         f"Porównanie do backtestu U7 tylko dla {PORTFOLIO_GM}."
     )
 
@@ -125,25 +134,52 @@ def render_portfolios() -> None:
 
     st.markdown(f"**Snapshot:** {latest_snapshot_date.isoformat()}")
 
-    assembly = _render_portfolio_xirr(selected, latest_snapshot, latest_snapshot_date)
+    # Ten sam plik parquet co ledger DATA_STEP — nie stale build_data po regeneracji.
+    xirr_snapshot = _snapshot_for_valuation(latest_snapshot_date, latest_snapshot)
+
+    assembly, portfolio_xirr = _render_portfolio_xirr(
+        selected, xirr_snapshot, latest_snapshot_date
+    )
 
     if selected == PORTFOLIO_GM:
-        _render_gm_composition(latest_snapshot, latest_snapshot_date)
+        _render_gm_composition(xirr_snapshot, latest_snapshot_date)
     else:
-        _render_generic_composition(latest_snapshot, selected)
+        _render_generic_composition(xirr_snapshot, selected)
 
-    _render_cf_browser(selected, assembly, latest_snapshot, latest_snapshot_date)
+    _render_cf_browser(
+        selected,
+        assembly,
+        xirr_snapshot,
+        latest_snapshot_date,
+        portfolio_xirr=portfolio_xirr,
+    )
     _render_nav_path(selected)
+
+
+def _snapshot_for_valuation(
+    valuation_date: date,
+    fallback: pd.DataFrame,
+) -> pd.DataFrame:
+    """Odczyt snapshota z dysku (jak `11 portfolio_cf`) — spójny terminal NAV."""
+    path = snapshot_parquet_path(valuation_date)
+    if path.is_file():
+        try:
+            frame = load_snapshot(path)
+            if frame is not None and not frame.empty:
+                return frame
+        except Exception:
+            pass
+    return fallback if isinstance(fallback, pd.DataFrame) else pd.DataFrame()
 
 
 def _render_portfolio_xirr(
     portfolio_name: str,
     snapshot: pd.DataFrame,
     valuation_date: date,
-) -> AssemblyResult | None:
+) -> tuple[AssemblyResult | None, PortfolioXirrResult | None]:
     if portfolio_name == PORTFOLIO_CASH_POOL or portfolio_name == XIRR_EXCLUDED_PORTFOLIO:
         st.info("XIRR portfela: `0 CASH-POOL` poza zakresem v1 (źródło finansowania).")
-        return None
+        return None, None
 
     try:
         with st.spinner("Ledger CF + XIRR portfela..."):
@@ -157,27 +193,40 @@ def _render_portfolio_xirr(
             )
     except Exception as exc:
         st.warning(f"Nie udało się policzyć XIRR portfela: {exc}")
-        return None
+        return None, None
 
     for msg in assembly.warnings:
         st.warning(msg)
     for msg in result.warnings:
         st.warning(msg)
 
-    c1, c2, c3 = st.columns(3)
-    xirr_label = "XIRR (PLN)"
+    c1, c2, c3, c4 = st.columns(4)
+    xirr_label = "XIRR (lokalny)"
     if result.incomplete:
-        xirr_label = "XIRR (PLN, niekompletne CF)"
+        xirr_label = "XIRR (lokalny, niekompletne CF)"
     c1.metric(
         xirr_label,
         f"{result.xirr:.2%}" if result.xirr is not None else "—",
     )
-    c2.metric("Terminal NAV", f"{result.terminal_pln:,.0f} PLN".replace(",", " "))
-    c3.metric("ROI nominalny", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
+    c2.metric(
+        "XIRR (PLN)",
+        f"{result.xirr_pln:.2%}" if result.xirr_pln is not None else "—",
+    )
+    c3.metric("Terminal NAV", f"{result.terminal_pln:,.0f} PLN".replace(",", " "))
+    c4.metric(
+        "Udział FX",
+        f"{result.fx_share:.1%}" if result.fx_share is not None else "—",
+    )
+    r1, r2, r3 = st.columns(3)
+    r1.metric("ROI lokalny", f"{result.roi_local_pln:,.0f} PLN".replace(",", " "))
+    r2.metric("ROI FX", f"{result.roi_fx_pln:,.0f} PLN".replace(",", " "))
+    r3.metric("ROI PLN", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
     st.caption(
-        f"XIRR = jeden compute_xirr na CF instrumentów (amount_pln) + terminal. "
+        "XIRR lokalny = CF × kurs NBP z daty wyceny (FX_T) + terminal NAV portfela. "
+        "XIRR PLN = CF × kurs z dnia transakcji (FX_t). "
+        "Udział FX = ROI_FX / ROI_PLN (może być <0% lub >100%). "
         f"Filtr pozycji (sidebar): **{current_sold_filter()}**. "
-        "Dual-run względem zakładki ROI (cache DATA_STEP `11 portfolio_cf`)."
+        "Cache DATA_STEP `11 portfolio_cf`."
     )
     if result.uncovered:
         lines = [
@@ -188,7 +237,7 @@ def _render_portfolio_xirr(
             "Instrumenty portfela **bez CF** (UNCOVERED; w XIRR brak ich przepływów, "
             "NAV terminala i tak z całego portfela):\n\n- " + "\n- ".join(lines)
         )
-    return assembly
+    return assembly, result
 
 
 def _render_cf_browser(
@@ -196,6 +245,8 @@ def _render_cf_browser(
     assembly: AssemblyResult | None,
     snapshot: pd.DataFrame,
     valuation_date: date,
+    *,
+    portfolio_xirr: PortfolioXirrResult | None = None,
 ) -> None:
     if assembly is None or portfolio_name == PORTFOLIO_CASH_POOL:
         return
@@ -204,7 +255,8 @@ def _render_cf_browser(
     mode = current_sold_filter()
     st.caption(
         f"Filtr pozycji (sidebar): **{mode}**. "
-        "Tabela per instrument jak w ROI — kwoty i XIRR w PLN (kurs NBP z dnia CF)."
+        "Wiersze: terminal/XIRR per instrument. "
+        "Razem: XIRR/ROI jak w nagłówku (terminal = NAV portfela ze snapshota)."
     )
     subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
     subset = filter_ledger_by_sold(
@@ -236,7 +288,7 @@ def _render_cf_browser(
         return
 
     try:
-        summary, pln_events = build_portfolio_instrument_summary(
+        summary, _pln_events, _local_events = build_portfolio_instrument_summary(
             assembly,
             portfolio_name,
             valuation_date,
@@ -246,16 +298,16 @@ def _render_cf_browser(
     except Exception as exc:
         st.warning(f"Nie udało się zbudować podsumowania per instrument: {exc}")
         summary = pd.DataFrame()
-        pln_events = {}
 
     if not summary.empty:
-        total = aggregate_venue_roi(summary, pln_events, valuation_date)
-        if not total.empty:
-            st.dataframe(
-                dataframe_for_streamlit(format_roi_summary_display(total)),
-                width="stretch",
-                hide_index=True,
-            )
+        if portfolio_xirr is not None:
+            total = build_portfolio_razem_row(summary, portfolio_xirr)
+            if not total.empty:
+                st.dataframe(
+                    dataframe_for_streamlit(format_roi_summary_display(total)),
+                    width="stretch",
+                    hide_index=True,
+                )
         st.dataframe(
             dataframe_for_streamlit(format_roi_summary_display(summary)),
             width="stretch",

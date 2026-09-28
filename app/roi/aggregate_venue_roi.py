@@ -13,6 +13,7 @@ from roi.data_model import CashFlowEvent
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 VENUE_TOTAL_ASSET_ID = "Razem"
+_NEAR_ZERO = 1e-9
 
 _MONEY_COLUMNS = (
     "capex",
@@ -28,10 +29,13 @@ def aggregate_venue_roi(
     summary: pd.DataFrame,
     events_by_asset: dict[str, pd.DataFrame],
     valuation_date: date,
+    *,
+    local_events_by_asset: dict[str, pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Jeden wiersz Razem dla widocznego summary (po filtrze Sprzedane).
 
     Kwoty = suma wierszy; XIRR = compute_xirr na concat CF + Σ terminal_unrealized;
+    gdy podane ``local_events_by_asset`` — XIRR lokalny (FX_T), ``xirr_pln`` ze spot.
     Data wyceny = min niepustych dat wyceny elementów; is_sold = wszystkie sprzedane.
     """
     if summary is None or summary.empty:
@@ -42,10 +46,24 @@ def aggregate_venue_roi(
     eval_date = _min_evaluation_date(summary)
 
     asset_ids = summary["asset_id"].astype(str).tolist()
-    pooled = _pool_cashflows(asset_ids, events_by_asset, valuation_date)
     terminal_unrealized = money["terminal_unrealized"]
-    xirr_dates, xirr_amounts = cashflows_for_xirr(pooled, valuation_date, terminal_unrealized)
-    xirr = compute_xirr(xirr_dates, xirr_amounts)
+
+    spot_pooled = _pool_cashflows(asset_ids, events_by_asset, valuation_date)
+    spot_dates, spot_amounts = cashflows_for_xirr(
+        spot_pooled, valuation_date, terminal_unrealized
+    )
+    xirr_spot = compute_xirr(spot_dates, spot_amounts)
+
+    if local_events_by_asset is not None:
+        local_pooled = _pool_cashflows(asset_ids, local_events_by_asset, valuation_date)
+        local_dates, local_amounts = cashflows_for_xirr(
+            local_pooled, valuation_date, terminal_unrealized
+        )
+        xirr = compute_xirr(local_dates, local_amounts)
+        xirr_pln = xirr_spot
+    else:
+        xirr = xirr_spot
+        xirr_pln = None
 
     row = roi_summary_to_row(
         RoiSummary(
@@ -63,6 +81,18 @@ def aggregate_venue_roi(
     )
     if "instrument" in summary.columns:
         row["instrument"] = VENUE_TOTAL_ASSET_ID
+    if "roi_local" in summary.columns or "roi_fx" in summary.columns:
+        roi_local = float(summary["roi_local"].sum()) if "roi_local" in summary.columns else 0.0
+        roi_fx = float(summary["roi_fx"].sum()) if "roi_fx" in summary.columns else 0.0
+        row["roi_local"] = round(roi_local)
+        row["roi_fx"] = round(roi_fx)
+        row["fx_share"] = (
+            None
+            if abs(money["roi_nominal"]) <= _NEAR_ZERO
+            else roi_fx / money["roi_nominal"]
+        )
+    if xirr_pln is not None or "xirr_pln" in summary.columns:
+        row["xirr_pln"] = xirr_pln
     return pd.DataFrame([row])
 
 

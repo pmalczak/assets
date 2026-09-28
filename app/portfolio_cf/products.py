@@ -14,11 +14,22 @@ from data_step.data_step_frame import DataStepFrame
 from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
-from portfolio_cf.xirr import compute_named_portfolio_xirr_map
+from portfolio_cf.xirr import compute_named_portfolio_metrics_map
 
 PORTFOLIO_CF_STEP = "11 portfolio_cf"
-# Bump przy zmianie semantyki ledgera (np. FX waluty katalogu) — stare parquet nieaktualne.
-_PORTFOLIO_CF_SCHEMA = 2
+# Bump przy zmianie semantyki ledgera / XIRR (FX attribution) — stare parquet nieaktualne.
+_PORTFOLIO_CF_SCHEMA = 3
+
+_XIRR_COLUMNS = (
+    "portfolio",
+    "sold_filter",
+    "xirr",
+    "xirr_pln",
+    "roi_pln",
+    "roi_local",
+    "roi_fx",
+    "fx_share",
+)
 
 
 def ledger_resource(valuation_date: date) -> str:
@@ -68,19 +79,41 @@ def load_portfolio_xirr_map(
     valuation_date: date,
     sold_filter: str,
 ) -> dict[str, float | None]:
-    """XIRR per portfel dla wybranego filtra pozycji — z produktu DATA_STEP."""
+    """XIRR lokalny per portfel dla wybranego filtra pozycji — z produktu DATA_STEP."""
+    metrics = load_portfolio_metrics_map(valuation_date, sold_filter)
+    return {name: row.get("xirr") for name, row in metrics.items()}
+
+
+def load_portfolio_metrics_map(
+    valuation_date: date,
+    sold_filter: str,
+) -> dict[str, dict[str, float | None]]:
+    """XIRR lokalny / spot + ROI FX per portfel (w tym Z RAZEM)."""
     table = _obtain_xirr_table(valuation_date)
     if table is None or table.empty:
         return {}
     subset = table.loc[table["sold_filter"].astype(str) == str(sold_filter)]
-    out: dict[str, float | None] = {}
+    out: dict[str, dict[str, float | None]] = {}
     for _, row in subset.iterrows():
-        raw = row.get("xirr")
-        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
-            out[str(row["portfolio"])] = None
-        else:
-            out[str(row["portfolio"])] = float(raw)
+        portfolio = str(row["portfolio"])
+        out[portfolio] = {
+            "xirr": _nullable_float(row.get("xirr")),
+            "xirr_pln": _nullable_float(row.get("xirr_pln")),
+            "roi_pln": _nullable_float(row.get("roi_pln")),
+            "roi_local": _nullable_float(row.get("roi_local")),
+            "roi_fx": _nullable_float(row.get("roi_fx")),
+            "fx_share": _nullable_float(row.get("fx_share")),
+        }
     return out
+
+
+def _nullable_float(raw: object) -> float | None:
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def invalidate_portfolio_cf(valuation_date: date) -> None:
@@ -246,23 +279,28 @@ def _collect_xirr(
     snapshot = _read_snapshot(source_file)
     rows: list[dict] = []
     for sold_filter in SOLD_FILTER_LABELS:
-        mapping = compute_named_portfolio_xirr_map(
+        mapping = compute_named_portfolio_metrics_map(
             valuation_date,
             assembly=assembly,
             snapshot=snapshot,
             sold_filter=sold_filter,
         )
-        for portfolio, xirr in mapping.items():
+        for portfolio, result in mapping.items():
             rows.append(
                 {
                     "portfolio": portfolio,
                     "sold_filter": sold_filter,
-                    "xirr": xirr,
+                    "xirr": result.xirr,
+                    "xirr_pln": result.xirr_pln,
+                    "roi_pln": result.roi_nominal_pln,
+                    "roi_local": result.roi_local_pln,
+                    "roi_fx": result.roi_fx_pln,
+                    "fx_share": result.fx_share,
                 }
             )
     if not rows:
-        return pd.DataFrame(columns=["portfolio", "sold_filter", "xirr"])
-    return pd.DataFrame(rows)
+        return pd.DataFrame(columns=list(_XIRR_COLUMNS))
+    return pd.DataFrame(rows, columns=list(_XIRR_COLUMNS))
 
 
 def _build_and_stash(
