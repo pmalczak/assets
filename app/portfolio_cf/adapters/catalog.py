@@ -12,9 +12,11 @@ from portfolio_cf.data_model import InstrumentCashFlow
 
 VENUE = "catalog"
 
-# Waluta natywna per instrument katalogu (v1).
-_INSTRUMENT_CURRENCY = {
+# Fallback gdy brak wiersza w ``assets`` / pustej ``waluta``.
+# ``cash`` / ``rocky-iv`` (RODZAJ*=assets.cash) = waluta wyceny EUR — jak ROI katalog.
+_FALLBACK_CURRENCY = {
     "cash": "EUR",
+    "rocky-iv": "EUR",
 }
 
 
@@ -31,7 +33,8 @@ def adapt_catalog_ledger(
 
         _summary, events_by_asset = compute_portfolio_roi(valuation_date)
 
-    currencies = dict(_INSTRUMENT_CURRENCY)
+    currencies = _catalog_currencies_from_assets()
+    currencies.update(_FALLBACK_CURRENCY)
     if currency_by_instrument:
         currencies.update(currency_by_instrument)
 
@@ -55,3 +58,26 @@ def adapt_catalog_ledger(
     out = pd.concat(frames, ignore_index=True)
     InstrumentCashFlow.check_structure(out)
     return out, coverage, warnings
+
+
+def _catalog_currencies_from_assets() -> dict[str, str]:
+    """``assets.waluta`` → mapa instrument_id → waluta CF (PLN/EUR)."""
+    try:
+        from importers.assets.data_model import AssetsDef
+        from importers.assets.read_assets import read_assets
+
+        assets = read_assets()
+    except Exception:
+        return {}
+    if assets is None or assets.empty:
+        return {}
+    if AssetsDef.ID not in assets.columns or AssetsDef.CURRENCY not in assets.columns:
+        return {}
+    out: dict[str, str] = {}
+    for _, row in assets.iterrows():
+        asset_id = str(row[AssetsDef.ID]).strip()
+        currency = str(row.get(AssetsDef.CURRENCY) or "").strip().upper()
+        if not asset_id or not currency:
+            continue
+        out[asset_id] = currency
+    return out

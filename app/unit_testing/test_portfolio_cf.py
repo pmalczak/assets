@@ -101,6 +101,73 @@ class PortfolioCfLedgerTests(unittest.TestCase):
         self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.AMOUNT_PLN]), -420.0)
         self.assertEqual(coverage[0].status, CoverageStatus.COVERED)
 
+    def test_catalog_rocky_iv_capex_eur_to_pln(self):
+        """rocky-iv: CAPEX w EUR → amount_pln; nie traktować kwot EUR jako PLN."""
+        from portfolio_cf.adapters.catalog import adapt_catalog_ledger
+
+        events = {
+            "rocky-iv": pd.DataFrame(
+                [
+                    {
+                        CashFlowEvent.ASSET_ID: "rocky-iv",
+                        CashFlowEvent.DATE: "2024-06-01",
+                        CashFlowEvent.AMOUNT: -1000.0,
+                        CashFlowEvent.CATEGORY: CAPEX,
+                        CashFlowEvent.SOURCE: "manual",
+                        CashFlowEvent.DESCRIPTION: "buy",
+                        CashFlowEvent.TITLE: "",
+                        CashFlowEvent.COUNTERPARTY: "",
+                        CashFlowEvent.ACCOUNT_NUMBER: "",
+                    }
+                ]
+            )
+        }
+        with patch(
+            "portfolio_cf.adapters.catalog._catalog_currencies_from_assets",
+            return_value={"rocky-iv": "EUR"},
+        ):
+            ledger, coverage, _warnings = adapt_catalog_ledger(
+                date(2025, 1, 1),
+                events_by_asset=events,
+                fx_rates=_fx_frame(),
+            )
+        self.assertEqual(len(coverage), 1)
+        self.assertEqual(str(ledger.iloc[0][InstrumentCashFlow.CURRENCY]), "EUR")
+        self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.AMOUNT]), -1000.0)
+        self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.AMOUNT_PLN]), -4200.0)
+
+    def test_catalog_fallback_eur_for_rocky_without_assets_map(self):
+        from portfolio_cf.adapters.catalog import adapt_catalog_ledger
+
+        events = {
+            "rocky-iv": pd.DataFrame(
+                [
+                    {
+                        CashFlowEvent.ASSET_ID: "rocky-iv",
+                        CashFlowEvent.DATE: "2024-06-01",
+                        CashFlowEvent.AMOUNT: -10.0,
+                        CashFlowEvent.CATEGORY: CAPEX,
+                        CashFlowEvent.SOURCE: "manual",
+                        CashFlowEvent.DESCRIPTION: "",
+                        CashFlowEvent.TITLE: "",
+                        CashFlowEvent.COUNTERPARTY: "",
+                        CashFlowEvent.ACCOUNT_NUMBER: "",
+                    }
+                ]
+            )
+        }
+        with patch(
+            "portfolio_cf.adapters.catalog._catalog_currencies_from_assets",
+            return_value={},
+        ):
+            ledger, _coverage, _warnings = adapt_catalog_ledger(
+                date(2025, 1, 1),
+                events_by_asset=events,
+                fx_rates=_fx_frame(),
+            )
+        self.assertEqual(str(ledger.iloc[0][InstrumentCashFlow.CURRENCY]), "EUR")
+        self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.AMOUNT_PLN]), -42.0)
+
     def test_same_day_rebalance_nets_in_portfolio_pln(self):
         """SELL ETF1 + BUY ETF2 tego samego dnia → netto 0 w amount_pln."""
         rows = [
@@ -186,6 +253,46 @@ class PortfolioCfXirrTests(unittest.TestCase):
         self.assertAlmostEqual(result.xirr, 0.0199, places=3)
         average_wrong = (1.0 + 0.01) / 2
         self.assertNotAlmostEqual(result.xirr, average_wrong, places=2)
+
+    def test_xirr_map_excludes_cash_pool(self):
+        from importers.assets.data_model import AssetsDef
+        from portfolio_cf.xirr import compute_named_portfolio_xirr_map
+        from portfolios.assignment import PORTFOLIO_CASH_POOL
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_xtb:A",
+                event_date="2024-01-01",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="PLN",
+                venue="xtb",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        assembly = AssemblyResult(
+            ledger=pd.DataFrame(rows),
+            coverage=[InstrumentCoverage("p_xtb:A", CoverageStatus.COVERED, venue="xtb")],
+        )
+        snapshot = pd.DataFrame(
+            [
+                {
+                    AssetsDef.ID: "p_xtb",
+                    AssetsDef.TYPE: "investment.udziały",
+                    AssetsDef.VALUE_PLN: 1100.0,
+                }
+            ]
+        )
+        mapping = compute_named_portfolio_xirr_map(
+            date(2025, 1, 1),
+            assembly=assembly,
+            snapshot=snapshot,
+            sold_filter="Wszystkie",
+        )
+        self.assertIsNone(mapping[PORTFOLIO_CASH_POOL])
+        self.assertIn(PORTFOLIO_GM, mapping)
+        self.assertIsNotNone(mapping[PORTFOLIO_GM])
+        self.assertAlmostEqual(float(mapping[PORTFOLIO_GM]), 0.10, places=2)
 
     def test_uncovered_with_nav_marks_incomplete(self):
         assembly = AssemblyResult(
@@ -326,11 +433,8 @@ class PortfolioCfAssembleInitTests(unittest.TestCase):
 class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
     def test_summary_matches_roi_columns_in_pln(self):
         from importers.assets.data_model import AssetsDef
-        from portfolio_cf.instrument_summary import (
-            aggregate_portfolio_instrument_summary,
-            build_portfolio_instrument_summary,
-        )
-        from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID
+        from portfolio_cf.instrument_summary import build_portfolio_instrument_summary
+        from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID, aggregate_venue_roi
 
         rows = [
             build_ledger_row(
@@ -410,7 +514,7 @@ class PortfolioCfInstrumentSummaryTests(unittest.TestCase):
         self.assertEqual(float(summary.iloc[0]["roi_nominal"]), 55000.0)
         self.assertIn("horbaczewskiego", events)
 
-        total = aggregate_portfolio_instrument_summary(summary, events, date(2025, 1, 1))
+        total = aggregate_venue_roi(summary, events, date(2025, 1, 1))
         self.assertEqual(total.iloc[0]["asset_id"], VENUE_TOTAL_ASSET_ID)
         self.assertEqual(float(total.iloc[0]["capex"]), -100000.0)
 

@@ -16,21 +16,21 @@ from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download
 from global_momentum.global_momentum_benchmarks import GM_U7_LABEL
 from importers.assets.data_model import AssetsDef
 from portfolio_cf.allocate import allocate_ledger_to_portfolio
-from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
-from portfolio_cf.coverage import CoverageStatus
+from portfolio_cf.assemble import AssemblyResult
 from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.export_excel import portfolio_cf_excel_filename, portfolio_cf_to_excel_bytes
 from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
 from portfolio_cf.instrument_summary import (
-    aggregate_portfolio_instrument_summary,
     build_portfolio_instrument_summary,
 )
+from portfolio_cf.products import invalidate_portfolio_cf, load_assembly
 from portfolio_cf.sold_status import (
     filter_ledger_by_sold,
 )
 from portfolio_cf.xirr import compute_named_portfolio_xirr
 from app_proc.ui_prefs import current_sold_filter
-from app_streamlit.render_roi import _format_roi_summary_display
+from app_streamlit.roi_display import format_roi_summary_display
+from roi.aggregate_venue_roi import aggregate_venue_roi
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_CASH_POOL,
@@ -48,7 +48,6 @@ from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 2
 _GM_POSITIONS_SCHEMA = 1
-_LEDGER_SCHEMA = 6
 _PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
 _LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
 _COMPOSITION_COLUMNS = (
@@ -106,7 +105,8 @@ def render_portfolios() -> None:
         _load_portfolio_nav.clear()
         _load_gm_positions.clear()
         _load_benchmarks.clear()
-        _load_instrument_ledger_cached.clear()
+        if latest_snapshot_date is not None:
+            invalidate_portfolio_cf(latest_snapshot_date)
         st.rerun()
 
     _purge_stale_portfolio_selection()
@@ -136,50 +136,6 @@ def render_portfolios() -> None:
     _render_nav_path(selected)
 
 
-@st.cache_data(show_spinner=False)
-def _load_instrument_ledger_cached(
-    valuation_date: date,
-    _schema: int = _LEDGER_SCHEMA,
-) -> tuple[pd.DataFrame, pd.DataFrame, tuple[str, ...], dict[str, bool]]:
-    from app_proc.snapshots import list_snapshot_files, load_snapshot, snapshots_directory
-
-    snapshot = pd.DataFrame()
-    for snap_date, path in list_snapshot_files(snapshots_directory()):
-        if snap_date == valuation_date:
-            snapshot = load_snapshot(path)
-            break
-    assembly = build_instrument_ledger(valuation_date, snapshot=snapshot)
-    return (
-        assembly.ledger,
-        assembly.coverage_frame(),
-        tuple(assembly.warnings),
-        dict(assembly.is_sold_by_instrument),
-    )
-
-
-def _load_instrument_ledger(valuation_date: date) -> AssemblyResult:
-    from portfolio_cf.coverage import InstrumentCoverage
-
-    ledger, coverage_df, warnings, sold_map = _load_instrument_ledger_cached(valuation_date)
-    coverage: list = []
-    if coverage_df is not None and not coverage_df.empty:
-        for _, row in coverage_df.iterrows():
-            coverage.append(
-                InstrumentCoverage(
-                    instrument_id=str(row["instrument_id"]),
-                    status=CoverageStatus(str(row["status"])),
-                    reason=str(row.get("reason") or ""),
-                    venue=str(row.get("venue") or ""),
-                )
-            )
-    return AssemblyResult(
-        ledger=ledger,
-        coverage=coverage,
-        warnings=list(warnings),
-        is_sold_by_instrument=dict(sold_map or {}),
-    )
-
-
 def _render_portfolio_xirr(
     portfolio_name: str,
     snapshot: pd.DataFrame,
@@ -191,7 +147,7 @@ def _render_portfolio_xirr(
 
     try:
         with st.spinner("Ledger CF + XIRR portfela..."):
-            assembly = _load_instrument_ledger(valuation_date)
+            assembly = load_assembly(valuation_date)
             result = compute_named_portfolio_xirr(
                 portfolio_name,
                 valuation_date,
@@ -221,7 +177,7 @@ def _render_portfolio_xirr(
     st.caption(
         f"XIRR = jeden compute_xirr na CF instrumentów (amount_pln) + terminal. "
         f"Filtr pozycji (sidebar): **{current_sold_filter()}**. "
-        "Dual-run względem zakładki ROI."
+        "Dual-run względem zakładki ROI (cache DATA_STEP `11 portfolio_cf`)."
     )
     if result.uncovered:
         lines = [
@@ -270,7 +226,7 @@ def _render_cf_browser(
         download_key=f"portfolio_cf_xlsx_{portfolio_name}",
         disabled=subset.empty,
         help_prepare=(
-            "Excel w perspektywie portfela (po filtrze pozycji): arkusz cf, coverage, meta. "
+            "Excel portfela (po filtrze pozycji): arkusz cf + coverage (diagnostyka) + meta. "
             "Na Python 3.14 włącz tylko na czas pobrania."
         ),
     )
@@ -293,17 +249,15 @@ def _render_cf_browser(
         pln_events = {}
 
     if not summary.empty:
-        total = aggregate_portfolio_instrument_summary(
-            summary, pln_events, valuation_date
-        )
+        total = aggregate_venue_roi(summary, pln_events, valuation_date)
         if not total.empty:
             st.dataframe(
-                dataframe_for_streamlit(_format_roi_summary_display(total)),
+                dataframe_for_streamlit(format_roi_summary_display(total)),
                 width="stretch",
                 hide_index=True,
             )
         st.dataframe(
-            dataframe_for_streamlit(_format_roi_summary_display(summary)),
+            dataframe_for_streamlit(format_roi_summary_display(summary)),
             width="stretch",
             hide_index=True,
         )

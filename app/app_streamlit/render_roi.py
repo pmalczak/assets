@@ -11,9 +11,9 @@ from app_proc.export_product_excel import (
     list_roi_product_excel_files,
     roi_summary_excel_filename,
 )
+from app_streamlit.roi_display import format_roi_summary_display
 from app_streamlit.safe_download import dataframe_for_streamlit, opt_in_download_button
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import AssetsDef
 from roi import CashFlowEvent, get_config_file, compute_portfolio_roi
 from roi.aggregate_venue_roi import aggregate_venue_roi
 from roi.broker_obligacje_roi import compute_obligacje_broker_roi
@@ -23,18 +23,6 @@ from roi.mbank_deposit_roi import compute_mbank_deposit_roi
 from roi.revolut_deposit_roi import compute_revolut_deposit_roi
 from roi.xtb_roi import compute_xtb_ticker_roi
 
-ROI_DISPLAY_COLUMNS = {
-    "asset_id": "Aktywo",
-    "capex": "Inwestycja (CAPEX)",
-    "opex": "Wydatki (OPEX)",
-    "revenue": "Wplywy (REVENUES)",
-    "terminal_realized": "Dezynwestycja (realiz.)",
-    "terminal_unrealized": "Wycena (nerealiz.)",
-    "roi_nominal": "ROI nominal",
-    "xirr": "XIRR",
-    "is_sold": "Sprzedane",
-}
-ROI_EVALUATION_DATE_LABEL = "Data wyceny"
 ROI_FLOW_DISPLAY_COLUMNS = {
     CashFlowEvent.DATE: "Data",
     CashFlowEvent.AMOUNT: "Kwota",
@@ -485,12 +473,12 @@ def _render_venue_summary_tables(
     total = aggregate_venue_roi(summary, events_by_asset, valuation_date)
     if not total.empty:
         st.dataframe(
-            dataframe_for_streamlit(_format_roi_summary_display(total)),
+            dataframe_for_streamlit(format_roi_summary_display(total)),
             width="stretch",
             hide_index=True,
         )
     st.dataframe(
-        dataframe_for_streamlit(_format_roi_summary_display(summary)),
+        dataframe_for_streamlit(format_roi_summary_display(summary)),
         width="stretch",
         hide_index=True,
     )
@@ -536,39 +524,6 @@ def _prepare_flow_display(events: pd.DataFrame, valuation_date: date) -> pd.Data
         ).drop(columns=["_sort"])
     flow_columns = [col for col in ROI_FLOW_DISPLAY_COLUMNS if col in events_display.columns]
     return events_display[flow_columns].rename(columns=ROI_FLOW_DISPLAY_COLUMNS)
-
-
-def _roi_display_column_map(summary: pd.DataFrame) -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    for key, label in ROI_DISPLAY_COLUMNS.items():
-        mapping[key] = label
-        if key == "terminal_unrealized" and AssetsDef.EVALUATION_DATE in summary.columns:
-            mapping[AssetsDef.EVALUATION_DATE] = ROI_EVALUATION_DATE_LABEL
-    return mapping
-
-
-def _format_roi_summary_display(summary: pd.DataFrame) -> pd.DataFrame:
-    column_map = _roi_display_column_map(summary)
-    keys = [key for key in column_map if key in summary.columns]
-    display = summary[keys].rename(columns=column_map)
-    if "instrument" in summary.columns:
-        display["Aktywo"] = summary["instrument"].astype(str)
-    skip_amount = {ROI_EVALUATION_DATE_LABEL, "Sprzedane", "XIRR"}
-    for col in column_map.values():
-        if col in skip_amount:
-            continue
-        if col in display.columns:
-            display[col] = display[col].map(
-                lambda v: f"{v:,}".replace(",", " ") if isinstance(v, (int, float)) else v
-            )
-    if "XIRR" in display.columns:
-        display["XIRR"] = summary["xirr"].map(
-            lambda v: f"{v * 100:.1f}%" if v is not None and pd.notna(v) else "—"
-        )
-    if "Sprzedane" in display.columns:
-        # bool + pyarrow na Python 3.14 potrafi zabić proces Streamlit (segfault).
-        display["Sprzedane"] = summary["is_sold"].map(lambda v: "tak" if bool(v) else "nie")
-    return display
 
 
 def _render_flow_details(

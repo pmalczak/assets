@@ -109,6 +109,41 @@ def compute_named_portfolio_xirr(
     )
 
 
+def compute_named_portfolio_xirr_map(
+    valuation_date: date,
+    *,
+    assembly: AssemblyResult | None = None,
+    snapshot: pd.DataFrame | None = None,
+    sold_filter: str | None = None,
+) -> dict[str, float | None]:
+    """XIRR PLN per nazwany portfel (CASH-POOL → None). Jedno assembly na wszystkie."""
+    from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
+    from portfolios.assignment import KNOWN_PORTFOLIOS
+
+    if assembly is None:
+        assembly = build_instrument_ledger(
+            valuation_date, fx_rates=None, snapshot=snapshot
+        )
+
+    out: dict[str, float | None] = {}
+    for name in KNOWN_PORTFOLIOS:
+        if name == XIRR_EXCLUDED_PORTFOLIO:
+            out[name] = None
+            continue
+        try:
+            result = compute_named_portfolio_xirr(
+                name,
+                valuation_date,
+                assembly=assembly,
+                snapshot=snapshot,
+                sold_filter=sold_filter,
+            )
+            out[name] = result.xirr
+        except Exception:
+            out[name] = None
+    return out
+
+
 def _pln_series(
     ledger: pd.DataFrame,
     valuation_date: date,

@@ -18,7 +18,6 @@ from portfolio_cf.sold_status import (
     sold_filter_label,
 )
 from portfolios.composition import KIND_CASH, KIND_POSITION, load_gm_position_lines
-from roi.aggregate_venue_roi import aggregate_venue_roi
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, roi_summary_to_row
 from roi.data_model import CashFlowEvent
@@ -95,15 +94,6 @@ def build_portfolio_instrument_summary(
         return pd.DataFrame(), {}
     summary = pd.DataFrame(rows)
     return summary.reset_index(drop=True), events_by_asset
-
-
-def aggregate_portfolio_instrument_summary(
-    summary: pd.DataFrame,
-    events_by_asset: dict[str, pd.DataFrame],
-    valuation_date: date,
-) -> pd.DataFrame:
-    """Wiersz Razem — te same reguły co ``aggregate_venue_roi`` (kwoty PLN)."""
-    return aggregate_venue_roi(summary, events_by_asset, valuation_date)
 
 
 def resolve_terminal_pln_by_instrument(
@@ -245,6 +235,8 @@ def _currency_by_instrument(ledger: pd.DataFrame | None) -> dict[str, str]:
 
 def _guess_currency(instrument_id: str, row: pd.Series) -> str:
     key = str(instrument_id)
+    if key in {"cash", "rocky-iv"}:
+        return "EUR"
     if key.startswith("p_degiro:") or key.startswith("p_re_robo:"):
         return "EUR"
     if key.startswith("p_re_eur") or key.startswith("g_re_eur"):
@@ -324,7 +316,7 @@ def _sum_category(cashflows: pd.DataFrame, category: str) -> float:
 
 def _instrument_labels(ledger: pd.DataFrame) -> dict[str, str]:
     try:
-        from importers.assets.instruments import InstrumentMapError, load_instrument_map
+        from importers.assets.instruments import load_instrument_map
 
         mapping = load_instrument_map()
     except Exception:

@@ -3,17 +3,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pandas as pd
 
 from importers.assets.data_model import AssetsDef
 from portfolios.assignment import KNOWN_PORTFOLIOS, attach_portfolio_column
 
-_SEPARATOR = "___________________\n"
 _COL_SPACE = 15
 _TOTAL = "Z RAZEM"
 _RAZEM_PLN = "RAZEM-PLN"
 _RAZEM = "RAZEM"
 _SHARE = "udział"
+_XIRR = "XIRR"
 _VALUE_PLN_EUR = f"{AssetsDef.VALUE_PLN}_eur".lower()
 _VALUE_PLN_PLN = f"{AssetsDef.VALUE_PLN}_pln".lower()
 
@@ -108,10 +110,20 @@ def rap2(assets: pd.DataFrame) -> pd.DataFrame:
     return g1
 
 
-def rap1(assets: pd.DataFrame) -> pd.DataFrame:
-    """Jeden wiersz na portfel: RAZEM (PLN) + udział % w sumie wszystkich portfeli."""
+def format_xirr_cell(value: float | None) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    return f"{float(value) * 100:.1f}%"
+
+
+def rap1(
+    assets: pd.DataFrame,
+    *,
+    xirr_by_portfolio: Mapping[str, float | None] | None = None,
+) -> pd.DataFrame:
+    """Jeden wiersz na portfel: RAZEM (PLN) + udział % + XIRR (z Portfele / portfolio_cf)."""
     work = attach_portfolio_column(assets)
-    empty = pd.DataFrame(columns=[_RAZEM, _SHARE])
+    empty = pd.DataFrame(columns=[_RAZEM, _SHARE, _XIRR])
     empty.index.name = AssetsDef.PORTFOLIO
     if work is None or work.empty or AssetsDef.VALUE_PLN not in work.columns:
         return empty
@@ -130,9 +142,18 @@ def rap1(assets: pd.DataFrame) -> pd.DataFrame:
     )
     total = float(by_portfolio.sum())
     share = (by_portfolio / total * 100.0) if total else by_portfolio * 0.0
+    xirr_map = dict(xirr_by_portfolio or {})
+    xirr_series = pd.Series(
+        {name: xirr_map.get(name) for name in by_portfolio.index},
+        dtype=object,
+    )
 
-    out = pd.DataFrame({_RAZEM: by_portfolio, _SHARE: share})
-    out.loc[_TOTAL] = {_RAZEM: total, _SHARE: 100.0 if total else 0.0}
+    out = pd.DataFrame({_RAZEM: by_portfolio, _SHARE: share, _XIRR: xirr_series})
+    out.loc[_TOTAL] = {
+        _RAZEM: total,
+        _SHARE: 100.0 if total else 0.0,
+        _XIRR: xirr_map.get(_TOTAL),
+    }
     out.index.name = AssetsDef.PORTFOLIO
 
     formatted = out.copy()
@@ -140,4 +161,5 @@ def rap1(assets: pd.DataFrame) -> pd.DataFrame:
         formatted[_RAZEM].round().astype(int).map("{:,}".format).str.replace(",", " ")
     )
     formatted[_SHARE] = formatted[_SHARE].map(lambda value: f"{float(value):.1f}%")
+    formatted[_XIRR] = formatted[_XIRR].map(format_xirr_cell)
     return formatted

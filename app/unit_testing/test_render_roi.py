@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from app_streamlit.roi_display import (
+    ROI_EVALUATION_DATE_LABEL,
+    format_roi_summary_display,
+)
 from app_streamlit.render_roi import (
     ROI_CALCULATION_DATE_LABEL,
-    ROI_EVALUATION_DATE_LABEL,
-    _format_roi_summary_display,
     _prepare_flow_display,
     _roi_calculation_date_input,
 )
@@ -96,7 +98,7 @@ class RoiSummaryDisplayTests(unittest.TestCase):
                 }
             ]
         )
-        display = _format_roi_summary_display(summary)
+        display = format_roi_summary_display(summary)
         cols = list(display.columns)
         self.assertEqual(
             cols[cols.index("Wycena (nerealiz.)") : cols.index("ROI nominal") + 1],
@@ -122,7 +124,7 @@ class RoiSummaryDisplayTests(unittest.TestCase):
                 }
             ]
         )
-        display = _format_roi_summary_display(summary)
+        display = format_roi_summary_display(summary)
         cols = list(display.columns)
         self.assertEqual(
             cols[cols.index("Wycena (nerealiz.)") : cols.index("ROI nominal") + 1],
