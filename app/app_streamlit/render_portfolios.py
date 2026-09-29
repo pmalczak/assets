@@ -42,6 +42,7 @@ from app_proc.snapshots import load_snapshot
 from portfolios.assignment import (
     KNOWN_PORTFOLIOS,
     PORTFOLIO_CASH_POOL,
+    PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
     PORTFOLIO_PLYNNY,
     assets_in_portfolio,
@@ -406,7 +407,7 @@ def _render_gm_composition(
     st.caption(
         f"Alokacja per instrument (DEGIRO + XTB). Cel U7 ≈ 1/3 NAV na aktywo. "
         f"Data snapshotu ≠ data sygnału U7. Portfel {PORTFOLIO_GM} bez złota "
-        f"(złoto w {PORTFOLIO_PLYNNY})."
+        f"(złoto w {PORTFOLIO_DLUGOTERMINOWY})."
     )
 
     lines: list = []

@@ -10,6 +10,7 @@ from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from portfolios.assignment import (
     PORTFOLIO_CASH_POOL,
+    PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
     PORTFOLIO_PLYNNY,
     PORTFOLIO_REVOLUT_ROBO,
@@ -45,13 +46,13 @@ class RapPortfolioIndexTests(unittest.TestCase):
         self.assertIn(PORTFOLIO_CASH_POOL, table.index)
         self.assertIn(PORTFOLIO_GM, table.index)
         self.assertIn(PORTFOLIO_REVOLUT_ROBO, table.index)
-        self.assertIn(PORTFOLIO_PLYNNY, table.index)
+        self.assertIn(PORTFOLIO_DLUGOTERMINOWY, table.index)
         self.assertIn("Z RAZEM", table.index)
         # 999 + 400 + 200 + 40 = 1639
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "RAZEM"]).strip(), "999")
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "RAZEM"]).strip(), "400")
         self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "RAZEM"]).strip(), "200")
-        self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "RAZEM"]).strip(), "40")
+        self.assertEqual(str(table.loc[PORTFOLIO_DLUGOTERMINOWY, "RAZEM"]).strip(), "40")
         self.assertEqual(str(table.loc["Z RAZEM", "RAZEM"]).strip(), "1 639")
         self.assertEqual(str(table.loc["Z RAZEM", "udział"]).strip(), "100.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "udział"]).strip(), "61.0%")
@@ -70,25 +71,25 @@ class RapPortfolioIndexTests(unittest.TestCase):
                 PORTFOLIO_CASH_POOL: None,
                 PORTFOLIO_GM: 0.1234,
                 PORTFOLIO_REVOLUT_ROBO: -0.05,
-                PORTFOLIO_PLYNNY: 0.0,
+                PORTFOLIO_DLUGOTERMINOWY: 0.0,
                 "Z RAZEM": 0.08,
             },
             xirr_pln_by_portfolio={
                 PORTFOLIO_CASH_POOL: None,
                 PORTFOLIO_GM: 0.15,
                 PORTFOLIO_REVOLUT_ROBO: -0.08,
-                PORTFOLIO_PLYNNY: 0.01,
+                PORTFOLIO_DLUGOTERMINOWY: 0.01,
                 "Z RAZEM": 0.09,
             },
         )
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "XIRR"]).strip(), "—")
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR"]).strip(), "12.3%")
         self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "XIRR"]).strip(), "-5.0%")
-        self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "XIRR"]).strip(), "0.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_DLUGOTERMINOWY, "XIRR"]).strip(), "0.0%")
         self.assertEqual(str(table.loc["Z RAZEM", "XIRR"]).strip(), "8.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_GM, "XIRR PLN"]).strip(), "15.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_REVOLUT_ROBO, "XIRR PLN"]).strip(), "-8.0%")
-        self.assertEqual(str(table.loc[PORTFOLIO_PLYNNY, "XIRR PLN"]).strip(), "1.0%")
+        self.assertEqual(str(table.loc[PORTFOLIO_DLUGOTERMINOWY, "XIRR PLN"]).strip(), "1.0%")
         self.assertEqual(str(table.loc["Z RAZEM", "XIRR PLN"]).strip(), "9.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "XIRR PLN"]).strip(), "—")
 
@@ -124,14 +125,17 @@ class RapPortfolioIndexTests(unittest.TestCase):
         self.assertEqual(str(gm["wartość_pln"]).strip(), "0")
         self.assertEqual(str(gm["wartość-pln_eur"]).strip(), "400")
         self.assertEqual(str(gm["wartość-pln_pln"]).strip(), "0")
-        bonds = table.loc[(PORTFOLIO_PLYNNY, "investment.obligacje")]
+        bonds = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "investment.obligacje")]
         self.assertEqual(str(bonds["wartość_pln"]).strip(), "1 234")
         self.assertEqual(str(gm["RAZEM-PLN"]).strip(), "400")
         self.assertEqual(str(bonds["RAZEM-PLN"]).strip(), "1 234")
-        mixed = table.loc[(PORTFOLIO_PLYNNY, "Z RAZEM")]
-        self.assertEqual(str(mixed["wartość-pln_eur"]).strip(), "40")
-        self.assertEqual(str(mixed["wartość-pln_pln"]).strip(), "1 234")
-        self.assertEqual(str(mixed["RAZEM-PLN"]).strip(), "1 274")
+        cash = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "investment.cash")]
+        self.assertEqual(str(cash["wartość-pln_eur"]).strip(), "40")
+        self.assertEqual(str(cash["RAZEM-PLN"]).strip(), "40")
+        dlugo_total = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "Z RAZEM")]
+        self.assertEqual(str(dlugo_total["wartość-pln_eur"]).strip(), "40")
+        self.assertEqual(str(dlugo_total["wartość-pln_pln"]).strip(), "1 234")
+        self.assertEqual(str(dlugo_total["RAZEM-PLN"]).strip(), "1 274")
         cash_pool = table.loc[(PORTFOLIO_CASH_POOL, "Z RAZEM")]
         self.assertEqual(str(cash_pool["wartość-pln_pln"]).strip(), "999")
         self.assertEqual(str(cash_pool["RAZEM-PLN"]).strip(), "999")

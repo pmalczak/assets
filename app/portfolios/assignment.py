@@ -26,7 +26,21 @@ PORTFOLIO_GM_ORDER: tuple[str, ...] = (
 PORTFOLIO_GM_ASSET_IDS = frozenset(PORTFOLIO_GM_ORDER)
 PORTFOLIO_GM_BROKER_ASSET_IDS = frozenset({DEFAULT_DEGIRO_ASSET_ID, DEFAULT_XTB_ASSET_ID})
 PORTFOLIO_REVOLUT_ROBO_ASSET_IDS = frozenset({DEFAULT_REVOLUT_ROBO_ASSET_ID})
-PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS = frozenset({"gm_ike", "pm_ike", "rocky-iv"})
+PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS = frozenset(
+    {
+        "gm_ike",
+        "pm_ike",
+        "rocky-iv",
+        "obligacjeskarbowe",
+        "cash",
+        "zloto-monety",
+    }
+)
+# IKE / rocky: bez własnego blottera CF w snapshotcie → UNCOVERED jeśli brak w ledgerze.
+# cash / złoto / obligacje mają CF (katalog / bonds) — nie tu.
+PORTFOLIO_DLUGOTERMINOWY_UNCOVERED_WITHOUT_CF = frozenset(
+    {"gm_ike", "pm_ike", "rocky-iv"}
+)
 
 ROLE_EXECUTION = "wykonanie"
 

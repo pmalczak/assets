@@ -55,9 +55,9 @@ def portfolio_for_instrument(instrument_id: str | None) -> str:
     if key in PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS:
         return PORTFOLIO_DLUGOTERMINOWY
 
-    # Emisje obligacji / depozyty: kontener lub prefix kontenera.
+    # Emisje obligacji: ten sam portfel co kontener obligacjeskarbowe.
     if key.startswith("obligacjeskarbowe:"):
-        return PORTFOLIO_PLYNNY
+        return PORTFOLIO_DLUGOTERMINOWY
 
     # Pojedyncze id katalogu / kontenera — jak assignment.py
     if ":" not in key:

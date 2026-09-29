@@ -21,6 +21,7 @@ from portfolio_cf.fx import to_pln
 from portfolio_cf.instrument_portfolio import portfolio_for_instrument
 from portfolio_cf.xirr import compute_named_portfolio_xirr
 from portfolios.assignment import (
+    PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
     PORTFOLIO_NIERUCHOMOSCI,
     PORTFOLIO_PLYNNY,
@@ -53,8 +54,11 @@ class PortfolioCfMappingTests(unittest.TestCase):
     def test_property_and_default(self):
         self.assertEqual(portfolio_for_instrument("aquamarina"), PORTFOLIO_NIERUCHOMOSCI)
         self.assertEqual(portfolio_for_instrument("horbaczewskiego"), PORTFOLIO_NIERUCHOMOSCI)
-        self.assertEqual(portfolio_for_instrument("zloto-monety"), PORTFOLIO_PLYNNY)
-        self.assertEqual(portfolio_for_instrument("obligacjeskarbowe:EDO1029"), PORTFOLIO_PLYNNY)
+        self.assertEqual(portfolio_for_instrument("zloto-monety"), PORTFOLIO_DLUGOTERMINOWY)
+        self.assertEqual(
+            portfolio_for_instrument("obligacjeskarbowe:EDO1029"),
+            PORTFOLIO_DLUGOTERMINOWY,
+        )
 
 
 class PortfolioCfCashLegTests(unittest.TestCase):

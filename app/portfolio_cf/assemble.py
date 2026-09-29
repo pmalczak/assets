@@ -18,7 +18,7 @@ from portfolio_cf.adapters.xtb import adapt_xtb_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.instrument_portfolio import is_xirr_excluded_instrument
-from portfolios.assignment import PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS
+from portfolios.assignment import PORTFOLIO_DLUGOTERMINOWY_UNCOVERED_WITHOUT_CF
 
 
 @dataclass
@@ -155,7 +155,7 @@ def _uncovered_from_snapshot(
                 )
             )
             continue
-        if asset_id in PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS:
+        if asset_id in PORTFOLIO_DLUGOTERMINOWY_UNCOVERED_WITHOUT_CF:
             out.append(
                 InstrumentCoverage(
                     instrument_id=asset_id,
@@ -180,7 +180,7 @@ def _uncovered_long_term(coverage: list[InstrumentCoverage]) -> list[InstrumentC
     """IKE / rocky bez venue CF → UNCOVERED jeśli nie ma w ledgerze katalogu."""
     known = _covered_ids(coverage)
     out: list[InstrumentCoverage] = []
-    for asset_id in sorted(PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS):
+    for asset_id in sorted(PORTFOLIO_DLUGOTERMINOWY_UNCOVERED_WITHOUT_CF):
         if asset_id in known:
             continue
         # rocky-iv często jest w katalogu — jeśli brak, uncovered
