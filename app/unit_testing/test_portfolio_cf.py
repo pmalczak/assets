@@ -443,7 +443,7 @@ class PortfolioCfXirrTests(unittest.TestCase):
         self.assertEqual(cash_instrument_id("p_degiro"), "p_degiro:CASH")
 
     def test_razem_matches_header_when_instrument_terminals_differ(self):
-        """ROBO-like: Σ MTM tickerów ≠ NAV snapshota → Razem z wyniku portfela."""
+        """Σ terminali tickerów ≠ NAV portfela (np. bez CASH) → Razem z wyniku portfela."""
         from portfolio_cf.xirr import build_portfolio_razem_row
         from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID
 

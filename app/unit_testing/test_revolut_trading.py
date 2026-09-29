@@ -11,6 +11,7 @@ from evaluators.evaluate_broker_revolut import (
     evaluate_broker_revolut,
     is_revolut_robo_broker,
     open_holdings_at_cost,
+    open_positions_mtm_value,
     revolut_working_cash,
 )
 from importers.assets.data_model import AssetsDef, GroupDomain, KindDomain, TypeDomain
@@ -251,6 +252,8 @@ class OpenHoldingsCostTests(unittest.TestCase):
         # remaining: 1@10 + 1@30 = 40 (not marked at sale 100)
         self.assertAlmostEqual(holdings["AAA"]["qty"], 2.0)
         self.assertAlmostEqual(holdings["AAA"]["cost"], 40.0)
+        # MTM: last trade 100 × qty 2
+        self.assertAlmostEqual(open_positions_mtm_value(df, holdings=holdings), 200.0)
 
     def test_complete_history_no_negative(self):
         df = pd.DataFrame(
@@ -477,6 +480,47 @@ class EvaluateBrokerTests(unittest.TestCase):
         self.assertEqual(result.iloc[0][AssetsDef.DESCR], "revolut robo (2 poz. + 1 cash)")
         self.assertEqual(result.iloc[0][AssetsDef.EVALUATION_DATE], "2026-01-31")
         self.assertEqual(warnings, ["luka test"])
+
+    def test_evaluate_positions_mtm_not_fifo_cost(self):
+        """NAV pozycji = last trade × qty, nie koszt FIFO (gdy kurs ≠ cena nabycia)."""
+        trading = pd.DataFrame(
+            [
+                self._tx(
+                    **{
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                        RevolutTradingFile.TICKER: None,
+                        RevolutTradingFile.QUANTITY: None,
+                        RevolutTradingFile.PRICE_PER_SHARE: None,
+                        RevolutTradingFile.TOTAL_AMOUNT: "100",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.DATE: "2026-01-01T00:00:00Z",
+                        RevolutTradingFile.TICKER: "AAA",
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                        RevolutTradingFile.QUANTITY: 2.0,
+                        RevolutTradingFile.PRICE_PER_SHARE: "10",
+                        RevolutTradingFile.TOTAL_AMOUNT: "20",
+                    }
+                ),
+                self._tx(
+                    **{
+                        RevolutTradingFile.DATE: "2026-01-15T00:00:00Z",
+                        RevolutTradingFile.TICKER: "AAA",
+                        RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_SELL,
+                        RevolutTradingFile.QUANTITY: -1.0,
+                        RevolutTradingFile.PRICE_PER_SHARE: "40",
+                        RevolutTradingFile.TOTAL_AMOUNT: "40",
+                    }
+                ),
+            ]
+        )
+        result, _warnings = self._evaluate(trading)
+        # cash = 100 - 20 + 40 = 120; remaining 1@ last 40 → MTM 40; NAV = 160
+        # FIFO cost remaining = 10 → byłoby 130
+        self.assertEqual(len(result), 1)
+        self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 160.0)
 
     def test_evaluation_date_is_min_of_snapshot_and_statement_download(self):
         old_buy = self._tx(

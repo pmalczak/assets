@@ -104,9 +104,8 @@ def render_portfolios() -> None:
 
     st.subheader("Portfele")
     st.caption(
-        "NAV i skład ze snapshotów. XIRR portfela = lokalny (CF × FX_T na datę wyceny) "
-        "+ terminal NAV; obok XIRR PLN (spot) i udział FX w P&L. "
-        "Równolegle do legacy ROI w zakładce ROI. "
+        "NAV i skład ze snapshotów. XIRR lokalny vs XIRR PLN vs udział FX — "
+        "sekcja *XIRR portfela a FX* w `Cursor_rules.md`. "
         f"Porównanie do backtestu U7 tylko dla {PORTFOLIO_GM}."
     )
 
@@ -222,11 +221,12 @@ def _render_portfolio_xirr(
     r2.metric("ROI FX", f"{result.roi_fx_pln:,.0f} PLN".replace(",", " "))
     r3.metric("ROI PLN", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
     st.caption(
-        "XIRR lokalny = CF × kurs NBP z daty wyceny (FX_T) + terminal NAV portfela. "
-        "XIRR PLN = CF × kurs z dnia transakcji (FX_t). "
-        "Udział FX = ROI_FX / ROI_PLN (może być <0% lub >100%). "
-        f"Filtr pozycji (sidebar): **{current_sold_filter()}**. "
-        "Cache DATA_STEP `11 portfolio_cf`."
+        "XIRR lokalny = rentowność aktywów (CF × FX_T na datę wyceny). "
+        "XIRR PLN = wynik łącznie z FX (CF × FX_t z dnia transakcji). "
+        "Udział FX = ROI_FX / ROI_PLN: >100% = strata lokalna skompensowana kursem; "
+        "<0% = FX zjadł zysk. "
+        f"Filtr pozycji: **{current_sold_filter()}**. "
+        "Szczegóły: `Cursor_rules.md` → XIRR portfela a FX."
     )
     if result.uncovered:
         lines = [
@@ -254,9 +254,10 @@ def _render_cf_browser(
     st.subheader("CF instrumentów (ledger)")
     mode = current_sold_filter()
     st.caption(
-        f"Filtr pozycji (sidebar): **{mode}**. "
-        "Wiersze: terminal/XIRR per instrument. "
-        "Razem: XIRR/ROI jak w nagłówku (terminal = NAV portfela ze snapshota)."
+        f"Filtr pozycji: **{mode}**. "
+        "Wiersze: XIRR/terminal per instrument. "
+        "Razem = ten sam wynik co nagłówek (NAV portfela ze snapshota). "
+        "Metryki: `Cursor_rules.md` → XIRR portfela a FX."
     )
     subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
     subset = filter_ledger_by_sold(

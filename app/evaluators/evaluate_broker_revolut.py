@@ -72,7 +72,7 @@ class RevolutRoboSnapshotEvaluator(BrokerSnapshotEvaluator):
         holdings = open_holdings_at_cost(trading_df)
         cash_value, cash_warnings = revolut_working_cash(trading_df)
         warnings.extend(cash_warnings)
-        positions_value = sum(info["cost"] for info in holdings.values())
+        positions_value = open_positions_mtm_value(trading_df, holdings=holdings)
         return (
             BrokerHoldings(
                 positions_value=float(positions_value),
@@ -92,7 +92,7 @@ def evaluate_broker_revolut(
     assets_file_row: pd.Series,
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
-    """Syntetyczna wycena rachunku Revolut robo: FIFO otwartych pozycji + gotówka z blottera."""
+    """Wycena rachunku Revolut robo: MTM (ostatni kurs z blottera × qty) + gotówka."""
     return RevolutRoboSnapshotEvaluator().evaluate(
         data_root, asset_id, assets_file_row, valuation_date
     )
@@ -136,9 +136,58 @@ def filter_trading_on_or_before(df: pd.DataFrame, valuation_date: date) -> pd.Da
     return df.loc[parsed <= cutoff].copy()
 
 
+def last_trade_prices(trading_df: pd.DataFrame) -> dict[str, float]:
+    """Ostatnia cena BUY/SELL per ticker z blottera (przybliżenie MTM bez kursu bieżącego)."""
+    if trading_df is None or trading_df.empty:
+        return {}
+    work = trading_df.copy()
+    work["_dt"] = pd.to_datetime(work[RevolutTradingFile.DATE], format="ISO8601", utc=True)
+    work = work.sort_values("_dt")
+    prices: dict[str, float] = {}
+    for _, row in work.iterrows():
+        if row[RevolutTradingFile.TYPE] not in (
+            RevolutTradingFile.TYPE_BUY,
+            RevolutTradingFile.TYPE_SELL,
+        ):
+            continue
+        ticker = row.get(RevolutTradingFile.TICKER)
+        if pd.isna(ticker) or not str(ticker).strip():
+            continue
+        price = parse_trading_number(row[RevolutTradingFile.PRICE_PER_SHARE])
+        if price is None:
+            continue
+        prices[str(ticker).strip()] = float(price)
+    return prices
+
+
+def open_positions_mtm_value(
+    trading_df: pd.DataFrame,
+    *,
+    holdings: dict[str, dict] | None = None,
+) -> float:
+    """Σ qty_otwarta × ostatni kurs z blottera (jak terminal ROI Robo)."""
+    open_holdings = holdings if holdings is not None else open_holdings_at_cost(trading_df)
+    if not open_holdings:
+        return 0.0
+    prices = last_trade_prices(trading_df)
+    total = 0.0
+    for ticker, info in open_holdings.items():
+        qty = float(info.get("qty") or 0.0)
+        if qty <= 1e-12:
+            continue
+        price = float(prices.get(ticker) or 0.0)
+        if price <= 0:
+            # Brak kursu transakcji — fallback na koszt FIFO lotu.
+            total += float(info.get("cost") or 0.0)
+        else:
+            total += qty * price
+    return float(total)
+
+
 def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
     """
-    FIFO: otwarte loty → wartość = Σ qty_pozostała × cena_zakupu.
+    FIFO: otwarte loty → qty + koszt nabycia (Σ qty_pozostała × cena_zakupu).
+    Koszt służy do inventory / fallbacku; NAV snapshota = MTM z ``open_positions_mtm_value``.
     Zwraca {ticker: {qty, cost, currency}}.
     """
     work = trading_df.copy()

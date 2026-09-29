@@ -1,5 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Separacja FX w ROI/XIRR: constant-FX (FX_T) vs spot (FX_t)."""
+"""Separacja FX w ROI/XIRR portfela (constant FX_T vs spot FX_t).
+
+Kanoniczna semantyka i słownik: ``Cursor_rules.md`` → sekcja *XIRR portfela a FX*.
+
+Skrót::
+
+    ROI_PLN   = Σ amount_pln + terminal_PLN
+    ROI_local = Σ amount × FX_T + terminal_PLN
+    ROI_FX    = ROI_PLN − ROI_local
+    udział_FX = ROI_FX / ROI_PLN   # podpisany; None gdy ROI_PLN≈0
+
+XIRR lokalny = seria ``amount × FX_T``; XIRR PLN = seria ``amount_pln``.
+Bez osobnego XIRR(FX).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

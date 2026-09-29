@@ -126,9 +126,9 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     with controls_col:
         st.caption(
             f"Źródło: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`. "
-            "Skład portfeli — zakładka Portfele. "
-            "XIRR w RAP 1 = lokalny (constant FX_T) z DATA_STEP `11 portfolio_cf` "
-            "(filtr pozycji z sidebara); obok XIRR PLN (spot, FX_t)."
+            "Skład — zakładka Portfele. "
+            "RAP 1: **XIRR** = lokalny (FX_T), **XIRR PLN** = spot (FX_t); "
+            "filtr pozycji z sidebara. Semantyka: `Cursor_rules.md` → XIRR portfela a FX."
         )
 
     sold_filter = current_sold_filter()

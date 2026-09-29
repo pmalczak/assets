@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""XIRR nazwanego portfela: lokalny (FX_T) + spot PLN + atrybucja FX."""
+"""XIRR nazwanego portfela: lokalny (FX_T) + spot PLN + atrybucja FX.
+
+Semantyka metryk: ``Cursor_rules.md`` → *XIRR portfela a FX*.
+``xirr`` = lokalny (kanoniczny); ``xirr_pln`` = spot; Razem UI = ``build_portfolio_razem_row``.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -302,7 +306,7 @@ def build_portfolio_razem_row(
     """Wiersz Razem portfela: suma CAPEX/… z wierszy + XIRR/ROI/terminal z ``result``.
 
     Jedyna ścieżka metryk portfela — nie liczyć drugiego XIRR z Σ terminali
-    instrumentów (ROBO: MTM ≠ NAV snapshota).
+    instrumentów (NAV portfela = MTM pozycji + gotówka; Σ wierszy tickerów bez CASH).
     """
     from importers.assets.data_model import AssetsDef
     from roi.aggregate_venue_roi import VENUE_TOTAL_ASSET_ID

@@ -16,6 +16,7 @@ from analyse_assets.accounts_pools import load_accounts_pool
 from app_proc.data_root import resolve_asset_dir
 from evaluators.evaluate_broker_revolut import (
     filter_trading_on_or_before,
+    last_trade_prices,
     open_holdings_at_cost,
     parse_trading_number,
 )
@@ -116,7 +117,7 @@ def ticker_open_state(trading_df: pd.DataFrame) -> dict[str, dict]:
         return {}
 
     holdings = open_holdings_at_cost(trading_df)
-    last_prices = _last_trade_prices(trading_df)
+    last_prices = last_trade_prices(trading_df)
     tickers = set(holdings) | set(last_prices) | set(_tickers_with_roi_events(trading_df))
 
     state: dict[str, dict] = {}
@@ -297,27 +298,6 @@ def _trading_date_str(value) -> str | None:
     if getattr(ts, "tzinfo", None) is not None:
         ts = ts.tz_convert(None)
     return ts.date().isoformat()
-
-
-def _last_trade_prices(trading_df: pd.DataFrame) -> dict[str, float]:
-    work = trading_df.copy()
-    work["_dt"] = pd.to_datetime(work[RevolutTradingFile.DATE], format="ISO8601", utc=True)
-    work = work.sort_values("_dt")
-    prices: dict[str, float] = {}
-    for _, row in work.iterrows():
-        if row[RevolutTradingFile.TYPE] not in (
-            RevolutTradingFile.TYPE_BUY,
-            RevolutTradingFile.TYPE_SELL,
-        ):
-            continue
-        ticker = row.get(RevolutTradingFile.TICKER)
-        if pd.isna(ticker) or not str(ticker).strip():
-            continue
-        price = parse_trading_number(row[RevolutTradingFile.PRICE_PER_SHARE])
-        if price is None:
-            continue
-        prices[str(ticker).strip()] = float(price)
-    return prices
 
 
 def _tickers_with_roi_events(trading_df: pd.DataFrame) -> set[str]:
