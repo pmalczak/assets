@@ -272,6 +272,8 @@ Pozostaje:
 - **TODO:** czy Revolut robo / klasyczne ROI (REVENUES +, OPEX −) powinny przejść na tę samą polarność, czy obligacje zostają wyjątkiem.
 - Terminal otwartych = `WARTOŚĆ AKTUALNA` ze stanu; `is_sold` ⇔ open qty == 0.
 - Usunięte: `RODZAJ*=obligacje_skarbowe_import` i wycena N wierszy z `KWOTA` zakupu.
+- **Portfel (v1):** cały kontener `obligacjeskarbowe` (+ emisje `obligacjeskarbowe:*`) → `3 DŁUGOTERMINOWY`. Uzasadnienie: dziś w praktyce jedna seria 10-letnia — traktujemy rachunek jak jeden instrument długoterminowy.
+- **Na przyszłość (wiele zapadalności):** mapować **per emisja** (`obligacjeskarbowe:KOD`) do różnych portfeli wg terminu zapadalności. CF/ROI per kod już jest; wtedy domknąć model **BROKER / INSTRUMENT** jak Robo/DEGIRO — NAV/terminal portfela ze **składników emisji** (nie samego blobu kontenera), żeby CF i Razem się nie rozjeżdżały przy rozdziale między portfele.
 
 - Lepsze MTM online (API) — osobna decyzja później.
 
