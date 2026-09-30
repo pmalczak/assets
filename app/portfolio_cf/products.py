@@ -18,7 +18,7 @@ from portfolio_cf.xirr import compute_named_portfolio_metrics_map
 
 PORTFOLIO_CF_STEP = "11 portfolio_cf"
 # Bump przy zmianie semantyki ledgera / XIRR (FX attribution) — stare parquet nieaktualne.
-_PORTFOLIO_CF_SCHEMA = 3
+_PORTFOLIO_CF_SCHEMA = 4
 
 _XIRR_COLUMNS = (
     "portfolio",

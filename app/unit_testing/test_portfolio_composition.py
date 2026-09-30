@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 
 import pandas as pd
 
@@ -9,13 +10,19 @@ from evaluators.broker_snapshot import BrokerHoldings
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
-from portfolios.assignment import ROLE_EXECUTION, nav_pln_for_portfolio, PORTFOLIO_GM
+from portfolios.assignment import (
+    ROLE_EXECUTION,
+    nav_pln_for_portfolio,
+    PORTFOLIO_DLUGOTERMINOWY,
+    PORTFOLIO_GM,
+)
 from portfolios.composition import (
     KIND_CASH,
     KIND_POSITION,
     GmPositionLine,
     compose_gm_composition,
     compose_gm_instrument_composition,
+    split_broker_nav_for_instrument_overrides,
 )
 from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
 
@@ -211,6 +218,96 @@ class GmInstrumentCompositionTests(unittest.TestCase):
         self.assertEqual(list(table["kind"]), [KIND_POSITION, KIND_CASH])
         self.assertAlmostEqual(float(table.iloc[0]["Udział"]), 400 / 440)
         self.assertAlmostEqual(float(table.iloc[1]["Udział"]), 40 / 440)
+
+    def test_inter_rao_excluded_from_gm_composition(self):
+        snapshot = pd.DataFrame(
+            [
+                _snapshot_row(DEFAULT_DEGIRO_ASSET_ID, 400.0, value=100.0, currency="EUR"),
+            ]
+        )
+        lines = [
+            GmPositionLine(
+                broker_id=DEFAULT_DEGIRO_ASSET_ID,
+                broker_label="DEGIRO",
+                kind=KIND_POSITION,
+                code="LT0000128621",
+                label="INTER RAO LIETUVA AB",
+                value=25.0,
+                currency="EUR",
+            ),
+            GmPositionLine(
+                broker_id=DEFAULT_DEGIRO_ASSET_ID,
+                broker_label="DEGIRO",
+                kind=KIND_POSITION,
+                code="IE00BKM4GZ66",
+                label="Other ETF",
+                value=75.0,
+                currency="EUR",
+            ),
+        ]
+        split = split_broker_nav_for_instrument_overrides(
+            snapshot, date(2026, 9, 1), lines=lines
+        )
+        self.assertAlmostEqual(nav_pln_for_portfolio(split, PORTFOLIO_GM), 300.0)
+        self.assertAlmostEqual(
+            nav_pln_for_portfolio(split, PORTFOLIO_DLUGOTERMINOWY), 100.0
+        )
+        table = compose_gm_instrument_composition(split, lines)
+        self.assertEqual(set(table["Składnik"]), {"Other ETF"})
+        self.assertAlmostEqual(float(table.iloc[0]["Udział"]), 1.0)
+
+    def test_split_broker_nav_accepts_int64_amount_columns(self):
+        snapshot = pd.DataFrame(
+            [
+                {
+                    AssetsDef.ID: DEFAULT_DEGIRO_ASSET_ID,
+                    AssetsDef.VALUE_PLN: 400,
+                    AssetsDef.VALUE: 100,
+                    AssetsDef.CURRENCY: "EUR",
+                    AssetsDef.GROUP: "5 inwestycje finansowe",
+                }
+            ]
+        )
+        snapshot[AssetsDef.VALUE_PLN] = snapshot[AssetsDef.VALUE_PLN].astype("int64")
+        snapshot[AssetsDef.VALUE] = snapshot[AssetsDef.VALUE].astype("int64")
+        lines = [
+            GmPositionLine(
+                broker_id=DEFAULT_DEGIRO_ASSET_ID,
+                broker_label="DEGIRO",
+                kind=KIND_POSITION,
+                code="LT0000128621",
+                label="INTER RAO LIETUVA AB",
+                value=25.0,
+                currency="EUR",
+            ),
+        ]
+        split = split_broker_nav_for_instrument_overrides(
+            snapshot, date(2026, 9, 1), lines=lines
+        )
+        self.assertAlmostEqual(nav_pln_for_portfolio(split, PORTFOLIO_GM), 300.0)
+        self.assertAlmostEqual(
+            nav_pln_for_portfolio(split, PORTFOLIO_DLUGOTERMINOWY), 100.0
+        )
+
+    def test_split_broker_nav_noop_without_overrides(self):
+        snapshot = pd.DataFrame(
+            [_snapshot_row(DEFAULT_DEGIRO_ASSET_ID, 400.0, value=100.0, currency="EUR")]
+        )
+        lines = [
+            GmPositionLine(
+                broker_id=DEFAULT_DEGIRO_ASSET_ID,
+                broker_label="DEGIRO",
+                kind=KIND_POSITION,
+                code="IE00BKM4GZ66",
+                label="Other ETF",
+                value=100.0,
+                currency="EUR",
+            ),
+        ]
+        out = split_broker_nav_for_instrument_overrides(
+            snapshot, date(2026, 9, 1), lines=lines
+        )
+        self.assertIs(out, snapshot)
 
 
 if __name__ == "__main__":

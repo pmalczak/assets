@@ -179,10 +179,15 @@ def compose_gm_instrument_composition(
     """
     Skład per instrument (+ gotówka).
 
-    Udział = wartość-pln / NAV portfela 2 G-MOMENTUM ze snapshota.
+    Udział = wartość-pln / NAV portfela 2 G-MOMENTUM ze snapshota (po splitach override).
     Pozycje tego samego instrumentu z różnych kont są scalane.
+    Instrumenty z INSTRUMENT_PORTFOLIO_OVERRIDES poza GM są pomijane.
     """
-    lines = list(lines or [])
+    lines = [
+        line
+        for line in list(lines or [])
+        if _line_belongs_to_gm(line)
+    ]
     total = nav_pln_for_portfolio(snapshot, PORTFOLIO_GM)
     buckets: dict[tuple[str, str], dict[str, object]] = {}
 
@@ -267,6 +272,120 @@ def compose_gm_instrument_composition(
         ascending=[True, False],
     ).drop(columns=["_sort_kind"])
     return table.reset_index(drop=True)
+
+
+def _line_instrument_id(line: GmPositionLine) -> str | None:
+    if line.kind == KIND_CASH:
+        return f"{line.broker_id}:CASH"
+    if line.kind == KIND_POSITION and line.code:
+        return f"{line.broker_id}:{line.code}"
+    return None
+
+
+def _line_belongs_to_gm(line: GmPositionLine) -> bool:
+    from portfolio_cf.instrument_portfolio import portfolio_for_instrument
+
+    instrument_id = _line_instrument_id(line)
+    if instrument_id is None:
+        return False
+    return portfolio_for_instrument(instrument_id) == PORTFOLIO_GM
+
+
+def split_broker_nav_for_instrument_overrides(
+    assets: pd.DataFrame,
+    valuation_date: date,
+    *,
+    lines: list[GmPositionLine] | None = None,
+) -> pd.DataFrame:
+    """Wydziel NAV instrumentów z override poza blob brokera (snapshot runtime).
+
+    Dla każdej pozycji DEGIRO/XTB przypisanej do innego portfela niż konto:
+    odejmij wartość z wiersza brokera i dopisz wiersz ``broker:code``.
+    Bez override / bez pozycji — zwraca ``assets`` bez zmian (ta sama referencja).
+    """
+    from portfolio_cf.instrument_portfolio import portfolio_for_instrument
+
+    if assets is None or assets.empty or AssetsDef.ID not in assets.columns:
+        return assets
+
+    if lines is None:
+        try:
+            lines, _warnings = load_gm_position_lines(valuation_date)
+        except Exception:
+            return assets
+
+    deductions: dict[str, dict[str, float]] = {}
+    new_rows: list[dict[str, object]] = []
+    by_id = _rows_by_id(assets)
+
+    for line in lines:
+        if line.kind != KIND_POSITION or not line.code:
+            continue
+        instrument_id = f"{line.broker_id}:{line.code}"
+        assigned = portfolio_for_instrument(instrument_id)
+        broker_default = portfolio_for_instrument(f"{line.broker_id}:CASH")
+        if assigned == broker_default:
+            continue
+
+        fx = _implied_fx_pln(assets, line.broker_id, line.currency)
+        value_native = float(line.value)
+        value_pln = value_native * float(fx)
+        bucket = deductions.setdefault(
+            line.broker_id, {AssetsDef.VALUE: 0.0, AssetsDef.VALUE_PLN: 0.0}
+        )
+        bucket[AssetsDef.VALUE] += value_native
+        bucket[AssetsDef.VALUE_PLN] += value_pln
+
+        broker_row = by_id.get(line.broker_id)
+        row: dict[str, object] = {
+            AssetsDef.ID: instrument_id,
+            AssetsDef.TYPE: "investment.udziały",
+            AssetsDef.VALUE: value_native,
+            AssetsDef.VALUE_PLN: value_pln,
+            AssetsDef.CURRENCY: line.currency,
+            AssetsDef.EVALUATION_DATE: line.evaluation_date,
+        }
+        if broker_row is not None:
+            for column in (
+                AssetsDef.GROUP,
+                AssetsDef.DESCR,
+                AssetsDef.KIND,
+                AssetsDef.VALUE_DATE,
+                AssetsDef.DAYS_AFTER_VALUATION,
+            ):
+                if column in broker_row.index and column not in row:
+                    row[column] = broker_row.get(column)
+            if AssetsDef.DESCR in row:
+                row[AssetsDef.DESCR] = line.label or instrument_id
+            else:
+                row[AssetsDef.DESCR] = line.label or instrument_id
+        else:
+            row[AssetsDef.DESCR] = line.label or instrument_id
+        new_rows.append(row)
+
+    if not new_rows:
+        return assets
+
+    out = assets.copy()
+    # Snapshot często trzyma kwoty jako int64; .loc[mask]=float pada na CoW —
+    # odejmujemy na kopii float64 i podmieniamy całą kolumnę.
+    id_keys = out[AssetsDef.ID].astype(str).str.strip()
+    for column in (AssetsDef.VALUE, AssetsDef.VALUE_PLN):
+        if column not in out.columns:
+            continue
+        values = pd.to_numeric(out[column], errors="coerce").astype("float64").copy()
+        for broker_id, amounts in deductions.items():
+            mask = id_keys == broker_id
+            if mask.any():
+                values.loc[mask] = values.loc[mask].fillna(0.0) - float(amounts[column])
+        out[column] = values
+
+    extra = pd.DataFrame(new_rows)
+    for column in out.columns:
+        if column not in extra.columns:
+            extra[column] = pd.NA
+    extra = extra[[column for column in out.columns]]
+    return pd.concat([out, extra], ignore_index=True)
 
 
 def load_gm_broker_holdings(

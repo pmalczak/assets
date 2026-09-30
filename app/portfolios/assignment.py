@@ -36,6 +36,11 @@ PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS = frozenset(
         "zloto-monety",
     }
 )
+# Instrumenty brokerskie poza domyślnym portfelem konta (v1: DEGIRO/XTB → GM).
+# Klucz = instrument_id jak w ledgerze (np. p_degiro:ISIN).
+INSTRUMENT_PORTFOLIO_OVERRIDES: dict[str, str] = {
+    "p_degiro:LT0000128621": PORTFOLIO_DLUGOTERMINOWY,  # INTER RAO LIETUVA AB
+}
 # IKE / rocky: bez własnego blottera CF w snapshotcie → UNCOVERED jeśli brak w ledgerze.
 # cash / złoto / obligacje mają CF (katalog / bonds) — nie tu.
 PORTFOLIO_DLUGOTERMINOWY_UNCOVERED_WITHOUT_CF = frozenset(
@@ -77,6 +82,9 @@ def _clean_typ(typ: object) -> str:
 
 def portfolio_for_asset_id(asset_id: str | None) -> str:
     key = str(asset_id or "").strip()
+    override = INSTRUMENT_PORTFOLIO_OVERRIDES.get(key)
+    if override is not None:
+        return override
     if key in PORTFOLIO_GM_ASSET_IDS:
         return PORTFOLIO_GM
     if key in PORTFOLIO_REVOLUT_ROBO_ASSET_IDS:
@@ -224,6 +232,7 @@ def load_portfolio_nav_history(
 ) -> pd.Series:
     """Suma VALUE_PLN ze snapshotów `09 assets` dla jednego nazwanego portfela."""
     from app_proc.snapshots import list_snapshot_files, load_snapshot, snapshots_directory
+    from portfolios.composition import split_broker_nav_for_instrument_overrides
 
     directory = snapshots_dir if snapshots_dir is not None else snapshots_directory()
     dates: list[pd.Timestamp] = []
@@ -238,6 +247,8 @@ def load_portfolio_nav_history(
                 assets = pd.read_parquet(path, columns=fallback)
             except Exception:
                 assets = load_snapshot(path)
+        as_of = pd.Timestamp(snapshot_date).date()
+        assets = split_broker_nav_for_instrument_overrides(assets, as_of)
         dates.append(pd.Timestamp(snapshot_date))
         values.append(nav_pln_for_portfolio(assets, portfolio_name))
     series = pd.Series(

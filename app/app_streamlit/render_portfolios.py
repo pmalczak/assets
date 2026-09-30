@@ -52,10 +52,11 @@ from portfolios.assignment import (
 from portfolios.composition import (
     compose_gm_instrument_composition,
     load_gm_position_lines,
+    split_broker_nav_for_instrument_overrides,
 )
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
-_PORTFOLIO_NAV_SCHEMA = 2
+_PORTFOLIO_NAV_SCHEMA = 3
 _GM_POSITIONS_SCHEMA = 1
 _PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
 _LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
@@ -136,15 +137,18 @@ def render_portfolios() -> None:
 
     # Ten sam plik parquet co ledger DATA_STEP — nie stale build_data po regeneracji.
     xirr_snapshot = _snapshot_for_valuation(latest_snapshot_date, latest_snapshot)
+    composition_snapshot = split_broker_nav_for_instrument_overrides(
+        xirr_snapshot, latest_snapshot_date
+    )
 
     assembly, portfolio_xirr = _render_portfolio_xirr(
         selected, xirr_snapshot, latest_snapshot_date
     )
 
     if selected == PORTFOLIO_GM:
-        _render_gm_composition(xirr_snapshot, latest_snapshot_date)
+        _render_gm_composition(composition_snapshot, latest_snapshot_date)
     else:
-        _render_generic_composition(xirr_snapshot, selected)
+        _render_generic_composition(composition_snapshot, selected)
 
     _render_cf_browser(
         selected,

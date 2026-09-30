@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from portfolios.assignment import (
     DEFAULT_PORTFOLIO,
+    INSTRUMENT_PORTFOLIO_OVERRIDES,
     INVESTMENT_PORTFOLIOS,
     KNOWN_PORTFOLIOS,
     PORTFOLIO_CASH_POOL,
@@ -29,11 +30,13 @@ from portfolios.composition import (
     compose_gm_instrument_composition,
     load_gm_broker_holdings,
     load_gm_position_lines,
+    split_broker_nav_for_instrument_overrides,
 )
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 __all__ = [
     "DEFAULT_PORTFOLIO",
+    "INSTRUMENT_PORTFOLIO_OVERRIDES",
     "INVESTMENT_PORTFOLIOS",
     "KNOWN_PORTFOLIOS",
     "PORTFOLIO_CASH_POOL",
@@ -62,4 +65,5 @@ __all__ = [
     "portfolio_nav_pln",
     "rebased_overlap",
     "rows_with_portfolio",
+    "split_broker_nav_for_instrument_overrides",
 ]

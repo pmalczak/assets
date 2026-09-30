@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from portfolios.assignment import (
+    INSTRUMENT_PORTFOLIO_OVERRIDES,
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS,
     PORTFOLIO_GM,
@@ -44,6 +45,10 @@ def portfolio_for_instrument(instrument_id: str | None) -> str:
     key = str(instrument_id or "").strip()
     if not key:
         return PORTFOLIO_PLYNNY
+
+    override = INSTRUMENT_PORTFOLIO_OVERRIDES.get(key)
+    if override is not None:
+        return override
 
     for prefix, portfolio in _BROKER_PREFIX_PORTFOLIO:
         if key.startswith(prefix):

@@ -28,6 +28,7 @@ from portfolio_cf.sold_status import (
     sold_filter_label,
 )
 from portfolios.assignment import KNOWN_PORTFOLIOS, nav_pln_for_portfolio
+from portfolios.composition import split_broker_nav_for_instrument_overrides
 from roi.xirr import compute_xirr
 
 RAP_TOTAL = "Z RAZEM"
@@ -92,7 +93,8 @@ def compute_named_portfolio_xirr(
         if mode == SOLD_FILTER_SOLD:
             terminal_pln = 0.0
         elif snapshot is not None and not snapshot.empty:
-            terminal_pln = float(nav_pln_for_portfolio(snapshot, portfolio_name))
+            split = split_broker_nav_for_instrument_overrides(snapshot, valuation_date)
+            terminal_pln = float(nav_pln_for_portfolio(split, portfolio_name))
         else:
             terminal_pln = 0.0
 
@@ -138,6 +140,11 @@ def compute_total_portfolio_xirr(
     terminal = 0.0
     warnings = list(assembly.warnings)
     uncovered: list[InstrumentCoverage] = []
+    split_snapshot = (
+        split_broker_nav_for_instrument_overrides(snapshot, valuation_date)
+        if snapshot is not None and not snapshot.empty
+        else snapshot
+    )
 
     for name in KNOWN_PORTFOLIOS:
         if name == XIRR_EXCLUDED_PORTFOLIO:
@@ -150,8 +157,8 @@ def compute_total_portfolio_xirr(
             frames.append(part)
         if mode == SOLD_FILTER_SOLD:
             part_terminal = 0.0
-        elif snapshot is not None and not snapshot.empty:
-            part_terminal = float(nav_pln_for_portfolio(snapshot, name))
+        elif split_snapshot is not None and not split_snapshot.empty:
+            part_terminal = float(nav_pln_for_portfolio(split_snapshot, name))
         else:
             part_terminal = 0.0
         terminal += part_terminal

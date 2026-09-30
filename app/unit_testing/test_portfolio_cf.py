@@ -51,6 +51,12 @@ class PortfolioCfMappingTests(unittest.TestCase):
         self.assertEqual(portfolio_for_instrument("p_xtb:ETFPZUW20M40.PL"), PORTFOLIO_GM)
         self.assertEqual(portfolio_for_instrument("p_xtb:CASH"), PORTFOLIO_GM)
 
+    def test_inter_rao_override_to_dlugoterminowy(self):
+        self.assertEqual(
+            portfolio_for_instrument("p_degiro:LT0000128621"),
+            PORTFOLIO_DLUGOTERMINOWY,
+        )
+
     def test_property_and_default(self):
         self.assertEqual(portfolio_for_instrument("aquamarina"), PORTFOLIO_NIERUCHOMOSCI)
         self.assertEqual(portfolio_for_instrument("horbaczewskiego"), PORTFOLIO_NIERUCHOMOSCI)

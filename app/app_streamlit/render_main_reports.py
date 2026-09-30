@@ -11,6 +11,7 @@ from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot
 from app_proc.ui_prefs import current_sold_filter
 from app_streamlit.build_data import build_portfolio_history_from_snapshots
 from portfolio_cf.products import invalidate_portfolio_cf, load_portfolio_metrics_map
+from portfolios.composition import split_broker_nav_for_instrument_overrides
 
 
 @st.cache_data(show_spinner=False)
@@ -122,6 +123,8 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         with controls_col:
             st.warning(f"Brak danych w snapshotcie {selected_date:%Y-%m-%d}.")
         return
+
+    assets = split_broker_nav_for_instrument_overrides(assets, selected_date)
 
     with controls_col:
         st.caption(
