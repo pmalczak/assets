@@ -58,7 +58,7 @@ def _run_generate_snapshot(today: date) -> None:
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
     from asset_reports import format_rap_table, rap1, rap2
 
-    st.subheader("Wartość aktywów")
+    st.subheader("Aktywa")
 
     today = date.today()
     snapshot_files = list_snapshot_files(snapshots_directory())

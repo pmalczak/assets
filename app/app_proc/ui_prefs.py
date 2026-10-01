@@ -5,14 +5,13 @@ from pathlib import Path
 
 import pandas as pd
 
-TAB_ASSETS = "Wartość aktywów"
+TAB_ASSETS = "Aktywa"
 TAB_PORTFOLIOS = "Portfele"
 
 TAB_LABELS = [
     TAB_ASSETS,
     TAB_PORTFOLIOS,
     "Wykres portfela",
-    "ROI",
     "FX",
     "Global momentum",
     "Import wyciągów",
@@ -27,13 +26,14 @@ SLUG_TO_LABEL = {
     "portfele": TAB_PORTFOLIOS,
     "raporty": TAB_ASSETS,
     "szukaj": "Wyszukiwanie transakcji",
-    "roi": "ROI",
-    "roi-robo": "ROI",
-    "roi-depozyty": "ROI",
-    "roi-mbank-depozyty": "ROI",
-    "roi-obligacje": "ROI",
-    "roi-degiro": "ROI",
-    "roi-xtb": "ROI",
+    # Legacy slugs po usunięciu zakładki ROI → Portfele (CF / XIRR).
+    "roi": TAB_PORTFOLIOS,
+    "roi-robo": TAB_PORTFOLIOS,
+    "roi-depozyty": TAB_PORTFOLIOS,
+    "roi-mbank-depozyty": TAB_PORTFOLIOS,
+    "roi-obligacje": TAB_PORTFOLIOS,
+    "roi-degiro": TAB_PORTFOLIOS,
+    "roi-xtb": TAB_PORTFOLIOS,
     "fx": "FX",
     "global-momentum": "Global momentum",
     "import": "Import wyciągów",
@@ -152,5 +152,5 @@ def render_sold_filter_control() -> None:
         options=SOLD_FILTER_LABELS,
         key=SOLD_FILTER_STATE_KEY,
         on_change=on_sold_filter_changed,
-        help="Filtruje tabele ROI i CF/XIRR w Portfelach według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
+        help="Filtruje tabele CF/XIRR w Portfelach według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
     )

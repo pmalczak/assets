@@ -41,9 +41,8 @@ class UiPrefsTests(unittest.TestCase):
                 "portfele",
             )
 
-    def test_roi_venues_are_not_top_level_tabs(self):
-        self.assertIn("ROI", TAB_LABELS)
-        self.assertEqual(TAB_LABELS.count("ROI"), 1)
+    def test_roi_tab_removed_legacy_slugs_go_to_portfolios(self):
+        self.assertNotIn("ROI", TAB_LABELS)
         for label in (
             "ROI Revolut robo",
             "ROI Revolut depozyty",
@@ -53,6 +52,21 @@ class UiPrefsTests(unittest.TestCase):
             "ROI XTB",
         ):
             self.assertNotIn(label, TAB_LABELS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for slug in (
+                "roi",
+                "roi-robo",
+                "roi-depozyty",
+                "roi-mbank-depozyty",
+                "roi-obligacje",
+                "roi-degiro",
+                "roi-xtb",
+            ):
+                (root / "last_tab.txt").write_text(slug, encoding="utf-8")
+                self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIOS)
+            save_last_tab("Global momentum", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "Global momentum")
 
     def test_load_last_tab_returns_default_when_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,25 +103,6 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             save_last_tab("Waliduj", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")
-
-    def test_roi_tab_roundtrip_and_legacy_venue_slugs(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            save_last_tab("ROI", prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), "ROI")
-            self.assertEqual((root / "last_tab.txt").read_text(encoding="utf-8").strip(), "roi")
-            for slug in (
-                "roi-robo",
-                "roi-depozyty",
-                "roi-mbank-depozyty",
-                "roi-obligacje",
-                "roi-degiro",
-                "roi-xtb",
-            ):
-                (root / "last_tab.txt").write_text(slug, encoding="utf-8")
-                self.assertEqual(load_last_tab(prefs_root=root), "ROI")
-            save_last_tab("Global momentum", prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), "Global momentum")
 
 
 class SoldFilterPrefsTests(unittest.TestCase):

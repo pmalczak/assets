@@ -130,7 +130,7 @@ def render_portfolios() -> None:
     )
 
     if latest_snapshot.empty or latest_snapshot_date is None:
-        st.warning("Brak snapshotu portfela — wygeneruj snapshot w Wartość aktywów.")
+        st.warning("Brak snapshotu portfela — wygeneruj snapshot w Aktywa.")
         return
 
     st.markdown(f"**Snapshot:** {latest_snapshot_date.isoformat()}")
