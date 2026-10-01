@@ -80,7 +80,7 @@ def render_global_momentum() -> None:
             _SECTION_RANKING_AS_TODAY,
             _SECTION_BENCHMARK,
         ],
-        default=_SECTION_RANKING,
+        default=_SECTION_RANKING_AS_TODAY,
         required=True,
         key="global_momentum_section",
         width="stretch",

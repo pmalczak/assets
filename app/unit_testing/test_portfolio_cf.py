@@ -94,7 +94,7 @@ class PortfolioCfLedgerTests(unittest.TestCase):
                         CashFlowEvent.SOURCE: "p_degiro",
                         CashFlowEvent.DESCRIPTION: "BUY",
                         CashFlowEvent.TITLE: "AAA",
-                        CashFlowEvent.COUNTERPARTY: "",
+                        CashFlowEvent.COUNTERPARTY: "MENNICA KAPITALOWA",
                         CashFlowEvent.ACCOUNT_NUMBER: "",
                     }
                 ]
@@ -109,6 +109,9 @@ class PortfolioCfLedgerTests(unittest.TestCase):
         )
         self.assertEqual(len(ledger), 1)
         self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.AMOUNT_PLN]), -420.0)
+        self.assertEqual(
+            ledger.iloc[0][InstrumentCashFlow.COUNTERPARTY], "MENNICA KAPITALOWA"
+        )
         self.assertEqual(coverage[0].status, CoverageStatus.COVERED)
 
     def test_catalog_rocky_iv_capex_eur_to_pln(self):

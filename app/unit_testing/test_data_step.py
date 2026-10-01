@@ -240,6 +240,35 @@ class DataStepIntegrationTests(unittest.TestCase):
         self.assertEqual(popped, "top")
         self.assertEqual(self.step._dependencies_stack, ["top"])
 
+    def test_pop_does_not_steal_parent_frame(self):
+        """Zagnieżdżony mismatch nie może zdjąć ramki rodzica ze stosu."""
+        self.step.init_steps(root=self.start_file)
+        self.step._dependencies_stack = ["top", "parent.parquet"]
+        popped = self.step._pop_dependency_frame("child.parquet")
+        self.assertEqual(popped, "parent.parquet")
+        self.assertEqual(self.step._dependencies_stack, ["top", "parent.parquet"])
+
+    def test_nested_obtain_mismatch_does_not_break_parent_finish(self):
+        self.step.init_steps(root=self.start_file)
+
+        def collect_child(**kwargs):
+            # Symuluj uszkodzony stos (np. połykany błąd / reset): zdejmij child ręcznie.
+            self.assertEqual(self.step._dependencies_stack[-1], "child.parquet")
+            self.step._dependencies_stack.pop()
+            raise RuntimeError("forced child failure")
+
+        def collect_parent(**kwargs):
+            with self.assertRaises(RuntimeError):
+                self.step.obtain("child.parquet", collect_child)
+            self.assertEqual(
+                self.step._dependencies_stack, ["top", "parent.parquet"]
+            )
+            return pd.DataFrame({"v": [1]})
+
+        result = self.step.obtain("parent.parquet", collect_parent)
+        self.assertEqual(result.get_status(), REFRESHED)
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
     def test_obtain_collects_and_caches_on_second_call(self):
         self.step.init_steps(root=self.start_file)
         calls = {"n": 0}

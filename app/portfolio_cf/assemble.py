@@ -72,6 +72,12 @@ def build_instrument_ledger(
         except ReferenceError:
             # DATA_STEP nie zainicjalizowany — nie maskować jako UNCOVERED.
             raise
+        except RuntimeError as exc:
+            # Uszkodzony stos obtain — nie połykać; inaczej rodzic dostaje mismatch.
+            if "DATA_STEP stack mismatch" in str(exc):
+                raise
+            warnings.append(f"{adapter.__name__}: {exc}")
+            continue
         except Exception as exc:
             warnings.append(f"{adapter.__name__}: {exc}")
             continue

@@ -27,6 +27,10 @@ def build_instrument_sold_map(valuation_date: date) -> dict[str, bool]:
     for loader in loaders:
         try:
             sold.update(loader(valuation_date))
+        except RuntimeError as exc:
+            if "DATA_STEP stack mismatch" in str(exc):
+                raise
+            continue
         except Exception:
             continue
     return sold

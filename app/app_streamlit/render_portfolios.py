@@ -358,6 +358,7 @@ def _render_cf_browser(
         InstrumentCashFlow.FX_RATE,
         InstrumentCashFlow.FX_DATE,
         InstrumentCashFlow.DESCRIPTION,
+        InstrumentCashFlow.COUNTERPARTY,
     ]
     display = view[[c for c in cols if c in view.columns]].copy()
     display[InstrumentCashFlow.DATE] = pd.to_datetime(
@@ -367,6 +368,10 @@ def _render_cf_browser(
     display[InstrumentCashFlow.DATE] = display[InstrumentCashFlow.DATE].dt.strftime(
         "%Y-%m-%d"
     )
+    if InstrumentCashFlow.COUNTERPARTY in display.columns:
+        display = display.rename(
+            columns={InstrumentCashFlow.COUNTERPARTY: "Kontrahent"}
+        )
     st.dataframe(
         dataframe_for_streamlit(display),
         width="stretch",

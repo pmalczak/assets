@@ -59,14 +59,16 @@ class DataStepPrimitives:
             self._reset_dependency_stack()
 
     def _pop_dependency_frame(self, product: str) -> str:
-        """Zdejmij ramkę obtain; nigdy nie zdejmuj sentinela 'top'."""
+        """Zdejmij ramkę obtain; nigdy nie zdejmuj sentinela 'top' ani cudzej ramki.
+
+        Zdejmowanie niepasującego produktu (dawny fallback) psuło zewnętrzny obtain:
+        zagnieżdżony collect kończył się z ``stack=['top']``, a rodzic raportował
+        ``popped 'top'`` przy finiszowaniu własnego produktu.
+        """
         self._ensure_dependency_stack()
         if self._dependencies_stack[-1] == product:
             return self._dependencies_stack.pop()
-        # Stos uszkodzony (np. reset mid-flight) — nie zdejmuj 'top'.
-        if self._dependencies_stack[-1] == "top":
-            return "top"
-        return self._dependencies_stack.pop()
+        return self._dependencies_stack[-1]
 
     def read_featured_file(self, data_file: Path) -> pd.DataFrame:
         self.is_initialised()
