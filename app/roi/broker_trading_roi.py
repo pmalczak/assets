@@ -86,11 +86,22 @@ def build_broker_ticker_cashflows(
                 continue
 
         asset_id = ticker_asset_id(broker_id, ticker)
+        quantity = None
+        unit_price = None
+        if tx_type in (RevolutTradingFile.TYPE_BUY, RevolutTradingFile.TYPE_SELL):
+            qty_raw = parse_trading_number(row.get(RevolutTradingFile.QUANTITY))
+            if qty_raw is not None and abs(qty_raw) > 0:
+                quantity = abs(float(qty_raw))
+            price_raw = parse_trading_number(row.get(RevolutTradingFile.PRICE_PER_SHARE))
+            if price_raw is not None:
+                unit_price = float(price_raw)
         by_ticker.setdefault(ticker, []).append(
             {
                 CashFlowEvent.ASSET_ID: asset_id,
                 CashFlowEvent.DATE: event_date,
                 CashFlowEvent.AMOUNT: float(amount),
+                CashFlowEvent.QUANTITY: quantity,
+                CashFlowEvent.UNIT_PRICE: unit_price,
                 CashFlowEvent.CATEGORY: category,
                 CashFlowEvent.SOURCE: broker_id,
                 CashFlowEvent.DESCRIPTION: str(tx_type),

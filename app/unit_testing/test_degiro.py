@@ -20,6 +20,7 @@ from importers.degiro.read_degiro import (
     latest_portfolio_as_of,
     parse_degiro_number,
     period_from_account_file,
+    period_gap_warnings,
     read_account_csv,
     read_portfolio_csv,
     read_transactions_csv,
@@ -75,6 +76,59 @@ class DegiroReadTests(unittest.TestCase):
                 period_from_account_file(root / ACCOUNT_SOURCE),
                 (date(2021, 7, 28), date(2025, 10, 9)),
             )
+
+    def test_read_account_and_transactions_drop_blank_dates(self):
+        account_csv = (
+            "Data,Czas,Data,Produkt,ISIN,Opis,Kurs,Zmiana,,Saldo,,Identyfikator zlecenia\n"
+            '28-07-2021,09:42,28-07-2021,INTER RAO LIETUVA AB,LT0000128621,Kupno,,EUR,"-635,97",EUR,"30,12",order-1\n'
+            ",,,,,,,,,,,\n"
+        )
+        transactions_csv = (
+            "Data,Czas,Produkt,ISIN,Giełda referencyjna,Miejsce wykonania,Liczba,Kurs,,"
+            "Wartość lokalna,,Wartość EUR,Kurs wymiany,Opłaty AutoFX,"
+            "Opłata transakcyjna DEGIRO i/lub opłata stron,Razem EUR,Identyfikator zlecenia\n"
+            '28-07-2021,09:41,INTER RAO LIETUVA AB,LT0000128621,WSE,XWAR,150,"19,5000",PLN,'
+            '"-2925,00",PLN,"-635,97","4,5993","0,00","-0,79","-636,76",order-1\n'
+            ",,,,,,,,,,,,,,,,\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            account_path = root / "Account.csv"
+            tx_path = root / "Transactions.csv"
+            account_path.write_text(account_csv, encoding="utf-8")
+            tx_path.write_text(transactions_csv, encoding="utf-8")
+            account = read_account_csv(account_path)
+            transactions = read_transactions_csv(tx_path)
+            self.assertEqual(len(account), 1)
+            self.assertEqual(len(transactions), 1)
+            period_start, period_end = period_from_account_file(account_path)
+            self.assertEqual(period_start, date(2021, 7, 28))
+            self.assertEqual(period_end, date(2021, 7, 28))
+
+    def test_period_gap_warning_merges_nested_before_gap(self):
+        self.assertEqual(
+            period_gap_warnings(
+                [
+                    (date(2026, 1, 1), date(2026, 6, 30)),
+                    (date(2026, 2, 1), date(2026, 2, 28)),
+                    (date(2026, 7, 1), date(2026, 8, 17)),
+                ],
+                "transactions",
+            ),
+            [],
+        )
+        warnings = period_gap_warnings(
+            [
+                (date(2026, 1, 1), date(2026, 3, 31)),
+                (date(2026, 5, 1), date(2026, 8, 17)),
+            ],
+            "transactions",
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(
+            warnings[0],
+            "Luka w okresach DEGIRO transactions: 2026-04-01 … 2026-04-30",
+        )
 
     def test_read_export_shapes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -150,6 +204,42 @@ class MoveDegiroTests(unittest.TestCase):
             results = move_degiro_files(assets, download)
             self.assertTrue(all(r.action == ACTION_SKIPPED for r in results))
             self.assertFalse((download / PORTFOLIO_SOURCE).is_file())
+
+    def test_same_period_refreshed_portfolio_replaces_portfolio_only(self):
+        refreshed_portfolio = """Produkt,Symbol/ISIN,Suma,Kurs,Lokalna wartość,,Wartość w EUR
+CASH & CASH FUND & FTX CASH (EUR),,,,EUR,"100,00","100,00"
+INTER RAO LIETUVA AB,LT0000128621,150,"11,54",PLN,"1731,00","402,28"
+ISHARES CORE MSCI JAPAN IMI UCITS,IE00B4L5YX21,10,"74,55",EUR,"745,50","745,50"
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            download = root / "Downloads"
+            assets = root / "assets"
+            target = assets / DEFAULT_DEGIRO_ASSET_ID
+            download.mkdir()
+            target.mkdir(parents=True)
+            start, end = date(2021, 7, 28), date(2025, 10, 9)
+            old_portfolio = target / dated_filename("portfolio", start, end)
+            old_portfolio.write_text(PORTFOLIO, encoding="utf-8")
+            (target / dated_filename("transactions", start, end)).write_text(TRANSACTIONS, encoding="utf-8")
+            (target / dated_filename("account", start, end)).write_text(ACCOUNT, encoding="utf-8")
+
+            (download / PORTFOLIO_SOURCE).write_text(refreshed_portfolio, encoding="utf-8")
+            (download / TRANSACTIONS_SOURCE).write_text(TRANSACTIONS, encoding="utf-8")
+            (download / ACCOUNT_SOURCE).write_text(ACCOUNT, encoding="utf-8")
+            fetched = download_date_of(download / ACCOUNT_SOURCE)
+
+            results = move_degiro_files(assets, download)
+            moved = [r for r in results if r.action == ACTION_MOVED]
+            skipped = [r for r in results if r.action == ACTION_SKIPPED]
+            self.assertEqual(len(moved), 1)
+            self.assertEqual(len(skipped), 2)
+            new_portfolio = target / dated_filename("portfolio", start, end, fetched)
+            self.assertTrue(new_portfolio.is_file())
+            self.assertFalse(old_portfolio.exists())
+            self.assertFalse((download / PORTFOLIO_SOURCE).is_file())
+            refreshed = read_portfolio_csv(new_portfolio)
+            self.assertEqual(len(refreshed), 3)
 
 
 class DegiroRoiTests(unittest.TestCase):

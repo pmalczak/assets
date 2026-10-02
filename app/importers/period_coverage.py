@@ -32,6 +32,18 @@ def find_coverage_gaps(periods: list[tuple[date, date]]) -> list[tuple[date, dat
     return gaps
 
 
+def format_period_gap_warnings(
+    periods: list[tuple[date, date]],
+    *,
+    label: str,
+) -> list[str]:
+    """Soft warnings for calendar gaps after merging named statement periods."""
+    return [
+        f"Luka w okresach {label}: {gap_start.isoformat()} … {gap_end.isoformat()}"
+        for gap_start, gap_end in find_coverage_gaps(periods)
+    ]
+
+
 def assert_no_coverage_gaps(
     periods: list[tuple[date, date]],
     *,

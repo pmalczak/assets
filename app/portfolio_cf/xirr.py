@@ -28,10 +28,41 @@ from portfolio_cf.sold_status import (
     sold_filter_label,
 )
 from portfolios.assignment import KNOWN_PORTFOLIOS, nav_pln_for_portfolio
-from portfolios.composition import split_broker_nav_for_instrument_overrides
+from portfolios.composition import (
+    broker_cash_pln_for_portfolio,
+    load_broker_holdings_for_portfolios,
+    split_broker_nav_for_instrument_overrides,
+)
 from roi.xirr import compute_xirr
 
 RAP_TOTAL = "Z RAZEM"
+
+
+def _ledger_excluding_broker_cash(ledger: pd.DataFrame) -> pd.DataFrame:
+    """Broker ``*:CASH`` nie wchodzi do CF/XIRR (gotówka robocza tylko w składzie/NAV)."""
+    if ledger is None or ledger.empty:
+        return ledger if ledger is not None else pd.DataFrame()
+    ids = ledger[InstrumentCashFlow.INSTRUMENT_ID].astype(str)
+    return ledger.loc[~ids.str.endswith(":CASH")].copy()
+
+
+def _terminal_positions_pln(
+    snapshot: pd.DataFrame,
+    portfolio_name: str,
+    valuation_date: date,
+    *,
+    holdings_by_id: dict | None = None,
+    warnings: list[str] | None = None,
+) -> float:
+    """NAV portfela ze snapshota minus gotówka robocza brokerów (XIRR = pozycje)."""
+    split = split_broker_nav_for_instrument_overrides(snapshot, valuation_date)
+    terminal = float(nav_pln_for_portfolio(split, portfolio_name))
+    if holdings_by_id is None:
+        holdings_by_id, hold_warnings = load_broker_holdings_for_portfolios(valuation_date)
+        if warnings is not None:
+            warnings.extend(hold_warnings)
+    cash = broker_cash_pln_for_portfolio(snapshot, portfolio_name, holdings_by_id)
+    return terminal - float(cash)
 
 
 @dataclass
@@ -61,11 +92,13 @@ def compute_named_portfolio_xirr(
     terminal_pln: float | None = None,
     fx_rates: pd.DataFrame | None = None,
     sold_filter: str | None = None,
+    holdings_by_id: dict | None = None,
 ) -> PortfolioXirrResult:
     """XIRR lokalny + spot oraz ROI_PLN / ROI_local / ROI_FX na CF portfela.
 
     Uwzględnia globalny filtr sprzedane/niesprzedane (jak ROI Razem).
     UNCOVERED (po filtrze) z niezerowym NAV → warning + incomplete=True.
+    Terminal = NAV pozycji (bez gotówki roboczej brokerów), o ile nie podano ``terminal_pln``.
     """
     if assembly is None:
         assembly = build_instrument_ledger(
@@ -77,6 +110,7 @@ def compute_named_portfolio_xirr(
     subset = filter_ledger_by_sold(
         subset, assembly.is_sold_by_instrument, sold_filter=mode
     )
+    subset = _ledger_excluding_broker_cash(subset)
     warnings = list(assembly.warnings)
     uncovered_in_portfolio = filter_coverage_by_sold(
         [
@@ -93,8 +127,13 @@ def compute_named_portfolio_xirr(
         if mode == SOLD_FILTER_SOLD:
             terminal_pln = 0.0
         elif snapshot is not None and not snapshot.empty:
-            split = split_broker_nav_for_instrument_overrides(snapshot, valuation_date)
-            terminal_pln = float(nav_pln_for_portfolio(split, portfolio_name))
+            terminal_pln = _terminal_positions_pln(
+                snapshot,
+                portfolio_name,
+                valuation_date,
+                holdings_by_id=holdings_by_id,
+                warnings=warnings,
+            )
         else:
             terminal_pln = 0.0
 
@@ -126,6 +165,7 @@ def compute_total_portfolio_xirr(
     snapshot: pd.DataFrame | None = None,
     fx_rates: pd.DataFrame | None = None,
     sold_filter: str | None = None,
+    holdings_by_id: dict | None = None,
 ) -> PortfolioXirrResult:
     """XIRR / ROI FX dla Z RAZEM (wszystkie portfele poza 0 CASH-POOL)."""
     from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
@@ -140,11 +180,17 @@ def compute_total_portfolio_xirr(
     terminal = 0.0
     warnings = list(assembly.warnings)
     uncovered: list[InstrumentCoverage] = []
-    split_snapshot = (
-        split_broker_nav_for_instrument_overrides(snapshot, valuation_date)
-        if snapshot is not None and not snapshot.empty
-        else snapshot
-    )
+    resolved_holdings = holdings_by_id
+    if (
+        resolved_holdings is None
+        and mode != SOLD_FILTER_SOLD
+        and snapshot is not None
+        and not snapshot.empty
+    ):
+        resolved_holdings, hold_warnings = load_broker_holdings_for_portfolios(
+            valuation_date
+        )
+        warnings.extend(hold_warnings)
 
     for name in KNOWN_PORTFOLIOS:
         if name == XIRR_EXCLUDED_PORTFOLIO:
@@ -153,12 +199,19 @@ def compute_total_portfolio_xirr(
         part = filter_ledger_by_sold(
             part, assembly.is_sold_by_instrument, sold_filter=mode
         )
+        part = _ledger_excluding_broker_cash(part)
         if part is not None and not part.empty:
             frames.append(part)
         if mode == SOLD_FILTER_SOLD:
             part_terminal = 0.0
-        elif split_snapshot is not None and not split_snapshot.empty:
-            part_terminal = float(nav_pln_for_portfolio(split_snapshot, name))
+        elif snapshot is not None and not snapshot.empty:
+            part_terminal = _terminal_positions_pln(
+                snapshot,
+                name,
+                valuation_date,
+                holdings_by_id=resolved_holdings if resolved_holdings is not None else {},
+                warnings=warnings,
+            )
         else:
             part_terminal = 0.0
         terminal += part_terminal
@@ -206,6 +259,7 @@ def compute_named_portfolio_xirr_map(
     snapshot: pd.DataFrame | None = None,
     sold_filter: str | None = None,
     fx_rates: pd.DataFrame | None = None,
+    holdings_by_id: dict | None = None,
 ) -> dict[str, float | None]:
     """XIRR lokalny per portfel (+ Z RAZEM). CASH-POOL → None."""
     metrics = compute_named_portfolio_metrics_map(
@@ -214,6 +268,7 @@ def compute_named_portfolio_xirr_map(
         snapshot=snapshot,
         sold_filter=sold_filter,
         fx_rates=fx_rates,
+        holdings_by_id=holdings_by_id,
     )
     return {name: row.xirr for name, row in metrics.items()}
 
@@ -225,6 +280,7 @@ def compute_named_portfolio_metrics_map(
     snapshot: pd.DataFrame | None = None,
     sold_filter: str | None = None,
     fx_rates: pd.DataFrame | None = None,
+    holdings_by_id: dict | None = None,
 ) -> dict[str, PortfolioXirrResult]:
     """Pełne metryki XIRR/FX per nazwany portfel + Z RAZEM."""
     from portfolio_cf.instrument_portfolio import XIRR_EXCLUDED_PORTFOLIO
@@ -232,6 +288,16 @@ def compute_named_portfolio_metrics_map(
     if assembly is None:
         assembly = build_instrument_ledger(
             valuation_date, fx_rates=fx_rates, snapshot=snapshot
+        )
+
+    resolved_holdings = holdings_by_id
+    if (
+        resolved_holdings is None
+        and snapshot is not None
+        and not snapshot.empty
+    ):
+        resolved_holdings, _hold_warnings = load_broker_holdings_for_portfolios(
+            valuation_date
         )
 
     out: dict[str, PortfolioXirrResult] = {}
@@ -247,6 +313,7 @@ def compute_named_portfolio_metrics_map(
                 snapshot=snapshot,
                 sold_filter=sold_filter,
                 fx_rates=fx_rates,
+                holdings_by_id=resolved_holdings,
             )
         except Exception:
             out[name] = _empty_excluded(name, valuation_date)
@@ -257,6 +324,7 @@ def compute_named_portfolio_metrics_map(
             snapshot=snapshot,
             sold_filter=sold_filter,
             fx_rates=fx_rates,
+            holdings_by_id=resolved_holdings,
         )
     except Exception:
         out[RAP_TOTAL] = _empty_excluded(RAP_TOTAL, valuation_date)

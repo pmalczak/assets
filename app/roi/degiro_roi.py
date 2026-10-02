@@ -18,6 +18,7 @@ from importers.degiro.data_model import (
     DegiroTransactionsFile,
 )
 from importers.degiro.read_degiro import (
+    is_blank_degiro_date,
     latest_portfolio_as_of,
     parse_degiro_date,
     read_degiro_account,
@@ -128,6 +129,9 @@ def _add_transaction_cashflows(
             category = DIVESTMENT
             amount = abs(amount)
         asset_id = ticker_asset_id(broker_id, isin)
+        qty_abs = abs(qty) if qty else None
+        price_raw = row.get(DegiroTransactionsFile.PRICE)
+        unit_price = float(price_raw) if pd.notna(price_raw) else None
         rows_by_asset.setdefault(asset_id, []).append(
             _event_row(
                 asset_id=asset_id,
@@ -138,6 +142,8 @@ def _add_transaction_cashflows(
                 description="BUY" if category == CAPEX else "SELL",
                 title=str(row.get(DegiroTransactionsFile.PRODUCT) or isin),
                 account_number=str(row.get(DegiroTransactionsFile.ORDER_ID) or ""),
+                quantity=qty_abs if qty_abs and qty_abs > 0 else None,
+                unit_price=unit_price,
             )
         )
 
@@ -183,11 +189,15 @@ def _event_row(
     description: str,
     title: str,
     account_number: str,
+    quantity: float | None = None,
+    unit_price: float | None = None,
 ) -> dict[str, object]:
     return {
         CashFlowEvent.ASSET_ID: asset_id,
         CashFlowEvent.DATE: parse_degiro_date(date_value).isoformat(),
         CashFlowEvent.AMOUNT: float(amount),
+        CashFlowEvent.QUANTITY: quantity,
+        CashFlowEvent.UNIT_PRICE: unit_price,
         CashFlowEvent.CATEGORY: category,
         CashFlowEvent.SOURCE: source,
         CashFlowEvent.DESCRIPTION: description,
@@ -222,7 +232,9 @@ def _qty_by_isin(portfolio_df: pd.DataFrame) -> dict[str, float]:
 def _filter_degiro_rows_on_or_before(df: pd.DataFrame, col: str, valuation_date: date) -> pd.DataFrame:
     if df is None or df.empty:
         return df.copy() if df is not None else pd.DataFrame()
-    work = df.copy()
+    work = df.loc[~df[col].map(is_blank_degiro_date)].copy()
+    if work.empty:
+        return work
     work["_iso_date"] = work[col].map(lambda v: parse_degiro_date(v).isoformat())
     filtered = filter_excel_rows_on_or_before(work, "_iso_date", valuation_date)
     return filtered.drop(columns=["_iso_date"])

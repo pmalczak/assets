@@ -45,19 +45,23 @@ from portfolios.assignment import (
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
     PORTFOLIO_PLYNNY,
+    PORTFOLIO_REVOLUT_ROBO,
     assets_in_portfolio,
     load_portfolio_nav_history,
     nav_pln_for_portfolio,
 )
 from portfolios.composition import (
     compose_gm_instrument_composition,
+    compose_instrument_composition,
     load_gm_position_lines,
+    load_robo_position_lines,
     split_broker_nav_for_instrument_overrides,
 )
 from portfolios.nav_path import nav_path_metrics, rebased_overlap
 
 _PORTFOLIO_NAV_SCHEMA = 3
 _GM_POSITIONS_SCHEMA = 1
+_ROBO_POSITIONS_SCHEMA = 1
 _PORTFOLIOS_SELECTED_KEY = "portfolios_selected_v2"
 _LEGACY_PORTFOLIOS_SELECTED_KEYS = ("portfolios_selected",)
 _COMPOSITION_COLUMNS = (
@@ -80,10 +84,16 @@ def _load_portfolio_nav(portfolio_name: str, _schema: int = _PORTFOLIO_NAV_SCHEM
 
 @st.cache_data(show_spinner=False)
 def _load_gm_positions(
-    valuation_date: date,
-    _schema: int = _GM_POSITIONS_SCHEMA,
+    valuation_date: date, _schema: int = _GM_POSITIONS_SCHEMA
 ) -> tuple[list, list[str]]:
     return load_gm_position_lines(valuation_date)
+
+
+@st.cache_data(show_spinner=False)
+def _load_robo_positions(
+    valuation_date: date, _schema: int = _ROBO_POSITIONS_SCHEMA
+) -> tuple[list, list[str]]:
+    return load_robo_position_lines(valuation_date)
 
 
 def _purge_stale_portfolio_selection() -> None:
@@ -114,6 +124,7 @@ def render_portfolios() -> None:
     if st.button("Odśwież NAV", key="portfolios_refresh"):
         _load_portfolio_nav.clear()
         _load_gm_positions.clear()
+        _load_robo_positions.clear()
         _load_benchmarks.clear()
         if latest_snapshot_date is not None:
             invalidate_portfolio_cf(latest_snapshot_date)
@@ -147,6 +158,8 @@ def render_portfolios() -> None:
 
     if selected == PORTFOLIO_GM:
         _render_gm_composition(composition_snapshot, latest_snapshot_date)
+    elif selected == PORTFOLIO_REVOLUT_ROBO:
+        _render_robo_composition(composition_snapshot, latest_snapshot_date)
     else:
         _render_generic_composition(composition_snapshot, selected)
 
@@ -353,6 +366,8 @@ def _render_cf_browser(
         InstrumentCashFlow.INSTRUMENT_ID,
         InstrumentCashFlow.CATEGORY,
         InstrumentCashFlow.AMOUNT,
+        InstrumentCashFlow.QUANTITY,
+        InstrumentCashFlow.UNIT_PRICE,
         InstrumentCashFlow.CURRENCY,
         InstrumentCashFlow.AMOUNT_PLN,
         InstrumentCashFlow.FX_RATE,
@@ -416,22 +431,65 @@ def _render_gm_composition(
     st.caption(
         f"Alokacja per instrument (DEGIRO + XTB). Cel U7 ≈ 1/3 NAV na aktywo. "
         f"Data snapshotu ≠ data sygnału U7. Portfel {PORTFOLIO_GM} bez złota "
-        f"(złoto w {PORTFOLIO_DLUGOTERMINOWY})."
+        f"(złoto w {PORTFOLIO_DLUGOTERMINOWY}). Gotówka robocza brokera w składzie; "
+        f"bez CF/XIRR."
+    )
+    _render_instrument_composition(
+        latest_snapshot,
+        latest_snapshot_date,
+        portfolio_name=PORTFOLIO_GM,
+        load_lines=_load_gm_positions,
+        empty_hint=(
+            "Brak pozycji instrumentów dla tego snapshota — "
+            "sprawdź wyciągi DEGIRO/XTB albo wygeneruj ponownie snapshot."
+        ),
     )
 
+
+def _render_robo_composition(
+    latest_snapshot: pd.DataFrame,
+    latest_snapshot_date: date,
+) -> None:
+    st.caption(
+        f"Alokacja per instrument (Revolut robo). Gotówka robocza brokera w składzie; "
+        f"bez CF/XIRR. Portfel {PORTFOLIO_REVOLUT_ROBO}."
+    )
+    _render_instrument_composition(
+        latest_snapshot,
+        latest_snapshot_date,
+        portfolio_name=PORTFOLIO_REVOLUT_ROBO,
+        load_lines=_load_robo_positions,
+        empty_hint=(
+            "Brak pozycji instrumentów dla tego snapshota — "
+            "sprawdź blotter trading albo wygeneruj ponownie snapshot."
+        ),
+    )
+
+
+def _render_instrument_composition(
+    latest_snapshot: pd.DataFrame,
+    latest_snapshot_date: date,
+    *,
+    portfolio_name: str,
+    load_lines,
+    empty_hint: str,
+) -> None:
     lines: list = []
     position_warnings: list[str] = []
     try:
         with st.spinner("Ładowanie pozycji instrumentów..."):
-            lines, position_warnings = _load_gm_positions(latest_snapshot_date)
+            lines, position_warnings = load_lines(latest_snapshot_date)
     except Exception as exc:
         position_warnings = [f"Nie udało się wczytać pozycji: {exc}"]
 
     for msg in position_warnings:
         st.warning(msg)
 
-    total_nav = nav_pln_for_portfolio(latest_snapshot, PORTFOLIO_GM)
-    table = compose_gm_instrument_composition(latest_snapshot, lines)
+    total_nav = nav_pln_for_portfolio(latest_snapshot, portfolio_name)
+    if portfolio_name == PORTFOLIO_GM:
+        table = compose_gm_instrument_composition(latest_snapshot, lines)
+    else:
+        table = compose_instrument_composition(latest_snapshot, portfolio_name, lines)
     position_nav = 0.0
     if not table.empty and "kind" in table.columns:
         position_nav = float(
@@ -439,14 +497,11 @@ def _render_gm_composition(
         )
 
     c1, c2 = st.columns(2)
-    c1.metric(f"NAV {PORTFOLIO_GM}", f"{total_nav:,.0f} PLN".replace(",", " "))
+    c1.metric(f"NAV {portfolio_name}", f"{total_nav:,.0f} PLN".replace(",", " "))
     c2.metric("Pozycje (bez gotówki)", f"{position_nav:,.0f} PLN".replace(",", " "))
 
     if table.empty:
-        st.info(
-            "Brak pozycji instrumentów dla tego snapshota — "
-            "sprawdź wyciągi DEGIRO/XTB albo wygeneruj ponownie snapshot."
-        )
+        st.info(empty_hint)
         return
 
     display = format_amount_columns(

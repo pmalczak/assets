@@ -81,6 +81,8 @@ def build_ledger_row(
     title: str = "",
     counterparty: str = "",
     account_number: str = "",
+    quantity: float | None = None,
+    unit_price: float | None = None,
     fx_rates: pd.DataFrame | None = None,
 ) -> dict:
     day = _as_date(event_date)
@@ -90,6 +92,8 @@ def build_ledger_row(
         InstrumentCashFlow.DATE: day.isoformat(),
         InstrumentCashFlow.CATEGORY: normalize_roi_category(category),
         InstrumentCashFlow.AMOUNT: float(amount),
+        InstrumentCashFlow.QUANTITY: _optional_float(quantity),
+        InstrumentCashFlow.UNIT_PRICE: _optional_float(unit_price),
         InstrumentCashFlow.CURRENCY: str(currency).strip().upper(),
         InstrumentCashFlow.AMOUNT_PLN: conversion.amount_pln,
         InstrumentCashFlow.FX_RATE: conversion.fx_rate,
@@ -141,8 +145,24 @@ def _legacy_row_to_ledger_row(
         title=str(event.get(CashFlowEvent.TITLE) or ""),
         counterparty=str(event.get(CashFlowEvent.COUNTERPARTY) or ""),
         account_number=str(event.get(CashFlowEvent.ACCOUNT_NUMBER) or ""),
+        quantity=_optional_float(event.get(CashFlowEvent.QUANTITY)),
+        unit_price=_optional_float(event.get(CashFlowEvent.UNIT_PRICE)),
         fx_rates=fx_rates,
     )
+
+
+def _optional_float(value) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(number):
+        return None
+    return number
 
 
 def _as_date(value: date | str) -> date:

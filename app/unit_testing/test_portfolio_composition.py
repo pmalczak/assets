@@ -15,13 +15,16 @@ from portfolios.assignment import (
     nav_pln_for_portfolio,
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
+    PORTFOLIO_REVOLUT_ROBO,
 )
 from portfolios.composition import (
     KIND_CASH,
     KIND_POSITION,
     GmPositionLine,
+    broker_cash_pln_for_portfolio,
     compose_gm_composition,
     compose_gm_instrument_composition,
+    compose_instrument_composition,
     split_broker_nav_for_instrument_overrides,
 )
 from roi.gold_terminal import GOLD_COINS_ROI_ASSET_ID
@@ -308,6 +311,74 @@ class GmInstrumentCompositionTests(unittest.TestCase):
             snapshot, date(2026, 9, 1), lines=lines
         )
         self.assertIs(out, snapshot)
+
+
+class BrokerCashAndRoboCompositionTests(unittest.TestCase):
+    def test_broker_cash_pln_for_portfolio(self):
+        snapshot = pd.DataFrame(
+            [
+                _snapshot_row(DEFAULT_DEGIRO_ASSET_ID, 440.0, value=110.0),
+                _snapshot_row("p_re_robo", 200.0, value=50.0),
+            ]
+        )
+        holdings = {
+            DEFAULT_DEGIRO_ASSET_ID: BrokerHoldings(
+                positions_value=100.0,
+                cash_value=10.0,
+                n_positions=1,
+                n_cash_rows=1,
+                evaluation_date="2026-08-01",
+                currency="EUR",
+            ),
+            "p_re_robo": BrokerHoldings(
+                positions_value=40.0,
+                cash_value=10.0,
+                n_positions=1,
+                n_cash_rows=1,
+                evaluation_date="2026-08-01",
+                currency="EUR",
+            ),
+        }
+        self.assertAlmostEqual(
+            broker_cash_pln_for_portfolio(snapshot, PORTFOLIO_GM, holdings), 40.0
+        )
+        self.assertAlmostEqual(
+            broker_cash_pln_for_portfolio(snapshot, PORTFOLIO_REVOLUT_ROBO, holdings),
+            40.0,
+        )
+
+    def test_robo_instrument_composition_includes_cash_and_tickers(self):
+        snapshot = pd.DataFrame(
+            [_snapshot_row("p_re_robo", 400.0, value=100.0)]
+        )
+        lines = [
+            GmPositionLine(
+                broker_id="p_re_robo",
+                broker_label="REVOLUT-ROBO",
+                kind=KIND_POSITION,
+                code="PRAR",
+                label="PRAR",
+                value=80.0,
+                currency="EUR",
+            ),
+            GmPositionLine(
+                broker_id="p_re_robo",
+                broker_label="REVOLUT-ROBO",
+                kind=KIND_CASH,
+                code="",
+                label="Gotówka (REVOLUT-ROBO)",
+                value=20.0,
+                currency="EUR",
+            ),
+        ]
+        table = compose_instrument_composition(
+            snapshot, PORTFOLIO_REVOLUT_ROBO, lines
+        )
+        self.assertEqual(set(table["kind"]), {KIND_POSITION, KIND_CASH})
+        self.assertIn("PRAR", set(table["Składnik"]))
+        cash_rows = table.loc[table["kind"] == KIND_CASH]
+        self.assertEqual(len(cash_rows), 1)
+        self.assertAlmostEqual(float(table["Udział"].sum()), 1.0)
 
 
 if __name__ == "__main__":

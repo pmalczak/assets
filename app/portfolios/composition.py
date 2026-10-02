@@ -19,6 +19,7 @@ from portfolios.assignment import (
     PORTFOLIO_GM_ORDER,
     gm_asset_role,
     nav_pln_for_portfolio,
+    portfolio_for_asset_id,
 )
 
 _DISPLAY_NAMES = {
@@ -161,10 +162,12 @@ def _implied_fx_pln(snapshot: pd.DataFrame, broker_id: str, currency: str) -> fl
     currency = str(currency or "").strip().upper()
     if not currency or currency == "PLN":
         return 1.0
-    by_id = _rows_by_id(snapshot)
-    row = by_id.get(broker_id)
-    if row is None:
+    if snapshot is None or snapshot.empty or AssetsDef.ID not in snapshot.columns:
         return 1.0
+    rows = snapshot.loc[snapshot[AssetsDef.ID].astype(str).str.strip() == str(broker_id)]
+    if rows.empty:
+        return 1.0
+    row = rows.iloc[0]
     native = _numeric(row.get(AssetsDef.VALUE))
     pln = _numeric(row.get(AssetsDef.VALUE_PLN))
     if native == 0.0:
@@ -176,19 +179,28 @@ def compose_gm_instrument_composition(
     snapshot: pd.DataFrame,
     lines: list[GmPositionLine] | None = None,
 ) -> pd.DataFrame:
+    """Skład per instrument (+ gotówka) dla 2 G-MOMENTUM."""
+    return compose_instrument_composition(snapshot, PORTFOLIO_GM, lines)
+
+
+def compose_instrument_composition(
+    snapshot: pd.DataFrame,
+    portfolio_name: str,
+    lines: list[GmPositionLine] | None = None,
+) -> pd.DataFrame:
     """
     Skład per instrument (+ gotówka).
 
-    Udział = wartość-pln / NAV portfela 2 G-MOMENTUM ze snapshota (po splitach override).
+    Udział = wartość-pln / NAV portfela ze snapshota (po splitach override).
     Pozycje tego samego instrumentu z różnych kont są scalane.
-    Instrumenty z INSTRUMENT_PORTFOLIO_OVERRIDES poza GM są pomijane.
+    Instrumenty z INSTRUMENT_PORTFOLIO_OVERRIDES poza ``portfolio_name`` są pomijane.
     """
     lines = [
         line
         for line in list(lines or [])
-        if _line_belongs_to_gm(line)
+        if _line_belongs_to_portfolio(line, portfolio_name)
     ]
-    total = nav_pln_for_portfolio(snapshot, PORTFOLIO_GM)
+    total = nav_pln_for_portfolio(snapshot, portfolio_name)
     buckets: dict[tuple[str, str], dict[str, object]] = {}
 
     for line in lines:
@@ -282,13 +294,80 @@ def _line_instrument_id(line: GmPositionLine) -> str | None:
     return None
 
 
-def _line_belongs_to_gm(line: GmPositionLine) -> bool:
+def _line_belongs_to_portfolio(line: GmPositionLine, portfolio_name: str) -> bool:
     from portfolio_cf.instrument_portfolio import portfolio_for_instrument
 
     instrument_id = _line_instrument_id(line)
     if instrument_id is None:
         return False
-    return portfolio_for_instrument(instrument_id) == PORTFOLIO_GM
+    return portfolio_for_instrument(instrument_id) == portfolio_name
+
+
+def broker_cash_pln_for_portfolio(
+    snapshot: pd.DataFrame,
+    portfolio_name: str,
+    holdings_by_id: dict[str, BrokerHoldings],
+) -> float:
+    """Gotówka robocza brokerów w portfelu (PLN) — do odjęcia od terminala XIRR."""
+    if snapshot is None or snapshot.empty or not holdings_by_id:
+        return 0.0
+    total = 0.0
+    for asset_id, holdings in holdings_by_id.items():
+        if portfolio_for_asset_id(str(asset_id)) != portfolio_name:
+            continue
+        rows = snapshot.loc[snapshot[AssetsDef.ID].astype(str).str.strip() == str(asset_id)]
+        if rows.empty:
+            continue
+        nav_pln = _numeric(rows.iloc[0].get(AssetsDef.VALUE_PLN))
+        _positions, cash_pln = _split_pln(nav_pln, holdings)
+        if cash_pln is not None:
+            total += float(cash_pln)
+    return total
+
+
+def load_broker_holdings_for_portfolios(
+    valuation_date: date,
+) -> tuple[dict[str, BrokerHoldings], list[str]]:
+    """Holdings DEGIRO/XTB/Robo — do XIRR (cash vs positions) i składu."""
+    holdings, warnings = load_gm_broker_holdings(valuation_date)
+    robo_holdings, robo_warnings = load_robo_broker_holdings(valuation_date)
+    holdings.update(robo_holdings)
+    warnings.extend(robo_warnings)
+    return holdings, warnings
+
+
+def load_robo_broker_holdings(
+    valuation_date: date,
+) -> tuple[dict[str, BrokerHoldings], list[str]]:
+    from app_proc.data_root import get_online_data_root
+    from evaluators.broker_registry import resolve_broker_snapshot_evaluator
+    from importers.assets.read_assets import read_assets
+    from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
+
+    warnings: list[str] = []
+    try:
+        catalog = read_assets()
+        data_root = get_online_data_root()
+    except Exception as exc:
+        return {}, [f"Nie udało się wczytać katalogu do holdings Robo: {exc}"]
+    if catalog.empty or AssetsDef.ID not in catalog.columns:
+        return {}, ["Brak katalogu aktywów do holdings Robo."]
+    rows = catalog[
+        catalog[AssetsDef.ID].astype(str).str.strip() == DEFAULT_REVOLUT_ROBO_ASSET_ID
+    ]
+    if rows.empty:
+        return {}, [f"Brak {DEFAULT_REVOLUT_ROBO_ASSET_ID} w katalogu."]
+    row = rows.iloc[0]
+    evaluator = resolve_broker_snapshot_evaluator(row)
+    if evaluator is None:
+        return {}, [f"Brak ewaluatora holdings dla {DEFAULT_REVOLUT_ROBO_ASSET_ID}."]
+    loaded, extra = evaluator.load_holdings(
+        data_root, DEFAULT_REVOLUT_ROBO_ASSET_ID, row, valuation_date
+    )
+    warnings.extend(extra)
+    if loaded is None:
+        return {}, warnings
+    return {DEFAULT_REVOLUT_ROBO_ASSET_ID: loaded}, warnings
 
 
 def split_broker_nav_for_instrument_overrides(
@@ -585,5 +664,118 @@ def load_gm_position_lines(
                         evaluation_date=eval_date,
                     )
                 )
+
+    return lines, warnings
+
+
+def load_robo_position_lines(
+    valuation_date: date,
+    *,
+    instruments: InstrumentMap | None = None,
+) -> tuple[list[GmPositionLine], list[str]]:
+    """Pozycje instrumentów + gotówka Robo z blottera na datę wyceny."""
+    from app_proc.data_root import resolve_asset_dir
+    from evaluators.evaluate_broker_revolut import (
+        filter_trading_on_or_before,
+        last_trade_prices,
+        open_holdings_at_cost,
+        revolut_working_cash,
+    )
+    from importers.assets.read_assets import read_assets
+    from importers.revolut.read_r_trading import read_revolut_trading_transactions
+    from importers.revolut.trading_data_model import (
+        DEFAULT_REVOLUT_ROBO_ASSET_ID,
+        RevolutTradingFile,
+    )
+
+    warnings: list[str] = []
+    lines: list[GmPositionLine] = []
+    broker_id = DEFAULT_REVOLUT_ROBO_ASSET_ID
+    label = "REVOLUT-ROBO"
+
+    mapping = instruments
+    if mapping is None:
+        try:
+            mapping = load_instrument_map()
+        except InstrumentMapError as exc:
+            warnings.append(f"Brak mapowania instruments — nazwy z blottera: {exc}")
+            mapping = None
+
+    try:
+        catalog = read_assets()
+    except Exception as exc:
+        return [], [f"Nie udało się wczytać katalogu do pozycji Robo: {exc}"]
+
+    if catalog.empty or AssetsDef.ID not in catalog.columns:
+        return [], ["Brak katalogu aktywów do pozycji Robo."]
+
+    broker_rows = catalog[catalog[AssetsDef.ID].astype(str).str.strip() == broker_id]
+    if broker_rows.empty:
+        return [], [f"Brak {broker_id} w katalogu — bez pozycji Robo."]
+
+    typ = str(broker_rows.iloc[0].get(AssetsDef.TYPE) or "").strip()
+    asset_dir = resolve_asset_dir(broker_id, typ)
+    if not asset_dir.is_dir():
+        return [], [f"Brak katalogu {asset_dir} — bez pozycji Robo."]
+
+    trading_df, load_warnings = read_revolut_trading_transactions(asset_dir, broker_id)
+    warnings.extend(load_warnings)
+    trading_df = filter_trading_on_or_before(trading_df, valuation_date)
+    if trading_df.empty:
+        warnings.append(f"Brak transakcji Robo <= {valuation_date.isoformat()}.")
+        return lines, warnings
+
+    holdings = open_holdings_at_cost(trading_df)
+    prices = last_trade_prices(trading_df)
+    eval_ts = pd.to_datetime(
+        trading_df[RevolutTradingFile.DATE], format="ISO8601", utc=True
+    ).max()
+    eval_date = (
+        str(eval_ts.date())
+        if eval_ts is not None and not pd.isna(eval_ts)
+        else valuation_date.isoformat()
+    )
+    catalog_currency = str(broker_rows.iloc[0].get(AssetsDef.CURRENCY) or "EUR").strip() or "EUR"
+
+    for ticker, info in holdings.items():
+        qty = float(info.get("qty") or 0.0)
+        if qty <= 1e-12:
+            continue
+        price = float(prices.get(ticker) or 0.0)
+        if price <= 0:
+            value = float(info.get("cost") or 0.0)
+        else:
+            value = qty * price
+        currency = str(info.get("currency") or catalog_currency).strip() or catalog_currency
+        lines.append(
+            GmPositionLine(
+                broker_id=broker_id,
+                broker_label=label,
+                kind=KIND_POSITION,
+                code=ticker,
+                label=_soft_instrument_name(
+                    mapping, venue="robo", code=ticker, fallback=ticker
+                ),
+                value=float(value),
+                currency=currency,
+                evaluation_date=eval_date,
+            )
+        )
+
+    cash_value, cash_warnings = revolut_working_cash(trading_df)
+    warnings.extend(cash_warnings)
+    if abs(cash_value) > 1e-9:
+        lines.append(
+            GmPositionLine(
+                broker_id=broker_id,
+                broker_label=label,
+                kind=KIND_CASH,
+                code="",
+                label=f"Gotówka ({label})",
+                value=float(cash_value),
+                currency=catalog_currency,
+                evaluation_date=eval_date,
+            )
+        )
 
     return lines, warnings

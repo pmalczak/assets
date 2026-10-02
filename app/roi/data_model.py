@@ -6,6 +6,8 @@ class CashFlowEventCls(GenericStructureClass):
     ASSET_ID = "asset_id"
     DATE = "date"
     AMOUNT = "amount"
+    QUANTITY = "quantity"
+    UNIT_PRICE = "unit_price"
     CATEGORY = "category"
     SOURCE = "source"
     DESCRIPTION = "description"
@@ -17,6 +19,8 @@ class CashFlowEventCls(GenericStructureClass):
         ASSET_ID,
         DATE,
         AMOUNT,
+        QUANTITY,
+        UNIT_PRICE,
         CATEGORY,
         SOURCE,
         DESCRIPTION,

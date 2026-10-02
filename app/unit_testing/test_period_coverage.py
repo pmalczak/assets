@@ -4,7 +4,12 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
-from importers.period_coverage import assert_no_coverage_gaps, find_coverage_gaps, merge_coverage
+from importers.period_coverage import (
+    assert_no_coverage_gaps,
+    find_coverage_gaps,
+    format_period_gap_warnings,
+    merge_coverage,
+)
 
 
 class PeriodCoverageTests(unittest.TestCase):
@@ -45,6 +50,39 @@ class PeriodCoverageTests(unittest.TestCase):
                 asset_id="p_re_eur",
             )
         self.assertIn("2025-01-31 .. 2025-03-01", str(ctx.exception))
+
+    def test_format_warnings_merges_nested_before_gap(self):
+        nested = format_period_gap_warnings(
+            [
+                (date(2026, 1, 1), date(2026, 6, 30)),
+                (date(2026, 2, 1), date(2026, 2, 28)),
+                (date(2026, 7, 1), date(2026, 8, 31)),
+            ],
+            label="DEGIRO transactions",
+        )
+        self.assertEqual(nested, [])
+
+        touching = format_period_gap_warnings(
+            [
+                (date(2026, 1, 1), date(2026, 3, 31)),
+                (date(2026, 4, 1), date(2026, 8, 20)),
+            ],
+            label="XTB cash",
+        )
+        self.assertEqual(touching, [])
+
+        gap = format_period_gap_warnings(
+            [
+                (date(2026, 1, 1), date(2026, 3, 31)),
+                (date(2026, 5, 1), date(2026, 8, 20)),
+            ],
+            label="XTB cash",
+        )
+        self.assertEqual(len(gap), 1)
+        self.assertEqual(
+            gap[0],
+            "Luka w okresach XTB cash: 2026-04-01 … 2026-04-30",
+        )
 
 
 if __name__ == "__main__":

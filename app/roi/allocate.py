@@ -224,6 +224,8 @@ def asset_rw_to_cashflow_events(
             # Jednolity string YYYY-MM-DD — inaczej parquet pada na mieszance Timestamp/str.
             CashFlowEvent.DATE: dates.dt.strftime("%Y-%m-%d"),
             CashFlowEvent.AMOUNT: pd.to_numeric(raw[AssetRw.AMOUNT], errors="coerce"),
+            CashFlowEvent.QUANTITY: pd.NA,
+            CashFlowEvent.UNIT_PRICE: pd.NA,
             CashFlowEvent.CATEGORY: raw[AssetRw.CAT].map(ASSET_RW_TO_ROI),
             CashFlowEvent.SOURCE: source_values,
             CashFlowEvent.DESCRIPTION: _text_column(raw, AssetRw.OPERATION_TYPE),

@@ -81,6 +81,118 @@ class PortfolioCfCashLegTests(unittest.TestCase):
             cash_leg_category_and_amount(OPEX, -50.0)
 
 
+class PortfolioCfAdapterNoCashTests(unittest.TestCase):
+    def test_adapt_robo_ledger_has_no_cash_instrument(self):
+        from importers.revolut.trading_data_model import RevolutTradingFile
+        from portfolio_cf.adapters.robo import adapt_robo_ledger
+
+        trading = pd.DataFrame(
+            [
+                {
+                    RevolutTradingFile.DATE: "2024-06-01T12:00:00.000Z",
+                    RevolutTradingFile.TICKER: "PRAR",
+                    RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_BUY,
+                    RevolutTradingFile.QUANTITY: 10,
+                    RevolutTradingFile.PRICE_PER_SHARE: "10",
+                    RevolutTradingFile.TOTAL_AMOUNT: "-100",
+                    RevolutTradingFile.CURRENCY: "EUR",
+                    RevolutTradingFile.FX_RATE: "1",
+                    RevolutTradingFile.FILE_DATE: "2024-06-01",
+                    RevolutTradingFile.PERIOD_START: "2024-01-01",
+                    RevolutTradingFile.PERIOD_END: "2024-06-01",
+                },
+                {
+                    RevolutTradingFile.DATE: "2024-06-01T12:00:00.000Z",
+                    RevolutTradingFile.TICKER: "",
+                    RevolutTradingFile.TYPE: RevolutTradingFile.TYPE_CASH_TOP_UP,
+                    RevolutTradingFile.QUANTITY: "",
+                    RevolutTradingFile.PRICE_PER_SHARE: "",
+                    RevolutTradingFile.TOTAL_AMOUNT: "500",
+                    RevolutTradingFile.CURRENCY: "EUR",
+                    RevolutTradingFile.FX_RATE: "1",
+                    RevolutTradingFile.FILE_DATE: "2024-06-01",
+                    RevolutTradingFile.PERIOD_START: "2024-01-01",
+                    RevolutTradingFile.PERIOD_END: "2024-06-01",
+                },
+            ]
+        )
+        ledger, coverage, _warnings = adapt_robo_ledger(
+            date(2025, 1, 1),
+            trading_df=trading,
+            fx_rates=_fx_frame(),
+        )
+        ids = (
+            set(ledger[InstrumentCashFlow.INSTRUMENT_ID].astype(str))
+            if not ledger.empty
+            else set()
+        )
+        cov_ids = {item.instrument_id for item in coverage}
+        self.assertTrue(all(not iid.endswith(":CASH") for iid in ids | cov_ids))
+        self.assertIn("p_re_robo:PRAR", ids)
+        buy = ledger.loc[ledger[InstrumentCashFlow.INSTRUMENT_ID] == "p_re_robo:PRAR"].iloc[0]
+        self.assertAlmostEqual(float(buy[InstrumentCashFlow.QUANTITY]), 10.0)
+        self.assertAlmostEqual(float(buy[InstrumentCashFlow.UNIT_PRICE]), 10.0)
+
+
+class PortfolioCfUnitPriceTests(unittest.TestCase):
+    def test_degiro_transaction_carries_unit_price(self):
+        from importers.degiro.data_model import DegiroTransactionsFile
+        from roi.degiro_roi import build_degiro_cashflows
+
+        transactions = pd.DataFrame(
+            [
+                {
+                    DegiroTransactionsFile.DATE: "01-06-2024",
+                    DegiroTransactionsFile.TIME: "10:00",
+                    DegiroTransactionsFile.PRODUCT: "AAA ETF",
+                    DegiroTransactionsFile.ISIN: "IE00BKM4GZ66",
+                    DegiroTransactionsFile.REFERENCE_EXCHANGE: "",
+                    DegiroTransactionsFile.EXECUTION_VENUE: "",
+                    DegiroTransactionsFile.QUANTITY: 5,
+                    DegiroTransactionsFile.PRICE: 20.0,
+                    DegiroTransactionsFile.PRICE_CURRENCY: "EUR",
+                    DegiroTransactionsFile.LOCAL_VALUE: -100.0,
+                    DegiroTransactionsFile.LOCAL_VALUE_CURRENCY: "EUR",
+                    DegiroTransactionsFile.VALUE_EUR: -100.0,
+                    DegiroTransactionsFile.FX_RATE: 1.0,
+                    DegiroTransactionsFile.AUTOFX_FEE: "",
+                    DegiroTransactionsFile.DEGIRO_FEE: "",
+                    DegiroTransactionsFile.TOTAL_EUR: -100.0,
+                    DegiroTransactionsFile.ORDER_ID: "ord-1",
+                    DegiroTransactionsFile.FILE_DATE: "2024-06-01",
+                    DegiroTransactionsFile.PERIOD_START: "2024-06-01",
+                    DegiroTransactionsFile.PERIOD_END: "2024-06-01",
+                }
+            ]
+        )
+        events = build_degiro_cashflows(transactions, pd.DataFrame(), "p_degiro")
+        df = events["p_degiro:IE00BKM4GZ66"]
+        self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.QUANTITY]), 5.0)
+        self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.UNIT_PRICE]), 20.0)
+
+        ledger, _coverage = legacy_events_to_ledger(
+            events,
+            venue="degiro",
+            currency="EUR",
+            valuation_date=date(2025, 1, 1),
+            fx_rates=_fx_frame(),
+        )
+        self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.QUANTITY]), 5.0)
+        self.assertAlmostEqual(float(ledger.iloc[0][InstrumentCashFlow.UNIT_PRICE]), 20.0)
+
+    def test_ledger_row_without_price_stays_empty(self):
+        row = build_ledger_row(
+            instrument_id="p_xtb:A",
+            event_date="2024-01-01",
+            category=CAPEX,
+            amount=-1000.0,
+            currency="PLN",
+            venue="xtb",
+        )
+        self.assertIsNone(row[InstrumentCashFlow.QUANTITY])
+        self.assertIsNone(row[InstrumentCashFlow.UNIT_PRICE])
+
+
 class PortfolioCfLedgerTests(unittest.TestCase):
     def test_legacy_events_to_ledger_adds_pln(self):
         events = {
@@ -297,6 +409,56 @@ class PortfolioCfXirrTests(unittest.TestCase):
         self.assertEqual(result.fx_share, 0.0)
         self.assertAlmostEqual(result.xirr, result.xirr_pln, places=6)
 
+    def test_broker_cash_legs_excluded_from_portfolio_xirr(self):
+        """Legacy *:CASH w ledgerze (gdyby powstały) nie wchodzą do XIRR portfela."""
+        rows = [
+            build_ledger_row(
+                instrument_id="p_degiro:AAA",
+                event_date="2024-05-31",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="EUR",
+                venue="degiro",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="p_degiro:CASH",
+                event_date="2024-05-31",
+                category=DIVESTMENT,
+                amount=1000.0,
+                currency="EUR",
+                venue="degiro",
+                description="cash-leg:BUY",
+                fx_rates=_fx_frame(),
+            ),
+            build_ledger_row(
+                instrument_id="p_degiro:CASH",
+                event_date="2024-06-01",
+                category=DIVESTMENT,
+                amount=5000.0,
+                currency="EUR",
+                venue="degiro",
+                description="cash-leg:BUY",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        assembly = AssemblyResult(
+            ledger=pd.DataFrame(rows),
+            coverage=[
+                InstrumentCoverage("p_degiro:AAA", CoverageStatus.COVERED, venue="degiro"),
+                InstrumentCoverage("p_degiro:CASH", CoverageStatus.COVERED, venue="degiro"),
+            ],
+        )
+        result = compute_named_portfolio_xirr(
+            PORTFOLIO_GM,
+            date(2025, 1, 1),
+            assembly=assembly,
+            terminal_pln=4500.0,
+            fx_rates=_fx_frame(),
+        )
+        self.assertIsNotNone(result.xirr)
+        self.assertIsNotNone(result.xirr_pln)
+
     def test_eur_fx_share_above_100_percent(self):
         """Strata lokalna skompensowana wzrostem kursu → udział FX > 100%."""
         from portfolio_cf.fx_attribution import roi_fx_components
@@ -425,6 +587,7 @@ class PortfolioCfXirrTests(unittest.TestCase):
             assembly=assembly,
             snapshot=snapshot,
             sold_filter="Wszystkie",
+            holdings_by_id={},
         )
         self.assertIsNone(mapping[PORTFOLIO_CASH_POOL])
         self.assertIn(PORTFOLIO_GM, mapping)
@@ -516,6 +679,60 @@ class PortfolioCfXirrTests(unittest.TestCase):
         self.assertEqual(razem.iloc[0]["xirr_pln"], header.xirr_pln)
         self.assertEqual(float(razem.iloc[0]["roi_nominal"]), round(header.roi_nominal_pln))
         self.assertEqual(float(razem.iloc[0]["capex"]), -4200.0)
+
+    def test_portfolio_xirr_terminal_excludes_broker_cash(self):
+        """Terminal XIRR = NAV pozycji (bez gotówki roboczej brokera)."""
+        from evaluators.broker_snapshot import BrokerHoldings
+        from importers.assets.data_model import AssetsDef
+
+        rows = [
+            build_ledger_row(
+                instrument_id="p_degiro:AAA",
+                event_date="2024-05-31",
+                category=CAPEX,
+                amount=-1000.0,
+                currency="EUR",
+                venue="degiro",
+                fx_rates=_fx_frame(),
+            ),
+        ]
+        assembly = AssemblyResult(
+            ledger=pd.DataFrame(rows),
+            coverage=[
+                InstrumentCoverage("p_degiro:AAA", CoverageStatus.COVERED, venue="degiro"),
+            ],
+        )
+        snapshot = pd.DataFrame(
+            [
+                {
+                    AssetsDef.ID: "p_degiro",
+                    AssetsDef.TYPE: "investment.udziały",
+                    AssetsDef.VALUE: 1100.0,
+                    AssetsDef.VALUE_PLN: 4400.0,
+                    AssetsDef.CURRENCY: "EUR",
+                }
+            ]
+        )
+        holdings = {
+            "p_degiro": BrokerHoldings(
+                positions_value=1000.0,
+                cash_value=100.0,
+                n_positions=1,
+                n_cash_rows=1,
+                evaluation_date="2024-05-31",
+                currency="EUR",
+            )
+        }
+        result = compute_named_portfolio_xirr(
+            PORTFOLIO_GM,
+            date(2025, 1, 1),
+            assembly=assembly,
+            snapshot=snapshot,
+            fx_rates=_fx_frame(),
+            holdings_by_id=holdings,
+        )
+        # 4400 * 1000/1100 = 4000 pozycji
+        self.assertAlmostEqual(result.terminal_pln, 4000.0, places=4)
 
 
 class PortfolioCfExportTests(unittest.TestCase):

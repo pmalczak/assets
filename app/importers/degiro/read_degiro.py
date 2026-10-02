@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +16,7 @@ from importers.degiro.data_model import (
     DegiroPortfolioFile,
     DegiroTransactionsFile,
 )
+from importers.period_coverage import format_period_gap_warnings
 from importers.statement_download_date import download_date_of
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -48,6 +49,19 @@ def parse_degiro_date(value) -> date:
     if pd.isna(ts):
         raise ValueError(f"Niepoprawna data DEGIRO: {value!r}")
     return ts.date()
+
+
+def is_blank_degiro_date(value) -> bool:
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str) and not value.strip():
+        return True
+    return False
 
 
 def period_from_account_file(path: Path) -> tuple[date, date]:
@@ -198,18 +212,7 @@ def _one_portfolio_snapshot_per_end(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def period_gap_warnings(periods: list[tuple[date, date]], label: str) -> list[str]:
-    if len(periods) <= 1:
-        return []
-    ordered = sorted(periods)
-    warnings = []
-    for prev, nxt in zip(ordered, ordered[1:]):
-        gap_start = prev[1] + timedelta(days=1)
-        gap_end = nxt[0] - timedelta(days=1)
-        if gap_start <= gap_end:
-            warnings.append(
-                f"Luka w okresach DEGIRO {label}: {gap_start.isoformat()} … {gap_end.isoformat()}"
-            )
-    return warnings
+    return format_period_gap_warnings(periods, label=f"DEGIRO {label}")
 
 
 def _read_degiro_portfolio(source_file: Path = None) -> pd.DataFrame:
@@ -294,11 +297,12 @@ def _normalize_transactions(df: pd.DataFrame) -> pd.DataFrame:
     for col in DegiroTransactionsFile.expected_columns():
         if col not in out.columns:
             out[col] = ""
-    return out[list(DegiroTransactionsFile.expected_columns() - {
+    out = out[list(DegiroTransactionsFile.expected_columns() - {
         DegiroTransactionsFile.FILE_DATE,
         DegiroTransactionsFile.PERIOD_START,
         DegiroTransactionsFile.PERIOD_END,
     })]
+    return _drop_blank_date_rows(out, DegiroTransactionsFile.DATE)
 
 
 def _normalize_account(df: pd.DataFrame) -> pd.DataFrame:
@@ -309,19 +313,30 @@ def _normalize_account(df: pd.DataFrame) -> pd.DataFrame:
     for col in DegiroAccountFile.expected_columns():
         if col not in out.columns:
             out[col] = ""
-    return out[list(DegiroAccountFile.expected_columns() - {
+    out = out[list(DegiroAccountFile.expected_columns() - {
         DegiroAccountFile.FILE_DATE,
         DegiroAccountFile.PERIOD_START,
         DegiroAccountFile.PERIOD_END,
     })]
+    return _drop_blank_date_rows(out, DegiroAccountFile.BOOKING_DATE)
 
 
 def _named_periods(source_dir: Path, prefix: str) -> list[tuple[date, date]]:
     return [extract_period(path, prefix) for path in sorted(source_dir.rglob(f"{prefix}_*.csv"))]
 
 
+def _drop_blank_date_rows(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    if df.empty or date_col not in df.columns:
+        return df
+    keep = ~df[date_col].map(is_blank_degiro_date)
+    return df.loc[keep].reset_index(drop=True)
+
+
 def _sort_by_date(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
-    out = df.copy()
+    out = _drop_blank_date_rows(df, date_col)
+    if out.empty:
+        return out
+    out = out.copy()
     out["_sort"] = out[date_col].map(parse_degiro_date)
     out = out.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
     return out

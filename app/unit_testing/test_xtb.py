@@ -379,6 +379,30 @@ class ReadXtbTests(unittest.TestCase):
         )
         self.assertEqual(len(warnings), 1)
         self.assertIn("2026-04-01", warnings[0])
+        self.assertIn("XTB cash", warnings[0])
+
+    def test_period_gap_warning_merges_nested_and_touching(self):
+        self.assertEqual(
+            period_gap_warnings(
+                [
+                    (date(2026, 1, 1), date(2026, 6, 30)),
+                    (date(2026, 2, 1), date(2026, 2, 28)),
+                    (date(2026, 7, 1), date(2026, 8, 20)),
+                ],
+                "cash",
+            ),
+            [],
+        )
+        self.assertEqual(
+            period_gap_warnings(
+                [
+                    (date(2026, 1, 1), date(2026, 3, 31)),
+                    (date(2026, 4, 1), date(2026, 8, 20)),
+                ],
+                "cash",
+            ),
+            [],
+        )
 
 
 class EvaluateXtbTests(unittest.TestCase):

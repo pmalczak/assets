@@ -94,6 +94,12 @@ class BrokerTickerCashflowTests(unittest.TestCase):
         self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.AMOUNT]), -50.0)
         self.assertAlmostEqual(float(df.iloc[1][CashFlowEvent.AMOUNT]), 24.0)
         self.assertAlmostEqual(float(df.iloc[2][CashFlowEvent.AMOUNT]), 1.5)
+        self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.QUANTITY]), 10.0)
+        self.assertAlmostEqual(float(df.iloc[0][CashFlowEvent.UNIT_PRICE]), 5.0)
+        self.assertAlmostEqual(float(df.iloc[1][CashFlowEvent.QUANTITY]), 4.0)
+        self.assertAlmostEqual(float(df.iloc[1][CashFlowEvent.UNIT_PRICE]), 6.0)
+        self.assertTrue(pd.isna(df.iloc[2][CashFlowEvent.QUANTITY]))
+        self.assertTrue(pd.isna(df.iloc[2][CashFlowEvent.UNIT_PRICE]))
 
     def test_robo_management_fee_goes_to_synthetic_ticker(self):
         trading = pd.DataFrame(

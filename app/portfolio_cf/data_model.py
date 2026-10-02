@@ -10,6 +10,8 @@ class InstrumentCashFlowCls(GenericStructureClass):
     DATE = "date"
     CATEGORY = "category"
     AMOUNT = "amount"
+    QUANTITY = "quantity"
+    UNIT_PRICE = "unit_price"
     CURRENCY = "currency"
     AMOUNT_PLN = "amount_pln"
     FX_RATE = "fx_rate"
@@ -26,6 +28,8 @@ class InstrumentCashFlowCls(GenericStructureClass):
         DATE,
         CATEGORY,
         AMOUNT,
+        QUANTITY,
+        UNIT_PRICE,
         CURRENCY,
         AMOUNT_PLN,
         FX_RATE,

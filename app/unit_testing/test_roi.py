@@ -12,12 +12,12 @@ from roi.data_model import CashFlowEvent
 
 def _kiemliczow_1_events() -> pd.DataFrame:
     rows = [
-        ("kiemliczow_1", "1997-06-02", -48600.0, CAPEX, "manual", "zakup mieszkania", "", "", ""),
-        ("kiemliczow_1", "2000-01-03", 156600.0, DIVESTMENT, "manual", "sprzedaż", "", "", ""),
-        ("kiemliczow_1", "2000-04-04", -3700.0, OPEX, "manual", "opłata skarbowa", "", "", ""),
-        ("kiemliczow_1", "2000-04-04", -695.5, OPEX, "manual", "prowizja", "", "", ""),
-        ("kiemliczow_1", "2001-08-20", -572.5, OPEX, "manual", "hipoteka - opłata sądowa", "", "", ""),
-        ("kiemliczow_1", "2001-10-05", -145.0, OPEX, "manual", "hipoteka - opłata sądowa", "", "", ""),
+        ("kiemliczow_1", "1997-06-02", -48600.0, None, None, CAPEX, "manual", "zakup mieszkania", "", "", ""),
+        ("kiemliczow_1", "2000-01-03", 156600.0, None, None, DIVESTMENT, "manual", "sprzedaż", "", "", ""),
+        ("kiemliczow_1", "2000-04-04", -3700.0, None, None, OPEX, "manual", "opłata skarbowa", "", "", ""),
+        ("kiemliczow_1", "2000-04-04", -695.5, None, None, OPEX, "manual", "prowizja", "", "", ""),
+        ("kiemliczow_1", "2001-08-20", -572.5, None, None, OPEX, "manual", "hipoteka - opłata sądowa", "", "", ""),
+        ("kiemliczow_1", "2001-10-05", -145.0, None, None, OPEX, "manual", "hipoteka - opłata sądowa", "", "", ""),
     ]
     df = pd.DataFrame(rows, columns=list(CashFlowEvent.COLUMN_ORDER))
     CashFlowEvent.check_structure(df)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 import re
 import zipfile
@@ -10,6 +10,7 @@ import zipfile
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from importers.period_coverage import format_period_gap_warnings
 from importers.xtb.data_model import (
     CASH_KIND,
     CLOSED_KIND,
@@ -179,18 +180,7 @@ def latest_open_as_of(open_df: pd.DataFrame, valuation_date: date) -> pd.DataFra
 
 
 def period_gap_warnings(periods: list[tuple[date, date]], label: str) -> list[str]:
-    if len(periods) <= 1:
-        return []
-    ordered = sorted(periods)
-    warnings = []
-    for prev, nxt in zip(ordered, ordered[1:]):
-        gap_start = prev[1] + timedelta(days=1)
-        gap_end = nxt[0] - timedelta(days=1)
-        if gap_start <= gap_end:
-            warnings.append(
-                f"Luka w okresach XTB {label}: {gap_start.isoformat()} … {gap_end.isoformat()}"
-            )
-    return warnings
+    return format_period_gap_warnings(periods, label=f"XTB {label}")
 
 
 def xtb_open_position_rows(open_positions: pd.DataFrame) -> pd.DataFrame:

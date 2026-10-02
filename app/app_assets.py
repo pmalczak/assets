@@ -62,6 +62,35 @@ def _clear_dashboard_cache() -> None:
     _load_transactions_cached.clear()
 
 
+def _invalidate_broker_sources_after_import(results) -> None:
+    """Po przeniesieniu wyciągów — przebuduj 01 source + portfolio_cf na dziś."""
+    from datetime import date
+
+    from data_step.data_step import DATA_STEP
+    from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
+    from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
+    from maintenance.move_downloaded_results import KIND_DEGIRO, KIND_XTB
+    from portfolio_cf.products import invalidate_portfolio_cf
+
+    kinds = {getattr(r, "kind", "") for r in results}
+    if KIND_DEGIRO in kinds:
+        for suffix in ("portfolio", "transactions", "account"):
+            try:
+                DATA_STEP.invalidate(f"01 source/{DEFAULT_DEGIRO_ASSET_ID}-{suffix}.parquet")
+            except Exception:
+                pass
+    if KIND_XTB in kinds:
+        for suffix in ("open", "closed", "cash"):
+            try:
+                DATA_STEP.invalidate(f"01 source/{DEFAULT_XTB_ASSET_ID}-{suffix}.parquet")
+            except Exception:
+                pass
+    try:
+        invalidate_portfolio_cf(date.today())
+    except Exception:
+        pass
+
+
 def _run_snapshot_recalculation(*, full_recalculation: bool) -> list[SnapshotResult]:
     return run_snapshot_job_isolated(
         weekly=full_recalculation,
@@ -107,6 +136,7 @@ def render_import_wyciagow() -> None:
                 with st.spinner("Przeliczanie snapshotu na dziś..."):
                     snapshot_results = _run_snapshot_recalculation(full_recalculation=False)
                 st.session_state["snapshot_recalculation_results"] = snapshot_results
+                _invalidate_broker_sources_after_import(results)
                 _clear_dashboard_cache()
         except Exception as exc:
             st.error("Nie udało się przenieść plików.")

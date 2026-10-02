@@ -147,8 +147,19 @@ def resolve_terminal_pln_by_instrument(
             key = f"{line.broker_id}:{line.code}"
         else:
             continue
-        fx = _implied_fx_pln(snapshot if snapshot is not None else pd.DataFrame(), line.broker_id, line.currency)
-        terminals[key] = float(line.value) * float(fx)
+        currency = str(line.currency or "").strip() or "PLN"
+        # Terminal z wyciągu jest w walucie pozycji — zawsze NBP/to_pln,
+        # nie polegaj wyłącznie na implied FX ze snapshota (puste/stare → FX=1).
+        try:
+            converted = to_pln(float(line.value), currency, valuation_date)
+            terminals[key] = converted.amount_pln
+        except Exception:
+            fx = _implied_fx_pln(
+                snapshot if snapshot is not None else pd.DataFrame(),
+                line.broker_id,
+                currency,
+            )
+            terminals[key] = float(line.value) * float(fx)
         if line.evaluation_date:
             eval_dates[key] = str(line.evaluation_date)
 
@@ -270,6 +281,8 @@ def _ledger_group_to_pln_events(instrument_id: str, group: pd.DataFrame) -> pd.D
                 CashFlowEvent.ASSET_ID: instrument_id,
                 CashFlowEvent.DATE: row[InstrumentCashFlow.DATE],
                 CashFlowEvent.AMOUNT: float(row[InstrumentCashFlow.AMOUNT_PLN]),
+                CashFlowEvent.QUANTITY: row.get(InstrumentCashFlow.QUANTITY),
+                CashFlowEvent.UNIT_PRICE: row.get(InstrumentCashFlow.UNIT_PRICE),
                 CashFlowEvent.CATEGORY: str(row[InstrumentCashFlow.CATEGORY]),
                 CashFlowEvent.SOURCE: str(row.get(InstrumentCashFlow.SOURCE) or ""),
                 CashFlowEvent.DESCRIPTION: str(row.get(InstrumentCashFlow.DESCRIPTION) or ""),
@@ -318,6 +331,8 @@ def _ledger_group_to_local_pln_events(
                 CashFlowEvent.ASSET_ID: instrument_id,
                 CashFlowEvent.DATE: row[InstrumentCashFlow.DATE],
                 CashFlowEvent.AMOUNT: local,
+                CashFlowEvent.QUANTITY: row.get(InstrumentCashFlow.QUANTITY),
+                CashFlowEvent.UNIT_PRICE: row.get(InstrumentCashFlow.UNIT_PRICE),
                 CashFlowEvent.CATEGORY: str(row[InstrumentCashFlow.CATEGORY]),
                 CashFlowEvent.SOURCE: str(row.get(InstrumentCashFlow.SOURCE) or ""),
                 CashFlowEvent.DESCRIPTION: str(row.get(InstrumentCashFlow.DESCRIPTION) or ""),
