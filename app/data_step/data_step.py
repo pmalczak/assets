@@ -91,6 +91,8 @@ class DataStep(DataStepPrimitives):  # interface class
             self._add_dependent(product, input_data_set)
         prev = self._dependencies_stack[-1]
         self._dependencies_stack.append(product)
+        error: BaseException | None = None
+        result = None
         try:
             self._add_arguments_to_dependencies(product, **kwargs)
             result = self._obtain_from_cache_or_collect(data_collector, product,
@@ -100,14 +102,19 @@ class DataStep(DataStepPrimitives):  # interface class
                 self.metadata.delete(product)
             except KeyError:
                 pass
-            raise e
+            error = e
         finally:
-            last_element = self._pop_dependency_frame(product)
+            # Zawsze wróć do prev — także po osieroconych ramkach zagnieżdżonych obtain.
+            unwound = self._unwind_dependency_to(prev)
+
+        if error is not None:
+            raise error
+
         self._add_dependent(prev, product)
-        if last_element != product:
+        if unwound != [product]:
             raise RuntimeError(
                 f"DATA_STEP stack mismatch while finishing obtain({product!r}): "
-                f"popped {last_element!r}, remaining stack={self._dependencies_stack!r}"
+                f"unwound {unwound!r}, remaining stack={self._dependencies_stack!r}"
             )
         return result
 

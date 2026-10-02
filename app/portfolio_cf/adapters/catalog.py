@@ -29,9 +29,10 @@ def adapt_catalog_ledger(
 ) -> tuple[pd.DataFrame, list[InstrumentCoverage], list[str]]:
     warnings: list[str] = []
     if events_by_asset is None:
-        from roi.compute_roi import compute_portfolio_roi
+        # Tylko CF katalogu — bez load_roi_summary (unikaj zbędnego zagnieżdżenia obtain).
+        from roi.roi_products import load_catalog_events
 
-        _summary, events_by_asset = compute_portfolio_roi(valuation_date)
+        events_by_asset = load_catalog_events(valuation_date)
 
     currencies = _catalog_currencies_from_assets()
     currencies.update(_FALLBACK_CURRENCY)

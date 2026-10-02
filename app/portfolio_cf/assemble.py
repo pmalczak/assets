@@ -101,6 +101,11 @@ def build_instrument_ledger(
 
     try:
         sold_map = build_instrument_sold_map(valuation_date)
+    except RuntimeError as exc:
+        if "DATA_STEP stack mismatch" in str(exc):
+            raise
+        warnings.append(f"build_instrument_sold_map: {exc}")
+        sold_map = {}
     except Exception as exc:
         warnings.append(f"build_instrument_sold_map: {exc}")
         sold_map = {}

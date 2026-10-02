@@ -70,6 +70,23 @@ class DataStepPrimitives:
             return self._dependencies_stack.pop()
         return self._dependencies_stack[-1]
 
+    def _unwind_dependency_to(self, prev: str) -> list[str]:
+        """Zdejmij ramki aż wierzchołek == ``prev`` (rodzic tego obtain).
+
+        Czyści też osierocone ramki zagnieżdżonych obtain (np. po połkniętym
+        mismatchu), żeby rodzic mógł dokończyć ze stosem w znanym stanie.
+        Nie zdejmuje sentinela ``top``. Zwraca zdjęte ramki od najstarszej.
+        """
+        self._ensure_dependency_stack()
+        popped: list[str] = []
+        while self._dependencies_stack[-1] != prev:
+            frame = self._dependencies_stack[-1]
+            if frame == "top":
+                break
+            popped.append(self._dependencies_stack.pop())
+        popped.reverse()
+        return popped
+
     def read_featured_file(self, data_file: Path) -> pd.DataFrame:
         self.is_initialised()
         assert isinstance(data_file, Path)

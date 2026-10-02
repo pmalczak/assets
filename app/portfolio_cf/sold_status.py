@@ -138,9 +138,9 @@ def _summary_sold_map(summary: pd.DataFrame) -> dict[str, bool]:
 
 
 def _load_catalog_sold(valuation_date: date) -> dict[str, bool]:
-    from roi.compute_roi import compute_portfolio_roi
+    from roi.roi_products import load_roi_summary
 
-    summary, _events = compute_portfolio_roi(valuation_date)
+    summary = load_roi_summary(valuation_date)
     return _summary_sold_map(summary)
 
 

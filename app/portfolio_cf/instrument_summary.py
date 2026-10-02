@@ -195,6 +195,10 @@ def _fill_terminals_from_venue_roi(
             break
         try:
             summary, *_rest = loader(valuation_date)
+        except RuntimeError as exc:
+            if "DATA_STEP stack mismatch" in str(exc):
+                raise
+            continue
         except Exception:
             continue
         if summary is None or summary.empty:

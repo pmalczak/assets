@@ -269,6 +269,42 @@ class DataStepIntegrationTests(unittest.TestCase):
         self.assertEqual(result.get_status(), REFRESHED)
         self.assertEqual(self.step._dependencies_stack, ["top"])
 
+    def test_obtain_unwinds_orphan_nested_frames_before_mismatch(self):
+        """Osierocona ramka nad produktem nie może zablokować rodzica na stałe."""
+        self.step.init_steps(root=self.start_file)
+
+        def collect_catalog(**kwargs):
+            # Symuluj połknięty nested obtain(summary): ramka zostaje na stosie.
+            self.step._dependencies_stack.append("summary.parquet")
+            return pd.DataFrame({"v": [1]})
+
+        def collect_ledger(**kwargs):
+            with self.assertRaises(RuntimeError) as ctx:
+                self.step.obtain("catalog.parquet", collect_catalog)
+            self.assertIn("stack mismatch", str(ctx.exception))
+            self.assertIn("unwound", str(ctx.exception))
+            # Po błędzie katalogu stos wraca do ledgera — bez osieroconego summary.
+            self.assertEqual(
+                self.step._dependencies_stack, ["top", "ledger.parquet"]
+            )
+            return pd.DataFrame({"v": [2]})
+
+        result = self.step.obtain("ledger.parquet", collect_ledger)
+        self.assertEqual(result.get_status(), REFRESHED)
+        self.assertEqual(self.step._dependencies_stack, ["top"])
+
+    def test_unwind_dependency_to_stops_at_prev(self):
+        self.step.init_steps(root=self.start_file)
+        self.step._dependencies_stack = [
+            "top",
+            "parent.parquet",
+            "child.parquet",
+            "orphan.parquet",
+        ]
+        unwound = self.step._unwind_dependency_to("parent.parquet")
+        self.assertEqual(unwound, ["child.parquet", "orphan.parquet"])
+        self.assertEqual(self.step._dependencies_stack, ["top", "parent.parquet"])
+
     def test_obtain_collects_and_caches_on_second_call(self):
         self.step.init_steps(root=self.start_file)
         calls = {"n": 0}
