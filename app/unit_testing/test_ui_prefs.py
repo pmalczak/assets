@@ -12,6 +12,7 @@ from app_proc.ui_prefs import (
     SOLD_FILTER_SOLD,
     TAB_ASSETS,
     TAB_LABELS,
+    TAB_MAINTENANCE,
     TAB_PORTFOLIOS,
     filter_by_sold,
     load_last_tab,
@@ -103,6 +104,23 @@ class UiPrefsTests(unittest.TestCase):
             root = Path(tmp)
             save_last_tab("Waliduj", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")
+
+    def test_maintenance_tab_is_after_validate(self):
+        self.assertIn(TAB_MAINTENANCE, TAB_LABELS)
+        self.assertEqual(
+            TAB_LABELS[TAB_LABELS.index("Waliduj") + 1],
+            TAB_MAINTENANCE,
+        )
+
+    def test_save_and_load_maintenance_tab_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab(TAB_MAINTENANCE, prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_MAINTENANCE)
+            self.assertEqual(
+                (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
+                "maintenance",
+            )
 
 
 class SoldFilterPrefsTests(unittest.TestCase):

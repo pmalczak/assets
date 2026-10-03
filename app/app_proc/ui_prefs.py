@@ -7,6 +7,7 @@ import pandas as pd
 
 TAB_ASSETS = "Aktywa"
 TAB_PORTFOLIOS = "Portfele"
+TAB_MAINTENANCE = "Maintenance"
 
 TAB_LABELS = [
     TAB_ASSETS,
@@ -17,6 +18,7 @@ TAB_LABELS = [
     "Import wyciągów",
     "Wyszukiwanie transakcji",
     "Waliduj",
+    TAB_MAINTENANCE,
 ]
 DEFAULT_TAB = TAB_ASSETS
 TABS_STATE_KEY = "app_assets_tab"
@@ -38,6 +40,7 @@ SLUG_TO_LABEL = {
     "global-momentum": "Global momentum",
     "import": "Import wyciągów",
     "waliduj": "Waliduj",
+    "maintenance": TAB_MAINTENANCE,
 }
 LABEL_TO_SLUG = {}
 for _slug, _label in SLUG_TO_LABEL.items():

@@ -23,15 +23,15 @@ class PortfolioCfProductsTests(unittest.TestCase):
         day = date(2026, 9, 28)
         self.assertEqual(
             ledger_resource(day),
-            "11 portfolio_cf/2026-09-28/s5/_ledger.parquet",
+            "11 portfolio_cf/2026-09-28/s6/_ledger.parquet",
         )
         self.assertEqual(
             coverage_resource(day),
-            "11 portfolio_cf/2026-09-28/s5/_coverage.parquet",
+            "11 portfolio_cf/2026-09-28/s6/_coverage.parquet",
         )
         self.assertEqual(
             xirr_resource(day),
-            "11 portfolio_cf/2026-09-28/s5/_xirr.parquet",
+            "11 portfolio_cf/2026-09-28/s6/_xirr.parquet",
         )
 
     @patch("portfolio_cf.products.DATA_STEP")

@@ -14,11 +14,11 @@ from data_step.data_step_frame import DataStepFrame
 from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
+from app_proc.portfolio_cf_step import PORTFOLIO_CF_SCHEMA, portfolio_cf_prefix
 from portfolio_cf.xirr import compute_named_portfolio_metrics_map
 
-PORTFOLIO_CF_STEP = "11 portfolio_cf"
-# Bump przy zmianie semantyki ledgera / XIRR (FX attribution) — stare parquet nieaktualne.
-_PORTFOLIO_CF_SCHEMA = 5
+# Re-export — stała kanoniczna w ``app_proc.portfolio_cf_step``.
+_PORTFOLIO_CF_SCHEMA = PORTFOLIO_CF_SCHEMA
 
 _XIRR_COLUMNS = (
     "portfolio",
@@ -33,31 +33,19 @@ _XIRR_COLUMNS = (
 
 
 def ledger_resource(valuation_date: date) -> str:
-    return (
-        f"{PORTFOLIO_CF_STEP}/{valuation_date:%Y-%m-%d}/"
-        f"s{_PORTFOLIO_CF_SCHEMA}/_ledger.parquet"
-    )
+    return f"{portfolio_cf_prefix(valuation_date)}/_ledger.parquet"
 
 
 def coverage_resource(valuation_date: date) -> str:
-    return (
-        f"{PORTFOLIO_CF_STEP}/{valuation_date:%Y-%m-%d}/"
-        f"s{_PORTFOLIO_CF_SCHEMA}/_coverage.parquet"
-    )
+    return f"{portfolio_cf_prefix(valuation_date)}/_coverage.parquet"
 
 
 def warnings_resource(valuation_date: date) -> str:
-    return (
-        f"{PORTFOLIO_CF_STEP}/{valuation_date:%Y-%m-%d}/"
-        f"s{_PORTFOLIO_CF_SCHEMA}/_warnings.parquet"
-    )
+    return f"{portfolio_cf_prefix(valuation_date)}/_warnings.parquet"
 
 
 def xirr_resource(valuation_date: date) -> str:
-    return (
-        f"{PORTFOLIO_CF_STEP}/{valuation_date:%Y-%m-%d}/"
-        f"s{_PORTFOLIO_CF_SCHEMA}/_xirr.parquet"
-    )
+    return f"{portfolio_cf_prefix(valuation_date)}/_xirr.parquet"
 
 
 _ASSEMBLY_BUILD: dict[str, AssemblyResult] = {}

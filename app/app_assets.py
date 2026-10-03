@@ -18,6 +18,7 @@ import streamlit as st
 from app_proc.ui_prefs import (
     TAB_ASSETS,
     TAB_LABELS,
+    TAB_MAINTENANCE,
     TAB_PORTFOLIOS,
     TABS_STATE_KEY,
     load_last_tab,
@@ -36,6 +37,7 @@ from app_streamlit.render_portfolio_history import render_portfolio_history
 from app_streamlit.render_portfolios import render_portfolios
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
+from app_streamlit.render_maintenance import render_maintenance
 from app_streamlit.render_validate import render_validate
 from app_streamlit.safe_download import opt_in_download_button
 
@@ -276,6 +278,8 @@ def main():
                 render_transaction_search()
             elif label == "Waliduj":
                 render_validate()
+            elif label == TAB_MAINTENANCE:
+                render_maintenance()
 
 if __name__ == "__main__":
     # infer_string + pyarrow na CPython 3.14 bywa przyczyną segfaultu Streamlit.

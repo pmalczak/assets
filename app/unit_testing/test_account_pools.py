@@ -229,7 +229,7 @@ class RoiProductPathTests(unittest.TestCase):
 
         self.assertEqual(
             roi_summary_resource(date(2026, 7, 17)),
-            "10 roi/2026-07-17/_roi_summary.parquet",
+            "11 portfolio_cf/2026-07-17/s6/_roi_summary.parquet",
         )
 
 
