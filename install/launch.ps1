@@ -17,8 +17,8 @@ if ($PSScriptRoot) {
 
 function Test-ManagedInstall {
     <#
-    Instalacja ze skrótu Pulpit / %LOCALAPPDATA%\assets — wolno nadpisać lokalne zmiany.
-    Klon developerski (inny katalog) — tylko ostrożny pull --ff-only.
+    Instalacja ze skrotu Pulpit / %LOCALAPPDATA%\assets - wolno nadpisac lokalne zmiany.
+    Klon developerski (inny katalog) - tylko ostrozny pull --ff-only.
     #>
     try {
         $a = (Resolve-Path -LiteralPath $InstallDir).Path.TrimEnd('\')
@@ -100,14 +100,14 @@ function Update-FromGitHub {
             Write-WarnStep "Aktualizacja instalacji (fetch/checkout main) nie powiodla sie. Startuje lokalna kopia."
             return
         }
-        Write-Ok "git checkout -f main ← origin/main (instalacja zarzadzana)"
+        Write-Ok "git checkout -f main <- origin/main (instalacja zarzadzana)"
     }
     else {
         & git -C $InstallDir pull --ff-only
         $pullCode = $LASTEXITCODE
         $ErrorActionPreference = $prev
         if ($pullCode -ne 0) {
-            Write-WarnStep "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia — w klonie developerskim bez reset --hard."
+            Write-WarnStep "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia - w klonie developerskim bez reset --hard."
             return
         }
         Write-Ok "git pull --ff-only (klon developerski)"
