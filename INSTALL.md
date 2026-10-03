@@ -60,8 +60,9 @@ Instalator:
 
 Kliknij **Assets** na Pulpicie (Linux: ewentualnie „Allow Launch” / zaufaj plikowi `.desktop`). Z terminala: `bash ~/.local/share/assets/install/launch.sh`.
 
-- **Jest sieć:** `git pull --ff-only`, potem `uv sync`, potem Streamlit.
-- **Brak sieci albo pull się nie uda** (np. lokalne zmiany, brak fast-forward): komunikat i start **lokalnej kopii** — bez `git reset --hard`.
+- **Jest sieć — instalacja zarządzana** (`%LOCALAPPDATA%\assets` / `~/.local/share/assets`, skrót Pulpit): `git fetch` + `checkout -f -B main origin/main`, potem `uv sync`, potem Streamlit. Lokalne zmiany w plikach śledzonych **nie blokują** aktualizacji (`data_steps/` z gitignore zostaje).
+- **Jest sieć — klon developerski** (inny katalog, np. uruchomienie `install/launch.*` z repozytorium roboczego): tylko `git pull --ff-only` — przy konflikcie / brudnym drzewie start lokalnej kopii **bez** `reset --hard`.
+- **Brak sieci albo update się nie uda:** komunikat i start lokalnej kopii.
 - Konsola / terminal zostaje otwarty na czas działania Streamlit.
 
 ## Po pierwszym starcie

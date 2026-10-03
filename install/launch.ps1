@@ -5,12 +5,28 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-$InstallDir = Join-Path $env:LOCALAPPDATA "assets"
+$ManagedInstallDir = Join-Path $env:LOCALAPPDATA "assets"
+$InstallDir = $ManagedInstallDir
 
 if ($PSScriptRoot) {
     $fromScript = Split-Path -Parent $PSScriptRoot
     if (Test-Path -LiteralPath (Join-Path $fromScript ".git")) {
         $InstallDir = $fromScript
+    }
+}
+
+function Test-ManagedInstall {
+    <#
+    Instalacja ze skrótu Pulpit / %LOCALAPPDATA%\assets — wolno nadpisać lokalne zmiany.
+    Klon developerski (inny katalog) — tylko ostrożny pull --ff-only.
+    #>
+    try {
+        $a = (Resolve-Path -LiteralPath $InstallDir).Path.TrimEnd('\')
+        $b = (Resolve-Path -LiteralPath $ManagedInstallDir).Path.TrimEnd('\')
+        return ($a -ieq $b)
+    }
+    catch {
+        return $false
     }
 }
 
@@ -69,14 +85,33 @@ function Update-FromGitHub {
     Write-Step "Aktualizacja z GitHub"
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & git -C $InstallDir pull --ff-only
-    $pullCode = $LASTEXITCODE
-    $ErrorActionPreference = $prev
-    if ($pullCode -ne 0) {
-        Write-WarnStep "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia, bez reset --hard."
-        return
+    $managed = Test-ManagedInstall
+    if ($managed) {
+        # Instalacja użytkowa: lokalne edycje w %LOCALAPPDATA%\assets nie mogą blokować update.
+        & git -C $InstallDir fetch origin
+        $updateCode = $LASTEXITCODE
+        if ($updateCode -eq 0) {
+            # -f odrzuca lokalne zmiany w tracked files; data_steps (gitignore) zostaje.
+            & git -C $InstallDir checkout -f -B main origin/main
+            $updateCode = $LASTEXITCODE
+        }
+        $ErrorActionPreference = $prev
+        if ($updateCode -ne 0) {
+            Write-WarnStep "Aktualizacja instalacji (fetch/checkout main) nie powiodla sie. Startuje lokalna kopia."
+            return
+        }
+        Write-Ok "git checkout -f main ← origin/main (instalacja zarzadzana)"
     }
-    Write-Ok "git pull --ff-only"
+    else {
+        & git -C $InstallDir pull --ff-only
+        $pullCode = $LASTEXITCODE
+        $ErrorActionPreference = $prev
+        if ($pullCode -ne 0) {
+            Write-WarnStep "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia — w klonie developerskim bez reset --hard."
+            return
+        }
+        Write-Ok "git pull --ff-only (klon developerski)"
+    }
     Write-Step "uv sync"
     Push-Location $InstallDir
     try {

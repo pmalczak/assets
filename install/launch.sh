@@ -3,7 +3,8 @@
 
 set -eu
 
-INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/assets"
+MANAGED_INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/assets"
+INSTALL_DIR="$MANAGED_INSTALL_DIR"
 
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +18,16 @@ step() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
 ok() { printf '\033[32mOK  %s\033[0m\n' "$1"; }
 warn() { printf '\033[33mUWAGA  %s\033[0m\n' "$1"; }
 die() { printf '\n\033[31mBLAD: %s\033[0m\n' "$1" >&2; exit 1; }
+
+# Instalacja ze skrótu / XDG — wolno nadpisać lokalne zmiany.
+# Klon developerski (inny katalog) — tylko ostrożny pull --ff-only.
+is_managed_install() {
+  local a b
+  [[ -d "$MANAGED_INSTALL_DIR" ]] || return 1
+  a="$(cd "$INSTALL_DIR" && pwd -P)"
+  b="$(cd "$MANAGED_INSTALL_DIR" && pwd -P)"
+  [[ "$a" == "$b" ]]
+}
 
 refresh_path() {
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -42,11 +53,23 @@ update_from_github() {
     return
   fi
   step "Aktualizacja z GitHub"
-  if git -C "$INSTALL_DIR" pull --ff-only; then
-    ok "git pull --ff-only"
+  if is_managed_install; then
+    # Instalacja użytkowa: lokalne edycje nie mogą blokować update.
+    # -f odrzuca zmiany w tracked files; data_steps (gitignore) zostaje.
+    if git -C "$INSTALL_DIR" fetch origin \
+      && git -C "$INSTALL_DIR" checkout -f -B main origin/main; then
+      ok "git checkout -f main ← origin/main (instalacja zarzadzana)"
+    else
+      warn "Aktualizacja instalacji (fetch/checkout main) nie powiodla sie. Startuje lokalna kopia."
+      return
+    fi
   else
-    warn "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia, bez reset --hard."
-    return
+    if git -C "$INSTALL_DIR" pull --ff-only; then
+      ok "git pull --ff-only (klon developerski)"
+    else
+      warn "git pull --ff-only nie powiodl sie (konflikt albo lokalne zmiany). Startuje lokalna kopia — w klonie developerskim bez reset --hard."
+      return
+    fi
   fi
   step "uv sync"
   if (cd "$INSTALL_DIR" && uv sync); then
