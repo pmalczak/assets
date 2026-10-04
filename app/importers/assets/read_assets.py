@@ -15,6 +15,7 @@ from importers.assets.data_model import (
     LEGACY_PROPERTIES_SHEET,
     PropertyValuations,
     UNIT_PRICE_EVALUATION_SHEET,
+    UnitPriceEvaluation,
 )
 from importers.assets.pool_id import (
     MBANK_EUR,
@@ -51,6 +52,7 @@ __all__ = [
     "UNIT_PRICE_EVALUATION_SHEET",
     "ASSET_EVALUATION_SHEET",
     "read_inventory",
+    "read_unit_price_evaluation",
     "read_property_valuations",
 ]
 
@@ -102,6 +104,18 @@ def read_inventory() -> pd.DataFrame:
     if not inventory.empty:
         Inventory.check_structure(inventory, file=source_file)
     return inventory
+
+
+def read_unit_price_evaluation() -> pd.DataFrame:
+    """Historia cen kupna per instrument (`unit-price-evaluation`). Brak zakładki → pusta ramka."""
+    source_file = get_assets_file()
+    sheet = _first_existing_sheet(source_file, (UNIT_PRICE_EVALUATION_SHEET,))
+    if sheet is None:
+        return pd.DataFrame()
+    prices = pd.read_excel(source_file, sheet_name=sheet)
+    if not prices.empty:
+        UnitPriceEvaluation.check_structure(prices, file=source_file)
+    return prices
 
 
 def read_property_valuations() -> pd.DataFrame:

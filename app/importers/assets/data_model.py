@@ -204,7 +204,7 @@ class PurchaseRulesCls(GenericStructureClass):
 
 
 class UnitPriceEvaluationCls(GenericStructureClass):
-    """Arkusz cen jednostkowych instrumentow (mark-to-market ROI / snapshot)."""
+    """Arkusz historii cen kupna per instrument (nie MTM / nie terminal)."""
 
     DATE = 'Data'
     INSTRUMENT = InventoryCls.INSTRUMENT
