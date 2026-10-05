@@ -230,7 +230,7 @@ def load_portfolio_nav_history(
     portfolio_name: str,
     snapshots_dir: Path | None = None,
 ) -> pd.Series:
-    """Suma VALUE_PLN ze snapshotów `09 assets` dla jednego nazwanego portfela."""
+    """Suma VALUE_PLN ze snapshotów `snapshots/{date}` dla jednego nazwanego portfela."""
     from app_proc.snapshots import list_snapshot_files, load_snapshot, snapshots_directory
     from portfolios.composition import split_broker_nav_for_instrument_overrides
 

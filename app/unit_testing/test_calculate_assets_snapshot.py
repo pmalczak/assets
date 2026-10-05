@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from app_proc.calculate_assets import finalize_assets_snapshot, calculate_assets, assets_snapshot_resource
+from app_proc.assets_snapshot_step import ASSETS_SNAPSHOT_SCHEMA, assets_snapshot_resource
+from app_proc.calculate_assets import finalize_assets_snapshot, calculate_assets, assets_snapshot_resource as _reexport_resource
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_steps_root import get_data_steps_root
 from importers.assets.data_model import AssetsDef, AssetsFile
@@ -14,8 +15,9 @@ class AssetsSnapshotResourceTests(unittest.TestCase):
     def test_assets_snapshot_resource_format(self):
         self.assertEqual(
             assets_snapshot_resource(date(2026, 7, 7)),
-            f"{ASSETS_SNAPSHOT_STEP}/2026-07-07.parquet",
+            f"{ASSETS_SNAPSHOT_STEP}/2026-07-07/s{ASSETS_SNAPSHOT_SCHEMA}/_assets.parquet",
         )
+        self.assertEqual(_reexport_resource(date(2026, 7, 7)), assets_snapshot_resource(date(2026, 7, 7)))
 
 
 class FinalizeAssetsSnapshotTests(unittest.TestCase):

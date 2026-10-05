@@ -52,6 +52,9 @@ class AssetRWCls:
             MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY: self.CAT_OUTFLOW,
             RevolutOperationType.CARD_PAYMENT: self.CAT_OUTFLOW,
             MbankOperationType.WYPLATA: self.CAT_OUTFLOW,
+            # PPE / zaliczki US (tytuł z kodem formularza) — OPEX w inflow_outflow.
+            MbankOperationType.PRZELEW_PODATKOWY: self.CAT_OUTFLOW,
+            MbankOperationType.PRZELEW_PRZYSZLY_PODATKOWY: self.CAT_OUTFLOW,
         }
         self.inflow_mapping = {
             MbankOperationType.PRZELEW_WEWNETRZNY_PRZYCHODZACY: self.CAT_INFLOW,

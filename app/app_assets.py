@@ -28,12 +28,10 @@ from app_proc.ui_prefs import (
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
 from app_proc.data_root import get_cash_pool_root, get_online_data_root
 from app_proc.data_steps_root import init_app_data_step
-from app_streamlit.build_data import build_portfolio_history_from_snapshots, build_data
-from app_streamlit.render_diagnostics import render_diagnostics
+from app_streamlit.build_data import build_data
 from app_streamlit.render_fx import render_fx
 from app_streamlit.render_global_momentum import render_global_momentum
 from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
-from app_streamlit.render_portfolio_history import render_portfolio_history
 from app_streamlit.render_portfolios import render_portfolios
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
@@ -59,7 +57,7 @@ st.set_page_config(page_title="Assets Dashboard (snapshots)", layout="wide")
 
 
 def _clear_dashboard_cache() -> None:
-    build_portfolio_history_from_snapshots.clear()
+    build_data.clear()
     load_snapshot_for_date.clear()
     _load_transactions_cached.clear()
 
@@ -261,13 +259,6 @@ def main():
                 render_main_reports(latest, data["latest_snapshot"])
             elif label == TAB_PORTFOLIOS:
                 render_portfolios()
-            elif label == "Wykres portfela":
-                render_portfolio_history(
-                    data["history"],
-                    data["timeline_events"],
-                    latest,
-                )
-                render_diagnostics(data)
             elif label == "FX":
                 render_fx()
             elif label == "Global momentum":

@@ -12,7 +12,6 @@ TAB_MAINTENANCE = "Maintenance"
 TAB_LABELS = [
     TAB_ASSETS,
     TAB_PORTFOLIOS,
-    "Wykres portfela",
     "FX",
     "Global momentum",
     "Import wyciągów",
@@ -24,10 +23,11 @@ DEFAULT_TAB = TAB_ASSETS
 TABS_STATE_KEY = "app_assets_tab"
 
 SLUG_TO_LABEL = {
-    "wykres": "Wykres portfela",
     "portfele": TAB_PORTFOLIOS,
     "raporty": TAB_ASSETS,
     "szukaj": "Wyszukiwanie transakcji",
+    # Legacy slug po usunięciu zakładki Wykres portfela.
+    "wykres": TAB_ASSETS,
     # Legacy slugs po usunięciu zakładki ROI → Portfele (CF / XIRR).
     "roi": TAB_PORTFOLIOS,
     "roi-robo": TAB_PORTFOLIOS,

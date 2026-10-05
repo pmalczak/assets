@@ -71,7 +71,7 @@ class DataStep(DataStepPrimitives):  # interface class
         w grafie zależności.
 
         Args:
-            product: Token produktu w ``data_steps`` (np. ``ASSETS_SNAPSHOT_STEP/2026-01-01.parquet``).
+            product: Token produktu w ``data_steps`` (np. ``snapshots/2026-01-01/s1/_assets.parquet``).
             data_collector: Callable zwracający ``DataFrame`` (lub ``DataStepFrame``).
             input_data_set: Opcjonalny token źródła — preferuj ``obtain_dependent``.
             keep_cached: Trzymaj wynik w pamięci między wywołaniami.

@@ -121,6 +121,31 @@ class EmptySelectorDiagnosticsTests(unittest.TestCase):
         self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_INFLOW)
         self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), 200.0)
 
+    def test_mbank_tax_transfer_maps_as_outflow(self):
+        for op in (
+            MbankOperationType.PRZELEW_PODATKOWY,
+            MbankOperationType.PRZELEW_PRZYSZLY_PODATKOWY,
+        ):
+            with self.subTest(op=op):
+                df = pd.DataFrame(
+                    [
+                        {
+                            AssetRw.OPERATION_TYPE: op,
+                            AssetRw.AMOUNT: -187.0,
+                            AssetRw.TITLE: "N6111576290 PPE PODATEK Z TYT. NAJMU",
+                        }
+                    ]
+                )
+                remaining, selected = select_asset(
+                    df,
+                    pd.Series([True], index=df.index),
+                    AssetRw.inflow_outflow_mapping,
+                    asset_id="ppe",
+                )
+                self.assertTrue(remaining.empty)
+                self.assertEqual(selected.iloc[0][AssetRw.CAT], AssetRw.CAT_OUTFLOW)
+                self.assertEqual(float(selected.iloc[0][AssetRw.AMOUNT]), -187.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -129,6 +129,8 @@ class MbankOperationTypeClass:
     ZERWANIE_LOKATY_TERMINOWEJ = 'ZERWANIE LOKATY TERMINOWEJ'
     WYGASNIECIE_LOKATY_TERMINOWEJ = 'WYGAŚNIĘCIE LOKATY TERMINOWEJ'
     BLIK_ZAKUP_NFC = 'BLIK ZAKUP NFC'
+    PRZELEW_PODATKOWY = 'PRZELEW PODATKOWY'
+    PRZELEW_PRZYSZLY_PODATKOWY = 'PRZELEW PRZYSZŁY PODATKOWY'
 
     def __init__(self):
         self.values = {
@@ -140,6 +142,8 @@ class MbankOperationTypeClass:
             self.WYPLATA_W_BANKOMACIE,
             self.PRZELEW_WEWNETRZNY_PRZYCHODZACY,
             self.BLIK_ZAKUP_NFC,
+            self.PRZELEW_PODATKOWY,
+            self.PRZELEW_PRZYSZLY_PODATKOWY,
         }
         self.deposits_operations = {
             self.PRZELEW_WEWNETRZNY_WYCHODZACY,

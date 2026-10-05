@@ -33,6 +33,7 @@ _PROPERTY_INSTRUMENT_IDS = frozenset(
         "starogajowa",
         "horbaczewskiego",
         "rumiankowa",
+        "ppe",
     }
 )
 

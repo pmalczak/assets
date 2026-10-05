@@ -2,8 +2,8 @@
 """
 Usuwa nieaktywne wersje cache DATA_STEP:
 
-* katalogi ``sN`` starsze niż bieżący schemat (np. ``11 portfolio_cf/.../s3`` przy ``s6``);
-* całe przestarzałe produkty (np. dawne ``10 roi/`` po przeniesieniu do ``11 portfolio_cf``).
+* katalogi ``sN`` starsze niż bieżący schemat (np. ``snapshots/.../s0`` przy ``s1``);
+* całe przestarzałe produkty (np. ``10 roi/``, ``09 assets/``, ``11 portfolio_cf/``).
 
 Użycie:
   cd app
@@ -28,10 +28,13 @@ from data_step.metadata_class import Metadata
 
 _SCHEMA_DIR = re.compile(r"^s(\d+)$")
 
+_FLAT_SNAPSHOT = re.compile(r"^(\d{4}-\d{2}-\d{2})\.parquet$")
+
 ACTION_STALE = "do usunięcia"
 ACTION_DELETED = "usunięty"
 KIND_SCHEMA = "schema"
 KIND_OBSOLETE_PRODUCT = "obsolete_product"
+KIND_OBSOLETE_FLAT = "obsolete_flat"
 
 
 @dataclass(frozen=True)
@@ -46,13 +49,13 @@ class StaleSchemaDir:
 
 def active_schema_products() -> dict[str, int]:
     """Produkt DATA_STEP → numer aktywnego schematu ``sN`` w ścieżce."""
-    from app_proc.portfolio_cf_step import PORTFOLIO_CF_SCHEMA, PORTFOLIO_CF_STEP
+    from app_proc.snapshot_step import SNAPSHOT_SCHEMA, SNAPSHOTS_STEP
 
-    return {PORTFOLIO_CF_STEP: int(PORTFOLIO_CF_SCHEMA)}
+    return {SNAPSHOTS_STEP: int(SNAPSHOT_SCHEMA)}
 
 
 def obsolete_data_step_products() -> tuple[str, ...]:
-    from app_proc.portfolio_cf_step import OBSOLETE_DATA_STEP_PRODUCTS
+    from app_proc.snapshot_step import OBSOLETE_DATA_STEP_PRODUCTS
 
     return tuple(OBSOLETE_DATA_STEP_PRODUCTS)
 
@@ -87,6 +90,21 @@ def find_stale_schema_dirs(data_steps_root: Path) -> list[StaleSchemaDir]:
                         kind=KIND_SCHEMA,
                     )
                 )
+        for child in sorted(product_root.iterdir()):
+            if not child.is_file():
+                continue
+            if _FLAT_SNAPSHOT.fullmatch(child.name) is None:
+                continue
+            found.append(
+                StaleSchemaDir(
+                    path=child,
+                    product=product,
+                    schema=0,
+                    active_schema=active,
+                    action=ACTION_STALE,
+                    kind=KIND_OBSOLETE_FLAT,
+                )
+            )
     for product in obsolete_data_step_products():
         product_root = root / product
         if product_root.is_dir():
@@ -124,6 +142,8 @@ def prune_stale_data_steps(
     for item in stale:
         if item.path.is_dir():
             shutil.rmtree(item.path)
+        elif item.path.is_file():
+            item.path.unlink()
         if item.kind == KIND_SCHEMA:
             _remove_empty_parents(item.path.parent, stop_at=root / item.product)
         applied.append(
@@ -149,6 +169,8 @@ def format_stale_results(results: list[StaleSchemaDir], data_steps_root: Path) -
     for item in results:
         if item.kind == KIND_OBSOLETE_PRODUCT:
             header = f"{item.product}: (przestarzały produkt)"
+        elif item.kind == KIND_OBSOLETE_FLAT:
+            header = f"{item.product}: (przestarzały płaski parquet)"
         else:
             header = f"{item.product}: (aktywny s{item.active_schema})"
         if header != current_header:
@@ -160,6 +182,8 @@ def format_stale_results(results: list[StaleSchemaDir], data_steps_root: Path) -
             rel = item.path
         if item.kind == KIND_OBSOLETE_PRODUCT:
             lines.append(f"  {item.action}: {rel.as_posix()}  (całe drzewo)")
+        elif item.kind == KIND_OBSOLETE_FLAT:
+            lines.append(f"  {item.action}: {rel.as_posix()}  (dawny YYYY-MM-DD.parquet)")
         else:
             lines.append(
                 f"  {item.action}: {rel.as_posix()}  "

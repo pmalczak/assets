@@ -5,14 +5,13 @@ import unittest
 
 import pandas as pd
 
-from asset_reports import format_rap_table, rap1, rap2
+from asset_reports import format_rap_table, rap1
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from portfolios.assignment import (
     PORTFOLIO_CASH_POOL,
     PORTFOLIO_DLUGOTERMINOWY,
     PORTFOLIO_GM,
-    PORTFOLIO_PLYNNY,
     PORTFOLIO_REVOLUT_ROBO,
 )
 
@@ -93,72 +92,19 @@ class RapPortfolioIndexTests(unittest.TestCase):
         self.assertEqual(str(table.loc["Z RAZEM", "XIRR PLN"]).strip(), "9.0%")
         self.assertEqual(str(table.loc[PORTFOLIO_CASH_POOL, "XIRR PLN"]).strip(), "—")
 
-    def test_rap2_index_is_portfolio_and_type(self):
-        table = rap2(self.snapshot)
-        self.assertEqual(list(table.index.names), [AssetsDef.PORTFOLIO, AssetsDef.TYPE])
-        self.assertIn((PORTFOLIO_CASH_POOL, "cash_pool.ror"), table.index)
-        self.assertIn((PORTFOLIO_GM, "investment.udziały"), table.index)
-        self.assertIn(("Z RAZEM", "Z RAZEM"), table.index)
-
-    def test_rap2_formats_amounts_like_rap1(self):
-        snapshot = pd.concat(
-            [
-                self.snapshot,
-                pd.DataFrame(
-                    [
-                        _row(
-                            "obligacjeskarbowe",
-                            "investment.obligacje",
-                            "5 inwestycje finansowe",
-                            "PLN",
-                            1234,
-                            1234,
-                        )
-                    ]
-                ),
-            ],
-            ignore_index=True,
-        )
-        table = rap2(snapshot)
-        gm = table.loc[(PORTFOLIO_GM, "investment.udziały")]
-        self.assertEqual(str(gm["wartość_eur"]).strip(), "100")
-        self.assertEqual(str(gm["wartość_pln"]).strip(), "0")
-        self.assertEqual(str(gm["wartość-pln_eur"]).strip(), "400")
-        self.assertEqual(str(gm["wartość-pln_pln"]).strip(), "0")
-        bonds = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "investment.obligacje")]
-        self.assertEqual(str(bonds["wartość_pln"]).strip(), "1 234")
-        self.assertEqual(str(gm["RAZEM-PLN"]).strip(), "400")
-        self.assertEqual(str(bonds["RAZEM-PLN"]).strip(), "1 234")
-        cash = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "investment.cash")]
-        self.assertEqual(str(cash["wartość-pln_eur"]).strip(), "40")
-        self.assertEqual(str(cash["RAZEM-PLN"]).strip(), "40")
-        dlugo_total = table.loc[(PORTFOLIO_DLUGOTERMINOWY, "Z RAZEM")]
-        self.assertEqual(str(dlugo_total["wartość-pln_eur"]).strip(), "40")
-        self.assertEqual(str(dlugo_total["wartość-pln_pln"]).strip(), "1 234")
-        self.assertEqual(str(dlugo_total["RAZEM-PLN"]).strip(), "1 274")
-        cash_pool = table.loc[(PORTFOLIO_CASH_POOL, "Z RAZEM")]
-        self.assertEqual(str(cash_pool["wartość-pln_pln"]).strip(), "999")
-        self.assertEqual(str(cash_pool["RAZEM-PLN"]).strip(), "999")
-        self.assertEqual(list(table.columns)[-1], "RAZEM-PLN")
-        self.assertNotIn("nan", " ".join(str(v) for v in table.to_numpy().ravel()))
-        self.assertNotIn(".0", " ".join(str(v) for v in table.to_numpy().ravel()))
-
-    def test_rap2_headers_sit_above_values(self):
+    def test_rap_table_headers_sit_above_values(self):
         table = pd.DataFrame(
             {
-                "wartość-pln_eur": ["40"],
-                "RAZEM-PLN": ["2 273"],
+                "RAZEM": ["1 639"],
+                "udział": ["100.0%"],
             },
-            index=pd.MultiIndex.from_tuples(
-                [("0 PŁYNNY", "investment.cash")],
-                names=["portfel", "typ"],
-            ),
+            index=pd.Index(["Z RAZEM"], name="portfel"),
         )
         lines = format_rap_table(table).splitlines()
         header, _names, data = lines
         for col, value in (
-            ("wartość-pln_eur", "40"),
-            ("RAZEM-PLN", "2 273"),
+            ("RAZEM", "1 639"),
+            ("udział", "100.0%"),
         ):
             header_end = header.rfind(col) + len(col)
             value_end = data.rfind(value) + len(value)

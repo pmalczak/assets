@@ -29,7 +29,7 @@ class UiPrefsTests(unittest.TestCase):
         self.assertEqual(TAB_LABELS[TAB_LABELS.index(TAB_ASSETS) + 1], TAB_PORTFOLIOS)
         self.assertEqual(
             TAB_LABELS[TAB_LABELS.index(TAB_PORTFOLIOS) + 1],
-            "Wykres portfela",
+            "FX",
         )
 
     def test_portfele_slug_roundtrip(self):
@@ -41,6 +41,13 @@ class UiPrefsTests(unittest.TestCase):
                 (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
                 "portfele",
             )
+
+    def test_legacy_wykres_slug_goes_to_assets(self):
+        self.assertNotIn("Wykres portfela", TAB_LABELS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "last_tab.txt").write_text("wykres", encoding="utf-8")
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_ASSETS)
 
     def test_roi_tab_removed_legacy_slugs_go_to_portfolios(self):
         self.assertNotIn("ROI", TAB_LABELS)

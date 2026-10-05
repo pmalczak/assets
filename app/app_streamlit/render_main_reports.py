@@ -5,25 +5,25 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.assets_snapshot_step import assets_snapshot_resource
 from app_proc.recalculate_snapshots import run_snapshot_job_isolated
-from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files
+from app_proc.snapshots import snapshots_directory, load_snapshot, list_snapshot_files, snapshot_path
 from app_proc.ui_prefs import current_sold_filter
-from app_streamlit.build_data import build_portfolio_history_from_snapshots
+from app_streamlit.build_data import build_data
 from portfolio_cf.products import invalidate_portfolio_cf, load_portfolio_metrics_map
 from portfolios.composition import split_broker_nav_for_instrument_overrides
 
 
 @st.cache_data(show_spinner=False)
 def load_snapshot_for_date(snapshot_date: date) -> pd.DataFrame:
-    path = snapshots_directory() / f"{snapshot_date:%Y-%m-%d}.parquet"
+    path = snapshot_path(snapshot_date)
     if not path.is_file():
         return pd.DataFrame()
     return load_snapshot(path)
 
 
 def _clear_reports_related_cache() -> None:
-    build_portfolio_history_from_snapshots.clear()
+    build_data.clear()
     load_snapshot_for_date.clear()
     try:
         from app_streamlit.render_portfolios import _load_gm_positions, _load_portfolio_nav
@@ -56,14 +56,14 @@ def _run_generate_snapshot(today: date) -> None:
 
 
 def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
-    from asset_reports import format_rap_table, rap1, rap2
+    from asset_reports import format_rap_table, rap1
 
     st.subheader("Aktywa")
 
     today = date.today()
     snapshot_files = list_snapshot_files(snapshots_directory())
 
-    # Góra: kontrolki + RAP1 obok siebie; dół: RAP2 na pełnej szerokości od lewej.
+    # Kontrolki + RAP1 obok siebie.
     controls_col, rap1_col = st.columns([1, 1], vertical_alignment="top", gap="medium")
 
     with controls_col:
@@ -76,7 +76,7 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
         )
         st.caption(
             "Przebudowuje snapshot na dziś w osobnym procesie "
-            f"(`{ASSETS_SNAPSHOT_STEP}/{today:%Y-%m-%d}.parquet`). "
+            f"(`{assets_snapshot_resource(today)}`). "
             "Źródła (`01 source`) zostają z DATA_STEP, jeśli są aktualne."
         )
 
@@ -128,7 +128,7 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
 
     with controls_col:
         st.caption(
-            f"Źródło: `{ASSETS_SNAPSHOT_STEP}/{selected_date:%Y-%m-%d}.parquet`. "
+            f"Źródło: `{assets_snapshot_resource(selected_date)}`. "
             "Skład — zakładka Portfele. "
             "RAP 1: **XIRR** = lokalny (FX_T), **XIRR PLN** = spot (FX_t); "
             "filtr pozycji z sidebara. Semantyka: `Cursor_rules.md` → XIRR portfela a FX."
@@ -160,6 +160,3 @@ def render_main_reports(snapshot_date: date | None, assets: pd.DataFrame):
             ),
             language=None,
         )
-
-    st.markdown("**RAP 2**")
-    st.code(format_rap_table(rap2(assets)), language=None)

@@ -6,14 +6,24 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.snapshot_step import (
+    ASSETS_SNAPSHOT_FILE,
+    SNAPSHOT_SCHEMA,
+    SNAPSHOTS_STEP,
+    assets_snapshot_resource,
+)
 from app_proc.data_steps_root import get_data_steps_root
 
-SNAPSHOT_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})\.parquet$")
+SNAPSHOT_DATE_DIR_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})$")
+SNAPSHOT_SCHEMA_DIR = f"s{SNAPSHOT_SCHEMA}"
 
 
 def snapshots_directory() -> Path:
-    return get_data_steps_root() / ASSETS_SNAPSHOT_STEP
+    return get_data_steps_root() / SNAPSHOTS_STEP
+
+
+def snapshot_path(snapshot_date: date) -> Path:
+    return get_data_steps_root() / assets_snapshot_resource(snapshot_date)
 
 
 def list_snapshot_files(snapshots_dir: Path) -> list[tuple[date, Path]]:
@@ -21,8 +31,9 @@ def list_snapshot_files(snapshots_dir: Path) -> list[tuple[date, Path]]:
         return []
 
     result: list[tuple[date, Path]] = []
-    for path in snapshots_dir.glob("*.parquet"):
-        match = SNAPSHOT_DATE_PATTERN.match(path.name)
+    for path in snapshots_dir.glob(f"*/{SNAPSHOT_SCHEMA_DIR}/{ASSETS_SNAPSHOT_FILE}"):
+        date_dir = path.parent.parent.name
+        match = SNAPSHOT_DATE_DIR_PATTERN.fullmatch(date_dir)
         if not match:
             continue
         result.append((date.fromisoformat(match.group(1)), path))

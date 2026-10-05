@@ -24,7 +24,7 @@ WEDNESDAY = 2
 FRIDAY = 4
 SUNDAY = 6
 SNAPSHOT_WEEKDAYS = (TUESDAY, WEDNESDAY, FRIDAY, SUNDAY)
-PORTFOLIO_WINDOW_DAYS = 183  # ~6 months — wykres portfela i pełne przeliczenie snapshotów
+PORTFOLIO_WINDOW_DAYS = 183  # ~6 months — pełne przeliczenie snapshotów (wt/sr/pt/nd)
 
 SNAPSHOT_DISPLAY_COLUMNS = {
     "valuation_date": "Data wyceny",

@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.snapshots import snapshots_directory
+from app_proc.assets_snapshot_step import assets_snapshot_resource
+from app_proc.data_steps_root import get_data_steps_root
 from app_proc.ui_prefs import SOLD_FILTER_LABELS
 from data_step.data_step import DATA_STEP
 from data_step.data_step_frame import DataStepFrame
@@ -52,7 +53,7 @@ _ASSEMBLY_BUILD: dict[str, AssemblyResult] = {}
 
 
 def snapshot_parquet_path(valuation_date: date) -> Path:
-    return snapshots_directory() / f"{valuation_date:%Y-%m-%d}.parquet"
+    return get_data_steps_root() / assets_snapshot_resource(valuation_date)
 
 
 def load_assembly(valuation_date: date) -> AssemblyResult:

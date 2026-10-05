@@ -12,20 +12,10 @@ from portfolios.assignment import KNOWN_PORTFOLIOS, attach_portfolio_column
 
 _COL_SPACE = 15
 _TOTAL = "Z RAZEM"
-_RAZEM_PLN = "RAZEM-PLN"
 _RAZEM = "RAZEM"
 _SHARE = "udział"
 _XIRR = "XIRR"
 _XIRR_PLN = "XIRR PLN"
-_VALUE_PLN_EUR = f"{AssetsDef.VALUE_PLN}_eur".lower()
-_VALUE_PLN_PLN = f"{AssetsDef.VALUE_PLN}_pln".lower()
-
-
-def _format_amount_columns(frame: pd.DataFrame) -> pd.DataFrame:
-    out = frame.copy()
-    for col in out.columns:
-        out[col] = out[col].round().astype(int).map("{:,}".format).str.replace(",", " ")
-    return out
 
 
 def format_rap_table(frame: pd.DataFrame, *, col_space: int = _COL_SPACE) -> str:
@@ -77,38 +67,6 @@ def format_rap_table(frame: pd.DataFrame, *, col_space: int = _COL_SPACE) -> str
         line += "".join(value.rjust(width) for value, width in zip(values, col_widths))
         lines.append(line)
     return "\n".join(lines)
-
-
-def rap2(assets: pd.DataFrame) -> pd.DataFrame:
-    work = attach_portfolio_column(assets)
-    a1 = work[
-        [
-            AssetsDef.PORTFOLIO,
-            AssetsDef.TYPE,
-            AssetsDef.VALUE,
-            AssetsDef.VALUE_PLN,
-            AssetsDef.CURRENCY,
-        ]
-    ].copy()
-    for col in (AssetsDef.VALUE, AssetsDef.VALUE_PLN):
-        a1[col] = pd.to_numeric(a1[col], errors="coerce").fillna(0)
-
-    a_type_total = a1.copy()
-    a_type_total[AssetsDef.TYPE] = _TOTAL
-    a_all_portfolios = a1.copy()
-    a_all_portfolios[AssetsDef.PORTFOLIO] = _TOTAL
-    a_grand = a_type_total.copy()
-    a_grand[AssetsDef.PORTFOLIO] = _TOTAL
-
-    a1 = pd.concat([a1, a_type_total, a_all_portfolios, a_grand])
-    g1 = a1.groupby([AssetsDef.PORTFOLIO, AssetsDef.TYPE, AssetsDef.CURRENCY]).sum()
-    g1 = g1.unstack(AssetsDef.CURRENCY).fillna(0)
-    g1.columns = [f"{col}_{cur}".lower() for col, cur in g1.columns]
-    pln_eur = g1[_VALUE_PLN_EUR] if _VALUE_PLN_EUR in g1.columns else 0
-    pln_pln = g1[_VALUE_PLN_PLN] if _VALUE_PLN_PLN in g1.columns else 0
-    g1[_RAZEM_PLN] = pln_eur + pln_pln
-    g1 = _format_amount_columns(g1)
-    return g1
 
 
 def format_xirr_cell(value: float | None) -> str:

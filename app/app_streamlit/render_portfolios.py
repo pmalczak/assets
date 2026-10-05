@@ -177,7 +177,7 @@ def _snapshot_for_valuation(
     valuation_date: date,
     fallback: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Odczyt snapshota z dysku (jak `11 portfolio_cf`) — spójny terminal NAV."""
+    """Odczyt snapshota z dysku (jak ledger w `snapshots/{date}`) — spójny terminal NAV."""
     path = snapshot_parquet_path(valuation_date)
     if path.is_file():
         try:
@@ -217,10 +217,10 @@ def _render_portfolio_xirr(
     for msg in result.warnings:
         st.warning(msg)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     xirr_label = "XIRR (lokalny)"
     if result.incomplete:
-        xirr_label = "XIRR (lokalny, niekompletne CF)"
+        xirr_label = "XIRR (lokalny*)"
     c1.metric(
         xirr_label,
         f"{result.xirr:.2%}" if result.xirr is not None else "—",
@@ -229,20 +229,19 @@ def _render_portfolio_xirr(
         "XIRR (PLN)",
         f"{result.xirr_pln:.2%}" if result.xirr_pln is not None else "—",
     )
-    c3.metric("Terminal NAV", f"{result.terminal_pln:,.0f} PLN".replace(",", " "))
-    c4.metric(
+    c3.metric(
         "Udział FX",
         f"{result.fx_share:.1%}" if result.fx_share is not None else "—",
     )
-    r1, r2, r3 = st.columns(3)
-    r1.metric("ROI lokalny", f"{result.roi_local_pln:,.0f} PLN".replace(",", " "))
-    r2.metric("ROI FX", f"{result.roi_fx_pln:,.0f} PLN".replace(",", " "))
-    r3.metric("ROI PLN", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
+    c4.metric("ROI lokalny", f"{result.roi_local_pln:,.0f} PLN".replace(",", " "))
+    c5.metric("ROI FX", f"{result.roi_fx_pln:,.0f} PLN".replace(",", " "))
+    c6.metric("ROI PLN", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
+    incomplete_note = " * = niekompletne CF. " if result.incomplete else " "
     st.caption(
         "XIRR lokalny = rentowność aktywów (CF × FX_T na datę wyceny). "
         "XIRR PLN = wynik łącznie z FX (CF × FX_t z dnia transakcji). "
         "Udział FX = ROI_FX / ROI_PLN: >100% = strata lokalna skompensowana kursem; "
-        "<0% = FX zjadł zysk. "
+        f"<0% = FX zjadł zysk.{incomplete_note}"
         f"Filtr pozycji: **{current_sold_filter()}**. "
         "Szczegóły: `Cursor_rules.md` → XIRR portfela a FX."
     )

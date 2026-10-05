@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
+from app_proc.assets_snapshot_step import assets_snapshot_resource
 from app_proc.recalculate_snapshots import (
     PORTFOLIO_WINDOW_DAYS,
     SNAPSHOT_JOB_RESULT_PREFIX,
@@ -44,7 +44,7 @@ class RecalculateTodaySnapshotTests(unittest.TestCase):
         self.assertEqual(result.valuation_date, date.today())
         self.assertEqual(result.rows, 2)
         self.assertEqual(result.total_pln, 150)
-        self.assertEqual(result.resource, f"{ASSETS_SNAPSHOT_STEP}/{date.today():%Y-%m-%d}.parquet")
+        self.assertEqual(result.resource, assets_snapshot_resource(date.today()))
 
 
     @patch("app_proc.recalculate_snapshots.calculate_assets")
@@ -57,7 +57,7 @@ class RecalculateTodaySnapshotTests(unittest.TestCase):
         recalculate_today_snapshot(force_read_all_data=False)
 
         data_step_mock.invalidate.assert_called_once_with(
-            f"{ASSETS_SNAPSHOT_STEP}/{date.today():%Y-%m-%d}.parquet"
+            assets_snapshot_resource(date.today())
         )
         calculate_assets_mock.assert_called_once_with(
             valuation_date=date.today(),
@@ -72,7 +72,7 @@ class SnapshotJobProtocolTests(unittest.TestCase):
                 valuation_date=date(2026, 8, 21),
                 rows=46,
                 total_pln=12001473,
-                resource=f"{ASSETS_SNAPSHOT_STEP}/2026-08-21.parquet",
+                resource=assets_snapshot_resource(date(2026, 8, 21)),
             )
         ]
         stdout = "log line\n" + encode_snapshot_job_results(results) + "\n"
@@ -92,7 +92,7 @@ class RunSnapshotJobIsolatedTests(unittest.TestCase):
             valuation_date=date(2026, 8, 21),
             rows=2,
             total_pln=10,
-            resource=f"{ASSETS_SNAPSHOT_STEP}/2026-08-21.parquet",
+            resource=assets_snapshot_resource(date(2026, 8, 21)),
         )
         run_mock.return_value = MagicMock(
             returncode=0,
@@ -145,7 +145,7 @@ class SnapshotResultsToDataframeTests(unittest.TestCase):
                 valuation_date=date(2026, 7, 15),
                 rows=3,
                 total_pln=1000,
-                resource=f"{ASSETS_SNAPSHOT_STEP}/2026-07-15.parquet",
+                resource=assets_snapshot_resource(date(2026, 7, 15)),
             )
         ]
         df = snapshot_results_to_dataframe(results)

@@ -23,21 +23,21 @@ from app_proc.export_product_excel import (
 from data_step.data_step import DATA_STEP
 from data_step.data_step_frame import DataStepFrame
 from importers.assets.pool_id import POOL_IDS
-from app_proc.portfolio_cf_step import portfolio_cf_prefix
+from app_proc.snapshot_step import SNAPSHOTS_STEP, snapshot_prefix
 from roi.allocate import allocate_catalog, collect_pool_ids_from_rules
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
 
-# Cache venue ROI w tym samym drzewie co ledger/XIRR (``11 portfolio_cf/{date}/sN/``).
-ROI_STEP = "11 portfolio_cf"  # alias historyczny — kanonicznie PORTFOLIO_CF_STEP
+# Cache venue ROI w tym samym drzewie co ledger/XIRR (``snapshots/{date}/sN/``).
+ROI_STEP = SNAPSHOTS_STEP
 
 
 def roi_catalog_resource(assets_date: date) -> str:
-    return f"{portfolio_cf_prefix(assets_date)}/_catalog.parquet"
+    return f"{snapshot_prefix(assets_date)}/_catalog.parquet"
 
 
 def roi_summary_resource(assets_date: date) -> str:
-    return f"{portfolio_cf_prefix(assets_date)}/_roi_summary.parquet"
+    return f"{snapshot_prefix(assets_date)}/_roi_summary.parquet"
 
 
 def add_account_tx_ymd_columns(df: pd.DataFrame) -> pd.DataFrame:

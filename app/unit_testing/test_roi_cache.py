@@ -73,7 +73,7 @@ class LoadCatalogEventsTests(unittest.TestCase):
     def test_roi_catalog_resource_includes_date(self):
         self.assertEqual(
             roi_catalog_resource(date(2026, 7, 16)),
-            "11 portfolio_cf/2026-07-16/s6/_catalog.parquet",
+            "snapshots/2026-07-16/s1/_catalog.parquet",
         )
 
 
@@ -121,7 +121,7 @@ class LoadRoiSummaryTests(unittest.TestCase):
     def test_roi_summary_resource_includes_date(self):
         self.assertEqual(
             roi_summary_resource(date(2026, 7, 16)),
-            "11 portfolio_cf/2026-07-16/s6/_roi_summary.parquet",
+            "snapshots/2026-07-16/s1/_roi_summary.parquet",
         )
 
 

@@ -10,13 +10,12 @@ from evaluators.evaluate_assets import evaluate_assets
 from fx.data_model import LastFx
 from importers.assets.data_model import AssetsDef, AssetsFile
 from importers.assets.read_assets import read_assets
+from app_proc.assets_snapshot_step import ASSETS_SNAPSHOT_STEP, assets_snapshot_resource
 from app_proc.check_wrong_catalogs import check_wrong_catalogs
 from app_proc.data_root import get_online_data_root
 from app_proc.data_steps_root import get_nbp_fx_cache_dir
 from app_proc.export_product_excel import export_assets_evaluation
 from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR, NbpFxRepository
-
-ASSETS_SNAPSHOT_STEP = "09 assets"
 
 
 def calculate_assets(
@@ -81,7 +80,3 @@ def finalize_assets_snapshot(assets: pd.DataFrame) -> pd.DataFrame:
     result = result[result[AssetsDef.VALUE] != 0]
     result = result.drop(columns=[AssetsDef.NOTES, LastFx.FX], errors="ignore")
     return result.copy()
-
-
-def assets_snapshot_resource(valuation_date: date) -> str:
-    return f"{ASSETS_SNAPSHOT_STEP}/{valuation_date:%Y-%m-%d}.parquet"

@@ -53,6 +53,27 @@ class FindStaleSchemaDirsTests(unittest.TestCase):
             ):
                 self.assertEqual(find_stale_schema_dirs(root), [])
 
+    def test_lists_obsolete_flat_asset_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flat = root / "09 assets" / "2026-10-02.parquet"
+            flat.parent.mkdir(parents=True)
+            flat.write_bytes(b"old")
+            active = root / "09 assets" / "2026-10-04" / "s1"
+            active.mkdir(parents=True)
+            (active / "_assets.parquet").write_bytes(b"new")
+            with patch(
+                "maintenance.prune_stale_data_steps.active_schema_products",
+                return_value={"09 assets": 1},
+            ), patch(
+                "maintenance.prune_stale_data_steps.obsolete_data_step_products",
+                return_value=(),
+            ):
+                found = find_stale_schema_dirs(root)
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0].path, flat)
+            self.assertEqual(found[0].kind, "obsolete_flat")
+
     def test_lists_obsolete_product_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
