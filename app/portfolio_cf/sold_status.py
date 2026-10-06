@@ -12,11 +12,25 @@ from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.instrument_portfolio import portfolio_for_instrument
 
 
-def build_instrument_sold_map(valuation_date: date) -> dict[str, bool]:
-    """Zbiera is_sold z summary venue ROI (katalog, brokerzy, depozyty, obligacje)."""
+def build_instrument_sold_map(
+    valuation_date: date,
+    *,
+    catalog_summary: pd.DataFrame | None = None,
+) -> dict[str, bool]:
+    """Zbiera is_sold z summary venue ROI (katalog, brokerzy, depozyty, obligacje).
+
+    Katalog jest wymagany: podaj ``catalog_summary`` (sibling ``_roi_summary``)
+    albo pozwól na ``load_roi_summary``. Wyjątki katalogu **nie** są połykane —
+    inaczej coverage zapisuje ciche ``is_sold=False`` i XIRR Niesprzedane = Wszystkie.
+    Pozostałe venue: soft (brak / błąd → pomijane).
+    """
     sold: dict[str, bool] = {}
-    loaders = (
-        _load_catalog_sold,
+    if catalog_summary is not None:
+        sold.update(_summary_sold_map(catalog_summary))
+    else:
+        sold.update(_load_catalog_sold(valuation_date))
+
+    soft_loaders = (
         _load_robo_sold,
         _load_degiro_sold,
         _load_xtb_sold,
@@ -24,7 +38,7 @@ def build_instrument_sold_map(valuation_date: date) -> dict[str, bool]:
         _load_revolut_deposits_sold,
         _load_mbank_deposits_sold,
     )
-    for loader in loaders:
+    for loader in soft_loaders:
         try:
             sold.update(loader(valuation_date))
         except RuntimeError as exc:

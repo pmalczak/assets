@@ -49,8 +49,14 @@ def build_instrument_ledger(
     *,
     fx_rates: pd.DataFrame | None = None,
     snapshot: pd.DataFrame | None = None,
+    catalog_summary: pd.DataFrame | None = None,
 ) -> AssemblyResult:
-    """Zbiera CF wszystkich venue; oznacza UNCOVERED z snapshota bez CF."""
+    """Zbiera CF wszystkich venue; oznacza UNCOVERED z snapshota bez CF.
+
+    ``catalog_summary`` = sibling ``_roi_summary`` (preferowane z ``products``).
+    Bez niego sold map woła ``load_roi_summary``; błąd katalogu propaguje się
+    (nie ciche ``is_sold=False``).
+    """
     from portfolio_cf.sold_status import build_instrument_sold_map
 
     frames: list[pd.DataFrame] = []
@@ -99,16 +105,9 @@ def build_instrument_ledger(
     coverage.extend(_uncovered_long_term(coverage))
     coverage = _dedupe_coverage(coverage)
 
-    try:
-        sold_map = build_instrument_sold_map(valuation_date)
-    except RuntimeError as exc:
-        if "DATA_STEP stack mismatch" in str(exc):
-            raise
-        warnings.append(f"build_instrument_sold_map: {exc}")
-        sold_map = {}
-    except Exception as exc:
-        warnings.append(f"build_instrument_sold_map: {exc}")
-        sold_map = {}
+    sold_map = build_instrument_sold_map(
+        valuation_date, catalog_summary=catalog_summary
+    )
 
     return AssemblyResult(
         ledger=ledger,

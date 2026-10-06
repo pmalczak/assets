@@ -34,17 +34,22 @@ class PortfolioCfProductsTests(unittest.TestCase):
             "snapshots/2026-09-28/s1/_xirr.parquet",
         )
 
+    @patch("portfolio_cf.products._obtain_roi_summary_sibling")
     @patch("portfolio_cf.products.DATA_STEP")
     @patch("portfolio_cf.products.snapshot_parquet_path")
     def test_load_assembly_uses_obtain_dependent_when_snapshot_exists(
         self,
         snap_path_mock,
         data_step_mock,
+        roi_sibling_mock,
     ):
         day = date(2026, 9, 28)
         path = MagicMock()
         path.is_file.return_value = True
         snap_path_mock.return_value = path
+        roi_frame = MagicMock()
+        roi_frame.data_frame.return_value = pd.DataFrame()
+        roi_sibling_mock.return_value = roi_frame
 
         ledger = pd.DataFrame(columns=list(InstrumentCashFlow.COLUMN_ORDER))
         coverage = pd.DataFrame(
@@ -67,9 +72,14 @@ class PortfolioCfProductsTests(unittest.TestCase):
         self.assertTrue(assembly.ledger.empty)
         self.assertEqual(data_step_mock.obtain_dependent.call_count, 3)
         data_step_mock.obtain.assert_not_called()
+        roi_sibling_mock.assert_called_once_with(day)
         first_args = data_step_mock.obtain_dependent.call_args_list[0].args
         self.assertEqual(first_args[0], ledger_resource(day))
         self.assertEqual(first_args[2], path)
+        self.assertIs(
+            data_step_mock.obtain_dependent.call_args_list[0].kwargs["roi_summary"],
+            roi_frame,
+        )
 
     @patch("portfolio_cf.products._obtain_xirr_table")
     def test_load_portfolio_xirr_map_filters_sold_mode(self, table_mock):

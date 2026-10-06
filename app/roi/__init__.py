@@ -13,6 +13,7 @@ from roi.roi_products import (
     load_catalog_events,
     load_roi_summary,
     load_unallocated_pool,
+    obtain_roi_summary_frame,
     roi_catalog_resource,
     roi_summary_resource,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "load_catalog_events",
     "load_roi_summary",
     "load_unallocated_pool",
+    "obtain_roi_summary_frame",
     "read_analyse_config",
     "resolve_terminal_value",
     "roi_catalog_resource",

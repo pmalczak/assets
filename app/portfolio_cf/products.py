@@ -120,6 +120,20 @@ def invalidate_portfolio_cf(valuation_date: date) -> None:
     _ASSEMBLY_BUILD.pop(_stash_key(valuation_date), None)
 
 
+def _obtain_roi_summary_sibling(valuation_date: date) -> DataStepFrame:
+    """``_roi_summary`` przed ledgerem — bez zagnieżdżenia w ``_collect_ledger``."""
+    from roi.roi_products import obtain_roi_summary_frame
+
+    return obtain_roi_summary_frame(valuation_date)
+
+
+def _catalog_summary_from_frame(roi_summary: object) -> pd.DataFrame | None:
+    if isinstance(roi_summary, DataStepFrame):
+        frame = roi_summary.data_frame()
+        return frame if frame is not None else pd.DataFrame()
+    return None
+
+
 def _obtain_assembly_parts(
     valuation_date: date,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
@@ -135,6 +149,8 @@ def _obtain_assembly_parts(
 def _obtain_core_frames(
     valuation_date: date,
 ) -> tuple[DataStepFrame, DataStepFrame, DataStepFrame]:
+    # Sibling: is_sold z _roi_summary — nie nestować load_roi_summary w ledgerze.
+    roi_summary_frame = _obtain_roi_summary_sibling(valuation_date)
     snap_path = snapshot_parquet_path(valuation_date)
     if snap_path.is_file():
         ledger_frame = DATA_STEP.obtain_dependent(
@@ -142,6 +158,7 @@ def _obtain_core_frames(
             _collect_ledger,
             snap_path,
             valuation_date=valuation_date,
+            roi_summary=roi_summary_frame,
         )
         coverage_frame = DATA_STEP.obtain_dependent(
             coverage_resource(valuation_date),
@@ -149,6 +166,7 @@ def _obtain_core_frames(
             snap_path,
             valuation_date=valuation_date,
             ledger=ledger_frame,
+            roi_summary=roi_summary_frame,
         )
         warnings_frame = DATA_STEP.obtain_dependent(
             warnings_resource(valuation_date),
@@ -156,24 +174,28 @@ def _obtain_core_frames(
             snap_path,
             valuation_date=valuation_date,
             ledger=ledger_frame,
+            roi_summary=roi_summary_frame,
         )
     else:
         ledger_frame = DATA_STEP.obtain(
             ledger_resource(valuation_date),
             _collect_ledger,
             valuation_date=valuation_date,
+            roi_summary=roi_summary_frame,
         )
         coverage_frame = DATA_STEP.obtain(
             coverage_resource(valuation_date),
             _collect_coverage,
             valuation_date=valuation_date,
             ledger=ledger_frame,
+            roi_summary=roi_summary_frame,
         )
         warnings_frame = DATA_STEP.obtain(
             warnings_resource(valuation_date),
             _collect_warnings,
             valuation_date=valuation_date,
             ledger=ledger_frame,
+            roi_summary=roi_summary_frame,
         )
     return ledger_frame, coverage_frame, warnings_frame
 
@@ -205,9 +227,14 @@ def _obtain_xirr_table(valuation_date: date) -> pd.DataFrame:
 def _collect_ledger(
     valuation_date: date,
     source_file: Path | None = None,
+    roi_summary: DataStepFrame | None = None,
     **_kwargs,
 ) -> pd.DataFrame:
-    assembly = _build_and_stash(valuation_date, source_file)
+    assembly = _build_and_stash(
+        valuation_date,
+        source_file,
+        catalog_summary=_catalog_summary_from_frame(roi_summary),
+    )
     if assembly.ledger is None or assembly.ledger.empty:
         return pd.DataFrame(columns=list(InstrumentCashFlow.COLUMN_ORDER))
     return assembly.ledger.copy()
@@ -217,11 +244,16 @@ def _collect_coverage(
     valuation_date: date,
     source_file: Path | None = None,
     ledger: DataStepFrame | None = None,
+    roi_summary: DataStepFrame | None = None,
     **_kwargs,
 ) -> pd.DataFrame:
     assembly = _ASSEMBLY_BUILD.get(_stash_key(valuation_date))
     if assembly is None:
-        assembly = _build_and_stash(valuation_date, source_file)
+        assembly = _build_and_stash(
+            valuation_date,
+            source_file,
+            catalog_summary=_catalog_summary_from_frame(roi_summary),
+        )
     frame = assembly.coverage_frame()
     if frame is None or frame.empty:
         return pd.DataFrame(
@@ -234,11 +266,16 @@ def _collect_warnings(
     valuation_date: date,
     source_file: Path | None = None,
     ledger: DataStepFrame | None = None,
+    roi_summary: DataStepFrame | None = None,
     **_kwargs,
 ) -> pd.DataFrame:
     assembly = _ASSEMBLY_BUILD.get(_stash_key(valuation_date))
     if assembly is None:
-        assembly = _build_and_stash(valuation_date, source_file)
+        assembly = _build_and_stash(
+            valuation_date,
+            source_file,
+            catalog_summary=_catalog_summary_from_frame(roi_summary),
+        )
     messages = list(assembly.warnings or [])
     if not messages:
         return pd.DataFrame(columns=["message"])
@@ -295,9 +332,15 @@ def _collect_xirr(
 def _build_and_stash(
     valuation_date: date,
     source_file: Path | None,
+    *,
+    catalog_summary: pd.DataFrame | None = None,
 ) -> AssemblyResult:
     snapshot = _read_snapshot(source_file)
-    assembly = build_instrument_ledger(valuation_date, snapshot=snapshot)
+    assembly = build_instrument_ledger(
+        valuation_date,
+        snapshot=snapshot,
+        catalog_summary=catalog_summary,
+    )
     _ASSEMBLY_BUILD[_stash_key(valuation_date)] = assembly
     return assembly
 

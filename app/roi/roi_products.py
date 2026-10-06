@@ -72,6 +72,27 @@ def load_catalog_events(
     return _split_by_asset(r.data_frame(), config["catalog"])
 
 
+def obtain_roi_summary_frame(
+    assets_date: date,
+    *,
+    config_path: Path | None = None,
+) -> DataStepFrame:
+    """Sibling obtain ``_roi_summary`` (najpierw catalog events, potem summary).
+
+    Używane też przez ``portfolio_cf.products`` — coverage/XIRR zależą od tej
+    ramki zamiast zagnieżdżać ``load_roi_summary`` w ``_collect_ledger``.
+    """
+    config_file = get_config_file(config_path)
+    catalog_events = _obtain_catalog_events(assets_date, config_path=config_path)
+    return DATA_STEP.obtain_dependent(
+        roi_summary_resource(assets_date),
+        _build_roi_summary,
+        config_file,
+        assets_date=assets_date,
+        catalog_events=catalog_events,
+    )
+
+
 def load_roi_summary(
     assets_date: date,
     config: dict[str, pd.DataFrame] | None = None,
@@ -80,20 +101,9 @@ def load_roi_summary(
 ) -> pd.DataFrame:
     """Summary ROI z DATA_STEP (XIRR liczone przy rebuildzie)."""
     if config is None:
-        config = read_analyse_config(config_path)
+        read_analyse_config(config_path)
 
-    config_file = get_config_file(config_path)
-    # Sibling obtain, then DataStepFrame kwarg — do not obtain(catalog) from inside
-    # the summary collector (nested obtain of catalog while summary is on the stack).
-    catalog_events = _obtain_catalog_events(assets_date, config_path=config_path)
-    r = DATA_STEP.obtain_dependent(
-        roi_summary_resource(assets_date),
-        _build_roi_summary,
-        config_file,
-        assets_date=assets_date,
-        catalog_events=catalog_events,
-    )
-    return r.data_frame()
+    return obtain_roi_summary_frame(assets_date, config_path=config_path).data_frame()
 
 
 def load_unallocated_pool(
