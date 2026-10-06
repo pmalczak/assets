@@ -48,7 +48,6 @@ from portfolios.assignment import (
     PORTFOLIO_REVOLUT_ROBO,
     assets_in_portfolio,
     load_portfolio_nav_history,
-    nav_pln_for_portfolio,
 )
 from portfolios.composition import (
     compose_gm_instrument_composition,
@@ -105,19 +104,13 @@ def _purge_stale_portfolio_selection() -> None:
         st.session_state.pop(_PORTFOLIOS_SELECTED_KEY, None)
 
 
-def render_portfolios() -> None:
-    from app_streamlit.build_data import build_data
+def render_portfolios(valuation_date: date, snapshot: pd.DataFrame) -> None:
+    """Belka nazwanych portfeli + skład / CF / ścieżka NAV (XIRR w RAP 1)."""
+    if not isinstance(snapshot, pd.DataFrame):
+        snapshot = pd.DataFrame()
 
-    data = build_data()
-    latest_snapshot = data["latest_snapshot"]
-    latest_snapshot_date = data["latest_snapshot_date"]
-    if not isinstance(latest_snapshot, pd.DataFrame):
-        latest_snapshot = pd.DataFrame()
-
-    st.subheader("Portfele")
     st.caption(
-        "NAV i skład ze snapshotów. XIRR lokalny vs XIRR PLN vs udział FX — "
-        "sekcja *XIRR portfela a FX* w `Cursor_rules.md`. "
+        "Skład i CF wybranego portfela (ta sama data snapshota co RAP 1). "
         f"Porównanie do backtestu U7 tylko dla {PORTFOLIO_GM}."
     )
 
@@ -126,8 +119,7 @@ def render_portfolios() -> None:
         _load_gm_positions.clear()
         _load_robo_positions.clear()
         _load_benchmarks.clear()
-        if latest_snapshot_date is not None:
-            invalidate_portfolio_cf(latest_snapshot_date)
+        invalidate_portfolio_cf(valuation_date)
         st.rerun()
 
     _purge_stale_portfolio_selection()
@@ -140,26 +132,24 @@ def render_portfolios() -> None:
         width="stretch",
     )
 
-    if latest_snapshot.empty or latest_snapshot_date is None:
-        st.warning("Brak snapshotu portfela — wygeneruj snapshot w Aktywa.")
+    if snapshot.empty:
+        st.warning(f"Brak danych w snapshotcie {valuation_date:%Y-%m-%d}.")
         return
 
-    st.markdown(f"**Snapshot:** {latest_snapshot_date.isoformat()}")
-
-    # Ten sam plik parquet co ledger DATA_STEP — nie stale build_data po regeneracji.
-    xirr_snapshot = _snapshot_for_valuation(latest_snapshot_date, latest_snapshot)
+    # Ten sam plik parquet co ledger DATA_STEP — nie stale frame po regeneracji.
+    xirr_snapshot = _snapshot_for_valuation(valuation_date, snapshot)
     composition_snapshot = split_broker_nav_for_instrument_overrides(
-        xirr_snapshot, latest_snapshot_date
+        xirr_snapshot, valuation_date
     )
 
     assembly, portfolio_xirr = _render_portfolio_xirr(
-        selected, xirr_snapshot, latest_snapshot_date
+        selected, xirr_snapshot, valuation_date
     )
 
     if selected == PORTFOLIO_GM:
-        _render_gm_composition(composition_snapshot, latest_snapshot_date)
+        _render_gm_composition(composition_snapshot, valuation_date)
     elif selected == PORTFOLIO_REVOLUT_ROBO:
-        _render_robo_composition(composition_snapshot, latest_snapshot_date)
+        _render_robo_composition(composition_snapshot, valuation_date)
     else:
         _render_generic_composition(composition_snapshot, selected)
 
@@ -167,7 +157,7 @@ def render_portfolios() -> None:
         selected,
         assembly,
         xirr_snapshot,
-        latest_snapshot_date,
+        valuation_date,
         portfolio_xirr=portfolio_xirr,
     )
     _render_nav_path(selected)
@@ -194,6 +184,7 @@ def _render_portfolio_xirr(
     snapshot: pd.DataFrame,
     valuation_date: date,
 ) -> tuple[AssemblyResult | None, PortfolioXirrResult | None]:
+    """Policz assembly/XIRR do CF (bez wiersza metryk — te są w RAP 1)."""
     if portfolio_name == PORTFOLIO_CASH_POOL or portfolio_name == XIRR_EXCLUDED_PORTFOLIO:
         st.info("XIRR portfela: `0 CASH-POOL` poza zakresem v1 (źródło finansowania).")
         return None, None
@@ -216,35 +207,8 @@ def _render_portfolio_xirr(
         st.warning(msg)
     for msg in result.warnings:
         st.warning(msg)
-
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    xirr_label = "XIRR (lokalny)"
     if result.incomplete:
-        xirr_label = "XIRR (lokalny*)"
-    c1.metric(
-        xirr_label,
-        f"{result.xirr:.2%}" if result.xirr is not None else "—",
-    )
-    c2.metric(
-        "XIRR (PLN)",
-        f"{result.xirr_pln:.2%}" if result.xirr_pln is not None else "—",
-    )
-    c3.metric(
-        "Udział FX",
-        f"{result.fx_share:.1%}" if result.fx_share is not None else "—",
-    )
-    c4.metric("ROI lokalny", f"{result.roi_local_pln:,.0f} PLN".replace(",", " "))
-    c5.metric("ROI FX", f"{result.roi_fx_pln:,.0f} PLN".replace(",", " "))
-    c6.metric("ROI PLN", f"{result.roi_nominal_pln:,.0f} PLN".replace(",", " "))
-    incomplete_note = " * = niekompletne CF. " if result.incomplete else " "
-    st.caption(
-        "XIRR lokalny = rentowność aktywów (CF × FX_T na datę wyceny). "
-        "XIRR PLN = wynik łącznie z FX (CF × FX_t z dnia transakcji). "
-        "Udział FX = ROI_FX / ROI_PLN: >100% = strata lokalna skompensowana kursem; "
-        f"<0% = FX zjadł zysk.{incomplete_note}"
-        f"Filtr pozycji: **{current_sold_filter()}**. "
-        "Szczegóły: `Cursor_rules.md` → XIRR portfela a FX."
-    )
+        st.caption("* = niekompletne CF (patrz RAP 1 / wiersz Razem w tabeli CF).")
     if result.uncovered:
         lines = [
             f"`{item.instrument_id}` — {item.reason or item.status.value}"
@@ -273,7 +237,7 @@ def _render_cf_browser(
     st.caption(
         f"Filtr pozycji: **{mode}**. "
         "Wiersze: XIRR/terminal per instrument. "
-        "Razem = ten sam wynik co nagłówek (NAV portfela ze snapshota). "
+        "Razem = ten sam wynik co RAP 1 dla portfela (NAV pozycji ze snapshota). "
         "Metryki: `Cursor_rules.md` → XIRR portfela a FX."
     )
     subset = allocate_ledger_to_portfolio(assembly.ledger, portfolio_name)
@@ -394,8 +358,6 @@ def _render_cf_browser(
 
 
 def _render_generic_composition(snapshot: pd.DataFrame, portfolio_name: str) -> None:
-    total_nav = nav_pln_for_portfolio(snapshot, portfolio_name)
-    st.metric(f"NAV {portfolio_name}", f"{total_nav:,.0f} PLN".replace(",", " "))
     table = _composition_table(snapshot, portfolio_name)
     if table.empty:
         st.info(f"Brak wierszy w tym snapshocie dla {portfolio_name}.")
@@ -484,20 +446,10 @@ def _render_instrument_composition(
     for msg in position_warnings:
         st.warning(msg)
 
-    total_nav = nav_pln_for_portfolio(latest_snapshot, portfolio_name)
     if portfolio_name == PORTFOLIO_GM:
         table = compose_gm_instrument_composition(latest_snapshot, lines)
     else:
         table = compose_instrument_composition(latest_snapshot, portfolio_name, lines)
-    position_nav = 0.0
-    if not table.empty and "kind" in table.columns:
-        position_nav = float(
-            table.loc[table["kind"] == "position", AssetsDef.VALUE_PLN].sum()
-        )
-
-    c1, c2 = st.columns(2)
-    c1.metric(f"NAV {portfolio_name}", f"{total_nav:,.0f} PLN".replace(",", " "))
-    c2.metric("Pozycje (bez gotówki)", f"{position_nav:,.0f} PLN".replace(",", " "))
 
     if table.empty:
         st.info(empty_hint)

@@ -10,10 +10,9 @@ from app_proc.ui_prefs import (
     SOLD_FILTER_ACTIVE,
     SOLD_FILTER_ALL,
     SOLD_FILTER_SOLD,
-    TAB_ASSETS,
     TAB_LABELS,
     TAB_MAINTENANCE,
-    TAB_PORTFOLIOS,
+    TAB_PORTFOLIO,
     filter_by_sold,
     load_last_tab,
     load_sold_filter,
@@ -24,32 +23,30 @@ from app_proc.ui_prefs import (
 
 
 class UiPrefsTests(unittest.TestCase):
-    def test_portfele_tab_is_after_assets(self):
-        self.assertIn(TAB_PORTFOLIOS, TAB_LABELS)
-        self.assertEqual(TAB_LABELS[TAB_LABELS.index(TAB_ASSETS) + 1], TAB_PORTFOLIOS)
-        self.assertEqual(
-            TAB_LABELS[TAB_LABELS.index(TAB_PORTFOLIOS) + 1],
-            "FX",
-        )
+    def test_portfolio_tab_is_first_then_fx(self):
+        self.assertEqual(TAB_LABELS[0], TAB_PORTFOLIO)
+        self.assertNotIn("Aktywa", TAB_LABELS)
+        self.assertNotIn("Portfele", TAB_LABELS)
+        self.assertEqual(TAB_LABELS[TAB_LABELS.index(TAB_PORTFOLIO) + 1], "FX")
 
-    def test_portfele_slug_roundtrip(self):
+    def test_portfolio_slug_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            save_last_tab(TAB_PORTFOLIOS, prefs_root=root)
-            self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIOS)
+            save_last_tab(TAB_PORTFOLIO, prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIO)
             self.assertEqual(
                 (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
-                "portfele",
+                "portfel",
             )
 
-    def test_legacy_wykres_slug_goes_to_assets(self):
+    def test_legacy_wykres_slug_goes_to_portfolio(self):
         self.assertNotIn("Wykres portfela", TAB_LABELS)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "last_tab.txt").write_text("wykres", encoding="utf-8")
-            self.assertEqual(load_last_tab(prefs_root=root), TAB_ASSETS)
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIO)
 
-    def test_roi_tab_removed_legacy_slugs_go_to_portfolios(self):
+    def test_roi_tab_removed_legacy_slugs_go_to_portfolio(self):
         self.assertNotIn("ROI", TAB_LABELS)
         for label in (
             "ROI Revolut robo",
@@ -72,9 +69,16 @@ class UiPrefsTests(unittest.TestCase):
                 "roi-xtb",
             ):
                 (root / "last_tab.txt").write_text(slug, encoding="utf-8")
-                self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIOS)
+                self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIO)
             save_last_tab("Global momentum", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Global momentum")
+
+    def test_legacy_portfele_and_raporty_slugs_go_to_portfolio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for slug in ("portfele", "raporty"):
+                (root / "last_tab.txt").write_text(slug, encoding="utf-8")
+                self.assertEqual(load_last_tab(prefs_root=root), TAB_PORTFOLIO)
 
     def test_load_last_tab_returns_default_when_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -92,7 +96,10 @@ class UiPrefsTests(unittest.TestCase):
             (root / "last_tab.txt").write_text("raporty", encoding="utf-8")
             self.assertEqual(load_last_tab(prefs_root=root), DEFAULT_TAB)
             save_last_tab(DEFAULT_TAB, prefs_root=root)
-            self.assertEqual((root / "last_tab.txt").read_text(encoding="utf-8").strip(), "raporty")
+            self.assertEqual(
+                (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
+                "portfel",
+            )
 
     def test_load_last_tab_falls_back_on_unknown_slug(self):
         with tempfile.TemporaryDirectory() as tmp:

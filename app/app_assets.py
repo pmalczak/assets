@@ -16,10 +16,9 @@ import pandas as pd
 import streamlit as st
 
 from app_proc.ui_prefs import (
-    TAB_ASSETS,
     TAB_LABELS,
     TAB_MAINTENANCE,
-    TAB_PORTFOLIOS,
+    TAB_PORTFOLIO,
     TABS_STATE_KEY,
     load_last_tab,
     on_tab_changed,
@@ -31,8 +30,8 @@ from app_proc.data_steps_root import init_app_data_step
 from app_streamlit.build_data import build_data
 from app_streamlit.render_fx import render_fx
 from app_streamlit.render_global_momentum import render_global_momentum
-from app_streamlit.render_main_reports import load_snapshot_for_date, render_main_reports
-from app_streamlit.render_portfolios import render_portfolios
+from app_streamlit.render_main_reports import load_snapshot_for_date
+from app_streamlit.render_portfolio_shell import render_portfolio_shell
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_maintenance import render_maintenance
@@ -237,7 +236,7 @@ def main():
             disabled=not isinstance(latest_snapshot, pd.DataFrame) or latest_snapshot.empty,
         )
 
-    if TABS_STATE_KEY not in st.session_state:
+    if TABS_STATE_KEY not in st.session_state or st.session_state[TABS_STATE_KEY] not in TAB_LABELS:
         st.session_state[TABS_STATE_KEY] = load_last_tab()
 
     tab_objs = st.tabs(
@@ -255,10 +254,8 @@ def main():
         with tab:
             if label != active_tab:
                 continue
-            if label == TAB_ASSETS:
-                render_main_reports(latest, data["latest_snapshot"])
-            elif label == TAB_PORTFOLIOS:
-                render_portfolios()
+            if label == TAB_PORTFOLIO:
+                render_portfolio_shell(latest, data["latest_snapshot"])
             elif label == "FX":
                 render_fx()
             elif label == "Global momentum":

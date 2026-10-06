@@ -11,7 +11,7 @@ from importers.assets.data_model import AssetsDef
 
 @st.cache_data(show_spinner="Wczytywanie snapshotow...")
 def build_data(_schema: int = 4) -> dict[str, object]:
-    """Ostatni snapshot do nagłówka dashboardu / Portfeli / Aktywa. Bez historii wykresu."""
+    """Ostatni snapshot do nagłówka dashboardu / zakładki Portfel. Bez historii wykresu."""
     del _schema
     snapshot_files = list_snapshot_files(snapshots_directory())
     if not snapshot_files:

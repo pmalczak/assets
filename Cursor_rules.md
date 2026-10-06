@@ -42,13 +42,13 @@ Arkusze `a_config.xlsx`:
 | **XIRR lokalny** | Kanoniczna rentowność aktywów portfela: CF × FX_T + terminal NAV PLN — **bez ścieżki ruchu kursu** |
 | **XIRR PLN (spot)** | Zwrot całkowity w PLN: CF × FX_t + terminal — **aktywo + FX** |
 | **ROI_PLN / ROI_local / ROI_FX** | Kwoty P&L (nie stopy); patrz sekcja *XIRR portfela a FX* |
-| **udział FX** | `ROI_FX / ROI_PLN` (podpisany); tylko Portfele — nie RAP 1 |
+| **udział FX** | `ROI_FX / ROI_PLN` (podpisany); w belce CF (wiersz Razem) — nie w RAP 1 |
 
 ---
 
 ## XIRR portfela a FX (`portfolio_cf`)
 
-Dotyczy **nazwanych portfeli** (zakładka Portfele + RAP 1). Warstwa `roi/` (kod) liczy CF/venue w walucie natywnej; cache DATA_STEP razem z ledgerem w **`snapshots/{date}/sN/`** (`_catalog`, `_roi_summary`, `_ledger`, `_assets`, …) — bez osobnej zakładki UI.
+Dotyczy **nazwanych portfeli** (zakładka Portfel → podzakładki Portfele + Aktywa/RAP 1). Warstwa `roi/` (kod) liczy CF/venue w walucie natywnej; cache DATA_STEP razem z ledgerem w **`snapshots/{date}/sN/`** (`_catalog`, `_roi_summary`, `_ledger`, `_assets`, …) — bez osobnej zakładki UI.
 
 Ledger instrumentu: `amount` (native) + `currency` + `amount_pln` (= native × FX_t) + terminal NAV już w PLN (= wycena przy FX_T).
 
@@ -83,14 +83,15 @@ Bez osobnego `XIRR(FX)` — IRR nie dekomponuje się addytywnie; udział FX licz
 
 ### Gdzie w UI
 
+- **Zakładka Portfel:** u góry Generuj + Data snapshotu (lewa) i **RAP 1** (prawa); poniżej zawsze belka nazwanych portfeli + skład/XIRR/CF (ta sama data).
 - **RAP 1:** `XIRR` (lokalny) + `XIRR PLN` (spot). Bez kolumny udział FX.
-- **Portfele (nagłówek):** XIRR lokalny, XIRR PLN, ROI lokalny / ROI FX / ROI PLN, udział FX.
-- **Portfele (tabela CF):** wiersze = per instrument (terminal MTM venue); **Razem** = ten sam wynik co nagłówek (`build_portfolio_razem_row` ← `compute_named_portfolio_xirr`). Nie uśredniać XIRR wierszy; nie brać Σ terminali instrumentów jako terminala Razem. XIRR **portfela**: CF bez `*:CASH`; **terminal = NAV pozycji** (NAV snapshota minus gotówka robocza brokerów). Gotówka brokera = skład/NAV majątku, nie ekspozycja XIRR. Kolumny **`quantity`** / **`unit_price`**: z wyciągu przy CAPEX/DIVESTMENT gdy źródło ma cenę (Robo `Price per share`, DEGIRO `Kurs`); XTB Cash Operations — puste. Nie wpływają na XIRR.
+- **Portfele (belka):** skład + CF + ścieżka NAV; bez osobnego wiersza metryk XIRR/ROI/NAV (te w RAP 1).
+- **Portfele (tabela CF):** wiersze = per instrument (terminal MTM venue); **Razem** = ten sam wynik co RAP 1 dla portfela (`build_portfolio_razem_row` ← `compute_named_portfolio_xirr`). Nie uśredniać XIRR wierszy; nie brać Σ terminali instrumentów jako terminala Razem. XIRR **portfela**: CF bez `*:CASH`; **terminal = NAV pozycji** (NAV snapshota minus gotówka robocza brokerów). Gotówka brokera = skład/NAV majątku, nie ekspozycja XIRR. Kolumny **`quantity`** / **`unit_price`**: z wyciągu przy CAPEX/DIVESTMENT gdy źródło ma cenę (Robo `Price per share`, DEGIRO `Kurs`); XTB Cash Operations — puste. Nie wpływają na XIRR.
 - **`Z RAZEM`:** concat CF portfeli poza `0 CASH-POOL` + Σ terminali pozycji (bez gotówki brokerskiej).
 
 ### Dual-run vs warstwa `roi/`
 
-Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX attribution w samym ROI. Agregacja `portfolio_cf` = dual-run w PLN (lokalny + spot) w Portfelach / RAP 1. Dawne `10 roi/` / `09 assets/` / `11 portfolio_cf/` są przestarzałe — usuwa `prune_stale_data_steps`.
+Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX attribution w samym ROI. Agregacja `portfolio_cf` = dual-run w PLN (lokalny + spot) w zakładce Portfel (RAP 1 + belka portfeli). Dawne `10 roi/` / `09 assets/` / `11 portfolio_cf/` są przestarzałe — usuwa `prune_stale_data_steps`.
 
 ---
 
@@ -113,12 +114,12 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
    - **Usunięte:** `zloto-monety-wyceny` (wycena całego holdingu złota) — nie wraca; złoto MTM = sztuki × gramy × NBP × 0,99
 7. **Złoto ROI** (`asset_id=zloto-monety`):
    - **CAPEX** wyłącznie z `a_config` (`roi_rules` / `roi_manual`) via `allocate_catalog` — jak inne aktywa
-   - **Inventory** z arkusza `inventory`; join CAPEX ↔ inventory **wyłącznie po dacie**
+   - **Inventory** z arkusza `inventory`; join CAPEX ↔ inventory **po dacie** (wiele instrumentów tego samego dnia OK; inventory na datę CAPEX zużywane raz — bez podwójnego liczenia przy wielu CAPEX)
    - **Terminal / snapshot:** `data wyceny` = data ostatniej publikacji NBP `cenyzlota` ≤ data snapshota / data obliczenia ROI (weekend i święto biorą poprzedni dzień z serii). `wartość` = sztuki × 31,1034768 g × cena NBP (PLN/g) × 0,99. To szacunek wartości bieżącej (kurs minus 1%), nie kwotowanie dilera. Waga w `inventory` tylko `1oz`; inna waga = twardy błąd. Arkusz `unit-price-evaluation` zostaje historią cen kupna.
-   - **Brak / niejednoznaczne / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
+   - **Brak / niekompletne inventory** na datę CAPEX → **twardy błąd** (nie warning); CAPEX bez sztuk nie jest pomijany po cichu
 8. **ROI cash a FX** — XIRR / ROI nominalny dla `cash` (i innych `RODZAJ*=assets.cash`, np. `rocky-iv`) liczony w **walucie wyceny (EUR)**; bez przeliczania CAPEX/terminal FX w ROI. Przeliczenie na PLN jest w snapshocie portfela (`snapshots/{date}/_assets`), nie w warstwie ROI cash. W **`portfolio_cf`** (Portfele / RAP 1) CF tych ID mają native + `amount_pln` (NBP z dnia CF); XIRR kanoniczny = constant FX_T; waluta z `assets.waluta` (fallback: `cash`/`rocky-iv` → EUR).
 9. **Snapshoty** — raporty UI z `snapshots/{date}/sN/_assets.parquet` (stałe w `app_proc/snapshot_step.py`; ten sam `{date}/sN` co ledger/XIRR/ROI). Data snapshota = katalog `{date}` (bez kolumny `data_wyceny_portfela`). Po zmianie semantyki wiersza albo ledgera bump `SNAPSHOT_SCHEMA` + regeneracja. Dawne `09 assets/` i `11 portfolio_cf/` wycina `prune_stale_data_steps`. Nie migrujemy historycznych parquetów bez prośby. Nowe snapshoty dla gotówki mają `id=cash` (nie `id=EUR`).
-   - **`cash_pool.ror` (daty w snapshocie):** `data-ostatniej-transakcji` (wiersz salda), `data-wyciągu` (data **pobrania** pliku / `mtime`; po merge **max** dat pobrań), `data-waluty` (kurs NBP), `liczba dni od wyceny` = `data-waluty − data-wyciągu`. Nie używać ostatniej transakcji jako daty wyciągu. W UI składu (Portfele): `data wyceny` → `data-waluty` → `liczba dni od wyceny` (bez `data-wyciągu` / `data-ostatniej-transakcji`).
+   - **`cash_pool.ror` (daty w snapshocie):** `data-ostatniej-transakcji` (wiersz salda), `data-wyciągu` (data **pobrania** pliku / `mtime`; po merge **max** dat pobrań), `data-waluty` (kurs NBP), `liczba dni od wyceny` = `data-waluty − data-wyciągu`. Nie używać ostatniej transakcji jako daty wyciągu. W UI składu (zakładka Portfel): `data wyceny` → `data-waluty` → `liczba dni od wyceny` (bez `data-wyciągu` / `data-ostatniej-transakcji`).
 10. **Layout Dropbox `INWESTYCJE/`**:
     - `assets/` — `a_config.xlsx` (ex `assets_1` + `analyse_assets_config`), katalogi aktywów `investment.*`
     - `cash_pool/` — katalogi aktywów `cash_pool.*` (wyciągi ROR mBank/Revolut)
@@ -126,7 +127,7 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
     - Import wyciągów ROR trafia do `cash_pool/`; wyjątki w `assets/`: trading Revolut (`p_re_robo`), obligacje skarbowe (`obligacjeskarbowe`)
     - Wyciąg, którego okres z nazwy **całkowicie zawiera się** w innym pliku tego samego rodzaju (to samo konto mBank / ten sam prefix Revolut `account-statement` lub `savings-statement`) jest zbędny — `maintenance/prune_contained_statements.py` (domyślnie dry-run; `--delete` kasuje). Równe okresy: zostaje jeden plik. UUID depozytów (bez dat w nazwie) poza tą regułą. Ten sam skrypt raportuje **luki** między pozostałymi okresami (next.start > prev.end + 1 dzień), np. `…_200101_200228` i `…_200315_200630`.
 11. **Portfel** — każde `investment.*` i `cash_pool.*` ma dokładnie jeden: `0 CASH-POOL` (cały `cash_pool.*`), `0 PŁYNNY` (default inwestycji poza wyjątkami), `1 REVOLUT-ROBO`, `2 G-MOMENTUM`, `3 DŁUGOTERMINOWY` (`gm_ike` / `pm_ike` / `rocky-iv` / `obligacjeskarbowe` / `cash` / `zloto-monety` / `p_degiro:LT0000128621` INTER RAO) albo `4 NIERUCHOMOSCI` (każde `investment.property`). Nie jest to `grupa` ani osobny wiersz katalogu. RAP 1 = portfel → `RAZEM` + `udział` % + **`XIRR`** + **`XIRR PLN`** (semantyka: sekcja *XIRR portfela a FX*; `0 CASH-POOL` → `—`). Bez RAP 2 (dawniej portfel × typ).
-12. **Kolejność i format kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. `wartość` i `wartość-pln` jak kwoty: spacje tysięcy, bez części dziesiętnej, wyrównane do prawej (`column_config` z `alignment="right"`, bo kwoty idą do UI jako tekst). Dotyczy tabel składu w zakładce Portfele i ewaluacji w Waliduj.
+12. **Kolejność i format kolumn w UI** — `wartość` → `waluta` → `wartość-pln`, potem `data wyceny` → `data-waluty` → `liczba dni od wyceny`. `wartość` i `wartość-pln` jak kwoty: spacje tysięcy, bez części dziesiętnej, wyrównane do prawej (`column_config` z `alignment="right"`, bo kwoty idą do UI jako tekst). Dotyczy tabel składu w zakładce Portfel i ewaluacji w Waliduj.
 
 ---
 
@@ -293,14 +294,13 @@ Pozostaje:
 - Nie dodawać zbędnych markdownów / refaktorów poza zakresem zastosowania.
 - Testy obok zmiany reguły (unittest w `app/unit_testing/`).
 - Streamlit: cache `@st.cache_data` — przy zmianie kształtu wyniku podbić `_schema` / `clear()`.
-- Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele CF/XIRR w Portfelach wg `is_sold`. Preferencja lokalna w `data_steps/_ui/sold_filter.txt` (nie w git). Snapshoty i tak pomijają `VALUE=0`.
+- Globalny filtr pozycji (sidebar): Niesprzedane / Sprzedane / Wszystkie — tabele CF/XIRR w zakładce Portfel wg `is_sold`. Preferencja lokalna w `data_steps/_ui/sold_filter.txt` (nie w git). Snapshoty i tak pomijają `VALUE=0`.
 - Zakładka **Waliduj**: walidacja ROI (`roi_def`/`roi_rules`/`roi_manual` / `instruments`) + ewaluacja katalogu `assets` w `a_config.xlsx` (dry-run, bez zapisu snapshotu).
 - Zakładka **Maintenance** (po Waliduj): UI do `prune_contained_statements` (cash_pool), `prune_contained_degiro` (p_degiro) oraz `prune_stale_data_steps` (stare `sN` pod `snapshots/{date}/`, całe przestarzałe produkty np. `10 roi/` / `09 assets/` / `11 portfolio_cf/`; czyści `_metadata.json`); domyślnie dry-run, opcjonalnie usuwanie jak `--delete`.
-- Zakładka **Portfele**: NAV i skład nazwanych portfeli ze snapshotów (`wartość` → `waluta` → `wartość-pln` → daty wyceny). Metryki XIRR/ROI/FX — sekcja **XIRR portfela a FX** (`app/portfolio_cf`, cache `snapshots/{date}/sN`). `0 CASH-POOL` poza XIRR. CF ledger zawsze widoczny (w tym **Kontrahent** z cash-pool / `AccountTx.counterparty` — do rekonsyliacji z rejestrem transakcji); tabela per instrument + Razem = nagłówek. `2 G-MOMENTUM` i `1 REVOLUT-ROBO`: skład per instrument (+ gotówka robocza); CF/XIRR bez cash. Tylko GM: NAV vs backtest U7. Ścieżka NAV ze snapshotów zawiera dopłaty (to nie TWR). Wynik strategii GM jest tu (`2 G-MOMENTUM`), nie w osobnej zakładce ROI. Bez zakładki **Wykres portfela** (dawna agregacja po `grupa` + arkusz `time-line`).
+- Zakładka **Portfel** (zamiast osobnych top-level Aktywa / Portfele): Generuj + Data snapshotu obok RAP 1 (`RAZEM` + `udział` + **`XIRR`** + **`XIRR PLN`** z `portfolio_cf`; semantyka — *XIRR portfela a FX*; bez RAP 2); poniżej zawsze belka nazwanych portfeli + skład/CF ze snapshotów (`wartość` → `waluta` → `wartość-pln` → daty wyceny) — bez duplikatu wiersza XIRR/ROI/NAV. `0 CASH-POOL` poza XIRR. CF ledger zawsze widoczny (w tym **Kontrahent** z cash-pool / `AccountTx.counterparty` — do rekonsyliacji z rejestrem transakcji); tabela per instrument + Razem = RAP 1. `2 G-MOMENTUM` i `1 REVOLUT-ROBO`: skład per instrument (+ gotówka robocza); CF/XIRR bez cash. Tylko GM: NAV vs backtest U7. Ścieżka NAV ze snapshotów zawiera dopłaty (to nie TWR). Wynik strategii GM jest tu (`2 G-MOMENTUM`), nie w osobnej zakładce ROI. Bez zakładki **Wykres portfela** (dawna agregacja po `grupa` + arkusz `time-line`).
 
 - Zakładka **Global momentum**: ranking operacyjny U7 (sygnał na koniec minionego miesiąca) + **as_today** (nieoficjalny nowcast na ostatnim wspólnym close ETF, nie sygnał rebalance; przy nazwie dryf TOP3 vs U7: `*` zostaje, `+` weszło, `-` wypadło) + backtest/benchmarki z `app/global_momentum`; ceny Yahoo przez DATA_STEP. **Poland** = `ETFPZUW20M40` (50% WIG20TR + 50% mWIG40TR); bez sWIG80 / pełnego WIG — brak lepszego jednego ETF-a wykonania, zostaje ten ticker. Kolumna **Asset** w Ranking U7 / as_today = `instruments.instrument` (join po `gm`); **Ticker** zostaje kodem Yahoo. Prefiksy dryfu zostają na Asset. Wewnętrzny ranking nadal po kluczach uniwersum (`USA`, `Japan`, …).
 - Zakładka **FX**: EUR/PLN (NBP A) + złoto NBP PLN/oz (prawa oś); punkty = ceny kupna z `unit-price-evaluation` (`Data` / `cena_jednostkowa` / `instrument`) w oknie wykresu — ta sama oś PLN/oz, nie MTM.
-- Zakładka **Aktywa**: u góry kontrolki snapshota obok RAP 1 (bez tytułu). RAP 1: `RAZEM` + `udział` + **`XIRR`** + **`XIRR PLN`** (z `portfolio_cf`; semantyka — *XIRR portfela a FX*). Skład aktywów według portfeli — wyłącznie zakładka **Portfele**. Bez RAP 2.
 - **Portfel** — każde `investment.*` i `cash_pool.*` należy do dokładnie jednego: **`0 CASH-POOL`** (cały `cash_pool.*`), **`0 PŁYNNY`** (default nowych inwestycji poza wyjątkami), **`1 REVOLUT-ROBO`** (`p_re_robo` + instrumenty `p_re_robo:*`), **`2 G-MOMENTUM`** (`p_degiro`/`p_xtb` + instrumenty `p_degiro:*`/`p_xtb:*`, **bez** override poniżej), **`3 DŁUGOTERMINOWY`** (`gm_ike`, `pm_ike`, `rocky-iv`, `obligacjeskarbowe` + emisje `obligacjeskarbowe:*`, `cash`, `zloto-monety`, **`p_degiro:LT0000128621`** INTER RAO LIETUVA AB), **`4 NIERUCHOMOSCI`** (wszystkie `investment.property`). Jednostka ledger/XIRR = **instrument**; mapa startowa = stan obecny (całe ROBO→ROBO, DEGIRO/XTB→GM) + wyjątki `INSTRUMENT_PORTFOLIO_OVERRIDES`. NAV snapshota: blob brokera jest w runtime dzielony (`split_broker_nav_for_instrument_overrides`) — wartość override schodzi z konta GM i wchodzi do docelowego portfela. Gotówka robocza brokera: skład/NAV tak, CF/XIRR nie (sekcja rachunek brokerski). Przypisanie w kodzie (v1). RAP 1 z XIRR portfeli. Widok GM / Robo = **Portfele**.
 - **DATA_STEP** — jedyna warstwa cache i łańcucha zależności. Korzystamy **tylko z API wysokopoziomowego** — w praktyce wyłącznie z metod klasy `DataStep` (np. `init_steps`, `obtain`, `obtain_dependent`, `force_read_data`). Nie wywoływać prywatnych pól/metod (`_dependencies_stack`, `_dependencies`, …) i nie omijać DATA_STEP własnym cache. **`snapshots/{date}/sN/`** (stałe w `app_proc/snapshot_step.py`): `_assets` + `_catalog` / `_roi_summary` (venue ROI) + `_ledger` / `_coverage` / `_warnings` / `_xirr`. UI Portfele / RAP 1: `load_assembly` / `load_portfolio_metrics_map`. **`is_sold` w coverage/XIRR** pochodzi z sibling `_roi_summary` (najpierw `obtain_roi_summary_frame`, potem ledger) — nie zagnieżdżać `load_roi_summary` w `_collect_ledger`; błąd / brak summary = twardy fail, nie ciche `is_sold=False` (inaczej filtr Niesprzedane = Wszystkie). **Inicjalizacja:** raz na proces w entrypoincie (`init_app_data_step()` z `app_assets.main` / CLI); nie w adapterach ani `download_yahoo`. Osobny proces (`snapshot_cli`) = własny init.
 - **Yahoo Close** — serie dzienne w `data_steps/yahoo/{ticker}/{as_of}.parquet` przez DATA_STEP (`yahoo_finance.download_yahoo`). Nie do snapshotu / ROI brokerów (MTM online nadal non-goal).
@@ -319,8 +319,8 @@ Pozostaje:
 - Osobny `XIRR(FX)` ani dekompozycja stopy IRR na FX (udział FX tylko z kwot P&L — sekcja *XIRR portfela a FX*).
 - MTM online instrumentów brokerskich (yfinance/OpenFIGI itd.) — spike OK; produkcja odłożona; snapshot brokerów udziałowych = pozycje (MTM ze źródła: DEGIRO/XTB eksport; Robo = last trade × qty z blottera) **+ gotówka robocza**. Złoto jest poza tym zakazem: szacunek NBP × 0,99.
 - Klasyczne ROI katalogowe `p_re_robo` / `obligacjeskarbowe` z cash pool / `roi_def` (równolegle do ROI per instrument).
-- Zakładka UI **ROI** (pills Katalog / brokerzy / depozyty) — usunięta; CF i XIRR w **Portfele** (`portfolio_cf`). Warstwa `roi/` zostaje jako źródło CF dla adapterów.
-- Fee / TOP-UP / podatki / przelewy PKO w XIRR **per instrument ETF** (Revolut: FEE jest na `REVOLUT-ROBO` i w Razem; TOP-UP nadal poza); rozbicie instrumentów GM — zakładka Portfele.
+- Zakładka UI **ROI** (pills Katalog / brokerzy / depozyty) — usunięta; CF i XIRR w zakładce **Portfel** (`portfolio_cf`). Warstwa `roi/` zostaje jako źródło CF dla adapterów.
+- Fee / TOP-UP / podatki / przelewy PKO w XIRR **per instrument ETF** (Revolut: FEE jest na `REVOLUT-ROBO` i w Razem; TOP-UP nadal poza); rozbicie instrumentów GM — zakładka Portfel.
 
 ---
 

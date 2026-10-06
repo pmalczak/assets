@@ -5,13 +5,11 @@ from pathlib import Path
 
 import pandas as pd
 
-TAB_ASSETS = "Aktywa"
-TAB_PORTFOLIOS = "Portfele"
+TAB_PORTFOLIO = "Portfel"
 TAB_MAINTENANCE = "Maintenance"
 
 TAB_LABELS = [
-    TAB_ASSETS,
-    TAB_PORTFOLIOS,
+    TAB_PORTFOLIO,
     "FX",
     "Global momentum",
     "Import wyciągów",
@@ -19,23 +17,23 @@ TAB_LABELS = [
     "Waliduj",
     TAB_MAINTENANCE,
 ]
-DEFAULT_TAB = TAB_ASSETS
+DEFAULT_TAB = TAB_PORTFOLIO
 TABS_STATE_KEY = "app_assets_tab"
 
 SLUG_TO_LABEL = {
-    "portfele": TAB_PORTFOLIOS,
-    "raporty": TAB_ASSETS,
+    "portfel": TAB_PORTFOLIO,
+    # Legacy top-level slugs → jedna zakładka Portfel.
+    "portfele": TAB_PORTFOLIO,
+    "raporty": TAB_PORTFOLIO,
+    "wykres": TAB_PORTFOLIO,
+    "roi": TAB_PORTFOLIO,
+    "roi-robo": TAB_PORTFOLIO,
+    "roi-depozyty": TAB_PORTFOLIO,
+    "roi-mbank-depozyty": TAB_PORTFOLIO,
+    "roi-obligacje": TAB_PORTFOLIO,
+    "roi-degiro": TAB_PORTFOLIO,
+    "roi-xtb": TAB_PORTFOLIO,
     "szukaj": "Wyszukiwanie transakcji",
-    # Legacy slug po usunięciu zakładki Wykres portfela.
-    "wykres": TAB_ASSETS,
-    # Legacy slugs po usunięciu zakładki ROI → Portfele (CF / XIRR).
-    "roi": TAB_PORTFOLIOS,
-    "roi-robo": TAB_PORTFOLIOS,
-    "roi-depozyty": TAB_PORTFOLIOS,
-    "roi-mbank-depozyty": TAB_PORTFOLIOS,
-    "roi-obligacje": TAB_PORTFOLIOS,
-    "roi-degiro": TAB_PORTFOLIOS,
-    "roi-xtb": TAB_PORTFOLIOS,
     "fx": "FX",
     "global-momentum": "Global momentum",
     "import": "Import wyciągów",
@@ -155,5 +153,8 @@ def render_sold_filter_control() -> None:
         options=SOLD_FILTER_LABELS,
         key=SOLD_FILTER_STATE_KEY,
         on_change=on_sold_filter_changed,
-        help="Filtruje tabele CF/XIRR w Portfelach według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie.",
+        help=(
+            "Filtruje tabele CF/XIRR w zakładce Portfel "
+            "według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie."
+        ),
     )
