@@ -1,6 +1,8 @@
 import unittest
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+import tempfile
 
 import pandas as pd
 
@@ -50,8 +52,11 @@ class FinalizeAssetsSnapshotTests(unittest.TestCase):
 
 
 class CalculateAssetsObtainTests(unittest.TestCase):
+    @patch("app_proc.calculate_assets.export_assets_evaluation")
     @patch("app_proc.calculate_assets.DATA_STEP")
-    def test_calculate_assets_calls_obtain_with_dated_product(self, data_step_mock):
+    def test_calculate_assets_calls_obtain_with_dated_product(
+        self, data_step_mock, export_mock
+    ):
         valuation_date = date(2026, 7, 7)
         expected_df = pd.DataFrame([{AssetsFile.ID: "a1"}])
         frame_mock = MagicMock()
@@ -66,9 +71,13 @@ class CalculateAssetsObtainTests(unittest.TestCase):
         self.assertEqual(args[0], assets_snapshot_resource(valuation_date))
         self.assertEqual(kwargs["valuation_date"], valuation_date)
         pd.testing.assert_frame_equal(result, expected_df)
+        export_mock.assert_called_once()
 
+    @patch("app_proc.calculate_assets.export_assets_evaluation")
     @patch("app_proc.calculate_assets.DATA_STEP")
-    def test_calculate_assets_defaults_valuation_date_to_today(self, data_step_mock):
+    def test_calculate_assets_defaults_valuation_date_to_today(
+        self, data_step_mock, export_mock
+    ):
         frame_mock = MagicMock()
         frame_mock.data_frame.return_value = pd.DataFrame()
         data_step_mock.obtain.return_value = frame_mock
@@ -77,6 +86,49 @@ class CalculateAssetsObtainTests(unittest.TestCase):
 
         product = data_step_mock.obtain.call_args.args[0]
         self.assertEqual(product, assets_snapshot_resource(date.today()))
+        export_mock.assert_called_once()
+
+
+class ExportAssetsEvaluationGateTests(unittest.TestCase):
+    def test_skips_write_when_export_pref_disabled(self):
+        from app_proc.export_product_excel import export_assets_evaluation
+
+        df = pd.DataFrame([{AssetsFile.ID: "a1"}])
+        with (
+            patch(
+                "app_proc.export_product_excel.is_export_product_excel_enabled",
+                return_value=False,
+            ),
+            patch("app_proc.export_product_excel.get_online_data_output") as out_mock,
+        ):
+            result = export_assets_evaluation(df, date(2026, 7, 7))
+
+        self.assertIsNone(result)
+        out_mock.assert_not_called()
+
+    def test_writes_when_export_pref_enabled(self):
+        from app_proc.export_product_excel import (
+            ASSETS_EVALUATION_FILE,
+            export_assets_evaluation,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            df = pd.DataFrame([{AssetsFile.ID: "a1"}])
+            with (
+                patch(
+                    "app_proc.export_product_excel.is_export_product_excel_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "app_proc.export_product_excel.get_online_data_output",
+                    return_value=out,
+                ),
+            ):
+                result = export_assets_evaluation(df, date(2026, 7, 7))
+
+            self.assertEqual(result, out / ASSETS_EVALUATION_FILE)
+            self.assertTrue((out / ASSETS_EVALUATION_FILE).is_file())
 
 
 class AssetsSnapshotParquetFileTests(unittest.TestCase):

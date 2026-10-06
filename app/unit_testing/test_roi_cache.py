@@ -288,16 +288,70 @@ class ExportRoiProductExcelsTests(unittest.TestCase):
                 "mbank_eur": pd.DataFrame([{AccountTx.POOL_ID: "mbank_eur", AccountTx.AMOUNT: 2.0}]),
             }
 
-            with patch(
-                "app_proc.export_product_excel.get_online_data_output",
-                return_value=out,
+            with (
+                patch(
+                    "app_proc.export_product_excel.is_export_product_excel_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "app_proc.export_product_excel.get_online_data_output",
+                    return_value=out,
+                ),
             ):
-                export_roi_product_excels(events, unallocated, catalog, date(2026, 7, 16))
+                result = export_roi_product_excels(events, unallocated, catalog, date(2026, 7, 16))
 
+            self.assertEqual(result, out)
             self.assertTrue((out / "mbank_asset_a.xlsx").is_file())
             self.assertTrue((out / unallocated_excel_filename("mbank_pln")).is_file())
             self.assertTrue((out / unallocated_excel_filename("mbank_eur")).is_file())
             self.assertFalse((out / "mbank_consolidated.xlsx").exists())
+
+    def test_skips_write_when_export_pref_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            catalog = pd.DataFrame(
+                [
+                    {
+                        AnalyseAssetsCatalog.ASSET_ID: "asset_a",
+                        AnalyseAssetsCatalog.ENABLED: True,
+                        AnalyseAssetsCatalog.ORDER: 1,
+                        AnalyseAssetsCatalog.OUTPUT_FILE: "mbank_asset_a.xlsx",
+                    }
+                ]
+            )
+            events = {"asset_a": pd.DataFrame()}
+            unallocated = {"mbank_pln": pd.DataFrame()}
+
+            with (
+                patch(
+                    "app_proc.export_product_excel.is_export_product_excel_enabled",
+                    return_value=False,
+                ),
+                patch(
+                    "app_proc.export_product_excel.get_online_data_output",
+                ) as out_mock,
+            ):
+                result = export_roi_product_excels(events, unallocated, catalog, date(2026, 7, 16))
+
+            self.assertIsNone(result)
+            out_mock.assert_not_called()
+            self.assertEqual(list(out.iterdir()), [])
+
+    def test_summary_excel_skips_when_export_pref_disabled(self):
+        from app_proc.export_product_excel import export_roi_summary_excel
+
+        summary = pd.DataFrame([{"asset_id": "x", "xirr": 0.1}])
+        with (
+            patch(
+                "app_proc.export_product_excel.is_export_product_excel_enabled",
+                return_value=False,
+            ),
+            patch("app_proc.export_product_excel.get_online_data_output") as out_mock,
+        ):
+            result = export_roi_summary_excel(summary, date(2026, 7, 16))
+
+        self.assertIsNone(result)
+        out_mock.assert_not_called()
 
 
 class AccountTxYmdTests(unittest.TestCase):

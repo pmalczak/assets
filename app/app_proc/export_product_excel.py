@@ -8,6 +8,7 @@ import pandas as pd
 
 from analyse_assets.config_model import AnalyseAssetsCatalog
 from app_proc.data_root import get_online_data_output
+from app_proc.ui_prefs import is_export_product_excel_enabled
 
 ASSETS_EVALUATION_FILE = "assets_evaluation.xlsx"
 
@@ -20,13 +21,17 @@ def roi_summary_excel_filename(snapshot_date: date) -> str:
     return f"roi_{snapshot_date:%Y-%m-%d}.xlsx"
 
 
-def export_assets_evaluation(df: pd.DataFrame, snapshot_date: date) -> Path:
+def export_assets_evaluation(df: pd.DataFrame, snapshot_date: date) -> Path | None:
+    if not is_export_product_excel_enabled():
+        return None
     target = get_online_data_output(snapshot_date) / ASSETS_EVALUATION_FILE
     df.to_excel(target, index=False)
     return target
 
 
-def export_roi_summary_excel(summary: pd.DataFrame, snapshot_date: date) -> Path:
+def export_roi_summary_excel(summary: pd.DataFrame, snapshot_date: date) -> Path | None:
+    if not is_export_product_excel_enabled():
+        return None
     target = get_online_data_output(snapshot_date) / roi_summary_excel_filename(snapshot_date)
     summary.to_excel(target, index=False)
     return target
@@ -37,8 +42,10 @@ def export_roi_product_excels(
     unallocated_by_pool: dict[str, pd.DataFrame],
     catalog: pd.DataFrame,
     snapshot_date: date,
-) -> Path:
+) -> Path | None:
     """Zapisuje per-asset Excel + unallocated_{pool_id}.xlsx do product/{date}/."""
+    if not is_export_product_excel_enabled():
+        return None
     out_dir = get_online_data_output(snapshot_date)
 
     enabled = catalog[catalog[AnalyseAssetsCatalog.ENABLED].astype(bool)].sort_values(

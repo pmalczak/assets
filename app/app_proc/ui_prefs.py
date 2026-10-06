@@ -61,6 +61,12 @@ SOLD_FILTER_SLUG_TO_LABEL = {
 SOLD_FILTER_LABEL_TO_SLUG = {label: slug for slug, label in SOLD_FILTER_SLUG_TO_LABEL.items()}
 SOLD_COLUMN = "is_sold"
 
+DEFAULT_EXPORT_PRODUCT_EXCEL = False
+EXPORT_PRODUCT_EXCEL_STATE_KEY = "app_assets_export_product_excel"
+EXPORT_PRODUCT_EXCEL_FILE = "export_product_excel.txt"
+EXPORT_PRODUCT_EXCEL_SLUG_ON = "on"
+EXPORT_PRODUCT_EXCEL_SLUG_OFF = "off"
+
 
 def _st():
     import streamlit as st
@@ -156,5 +162,55 @@ def render_sold_filter_control() -> None:
         help=(
             "Filtruje tabele CF/XIRR w zakładce Portfel "
             "według flagi sprzedane (is_sold): niesprzedane, sprzedane albo wszystkie."
+        ),
+    )
+
+
+def export_product_excel_path(prefs_root: Path | None = None) -> Path:
+    return _prefs_root(prefs_root) / EXPORT_PRODUCT_EXCEL_FILE
+
+
+def is_export_product_excel_enabled(prefs_root: Path | None = None) -> bool:
+    """Odczyt z pliku (bez Streamlit) — też CLI / DATA_STEP rebuild."""
+    path = export_product_excel_path(prefs_root)
+    if not path.is_file():
+        return DEFAULT_EXPORT_PRODUCT_EXCEL
+
+    slug = path.read_text(encoding="utf-8").strip().lower()
+    if slug == EXPORT_PRODUCT_EXCEL_SLUG_ON:
+        return True
+    if slug == EXPORT_PRODUCT_EXCEL_SLUG_OFF:
+        return False
+    return DEFAULT_EXPORT_PRODUCT_EXCEL
+
+
+def save_export_product_excel(enabled: bool, prefs_root: Path | None = None) -> None:
+    path = export_product_excel_path(prefs_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    slug = EXPORT_PRODUCT_EXCEL_SLUG_ON if enabled else EXPORT_PRODUCT_EXCEL_SLUG_OFF
+    path.write_text(slug, encoding="utf-8")
+
+
+def on_export_product_excel_changed() -> None:
+    save_export_product_excel(bool(_st().session_state[EXPORT_PRODUCT_EXCEL_STATE_KEY]))
+
+
+def current_export_product_excel() -> bool:
+    return bool(_st().session_state.get(EXPORT_PRODUCT_EXCEL_STATE_KEY, DEFAULT_EXPORT_PRODUCT_EXCEL))
+
+
+def render_export_product_excel_control() -> None:
+    st = _st()
+    if EXPORT_PRODUCT_EXCEL_STATE_KEY not in st.session_state:
+        st.session_state[EXPORT_PRODUCT_EXCEL_STATE_KEY] = is_export_product_excel_enabled()
+
+    st.sidebar.toggle(
+        "Eksport Excel do product/",
+        key=EXPORT_PRODUCT_EXCEL_STATE_KEY,
+        on_change=on_export_product_excel_changed,
+        help=(
+            "Gdy włączone, przy rebuildzie zapisuje Excelle do "
+            "Dropbox/INWESTYCJE/product/{data}/ (mbank_*, unallocated_*, roi_*, "
+            "assets_evaluation). Domyślnie wyłączone."
         ),
     )

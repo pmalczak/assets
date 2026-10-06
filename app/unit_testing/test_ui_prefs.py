@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from app_proc.ui_prefs import (
+    DEFAULT_EXPORT_PRODUCT_EXCEL,
     DEFAULT_SOLD_FILTER,
     DEFAULT_TAB,
     SOLD_FILTER_ACTIVE,
@@ -14,9 +15,12 @@ from app_proc.ui_prefs import (
     TAB_MAINTENANCE,
     TAB_PORTFOLIO,
     filter_by_sold,
+    is_export_product_excel_enabled,
     load_last_tab,
     load_sold_filter,
+    render_export_product_excel_control,
     render_sold_filter_control,
+    save_export_product_excel,
     save_last_tab,
     save_sold_filter,
 )
@@ -181,3 +185,38 @@ class SoldFilterPrefsTests(unittest.TestCase):
         df = pd.DataFrame({"asset_id": ["a", "b"], "is_sold": [pd.NA, True]})
         active = filter_by_sold(df, SOLD_FILTER_ACTIVE)
         self.assertEqual(list(active["asset_id"]), ["a"])
+
+
+class ExportProductExcelPrefsTests(unittest.TestCase):
+    def test_render_export_product_excel_control_is_exported(self):
+        self.assertTrue(callable(render_export_product_excel_control))
+
+    def test_default_is_disabled_when_file_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(is_export_product_excel_enabled(Path(tmp)))
+            self.assertIs(DEFAULT_EXPORT_PRODUCT_EXCEL, False)
+
+    def test_save_and_load_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_export_product_excel(True, prefs_root=root)
+            self.assertTrue(is_export_product_excel_enabled(prefs_root=root))
+            self.assertEqual(
+                (root / "export_product_excel.txt").read_text(encoding="utf-8").strip(),
+                "on",
+            )
+            save_export_product_excel(False, prefs_root=root)
+            self.assertFalse(is_export_product_excel_enabled(prefs_root=root))
+            self.assertEqual(
+                (root / "export_product_excel.txt").read_text(encoding="utf-8").strip(),
+                "off",
+            )
+
+    def test_unknown_slug_falls_back_to_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "export_product_excel.txt").write_text("nieznany", encoding="utf-8")
+            self.assertEqual(
+                is_export_product_excel_enabled(prefs_root=root),
+                DEFAULT_EXPORT_PRODUCT_EXCEL,
+            )

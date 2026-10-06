@@ -22,6 +22,7 @@ from app_proc.ui_prefs import (
     TABS_STATE_KEY,
     load_last_tab,
     on_tab_changed,
+    render_export_product_excel_control,
     render_sold_filter_control,
 )
 from app_proc.calculate_assets import ASSETS_SNAPSHOT_STEP
@@ -199,6 +200,7 @@ def main():
 
     st.title("Assets Dashboard (snapshoty DATA_STEP)")
     render_sold_filter_control()
+    render_export_product_excel_control()
 
     with st.spinner("Ladowanie snapshotow..."):
         try:
