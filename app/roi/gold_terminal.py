@@ -89,8 +89,11 @@ def holdings_from_capex_and_inventory(
 ) -> tuple[dict[str, float], list[str]]:
     """
     Join CAPEX ↔ inventory po dacie.
-    Udany join → sztuki/instrument.
-    Brak / niejednoznaczne / niekompletne inventory → GoldInventoryJoinError.
+
+    Na datę CAPEX wolno mieć wiele wierszy inventory (różne instrumenty).
+    Wszystkie wiersze z tej daty wchodzą do holdings **raz** (nawet przy wielu
+    CAPEX tego samego dnia — bez podwójnego liczenia).
+    Brak / niekompletne inventory na datę CAPEX → GoldInventoryJoinError.
     """
     holdings: dict[str, float] = {}
 
@@ -113,36 +116,35 @@ def holdings_from_capex_and_inventory(
         for day, group in inv.groupby("_day", sort=False):
             inv_by_date[pd.Timestamp(day)] = group
 
+    # Jedna data CAPEX → jedno zużycie inventory (wiele instrumentów OK).
+    capex_by_day: dict[pd.Timestamp, pd.Series] = {}
     for _, event in capex.iterrows():
-        ctx = _capex_inventory_context(event)
         day = _normalize_day(event[CashFlowEvent.DATE])
-
         if day is None:
             raise GoldInventoryJoinError(
-                _missing_inventory_message(ctx, "invalid_capex_date")
+                _missing_inventory_message(
+                    _capex_inventory_context(event), "invalid_capex_date"
+                )
             )
+        capex_by_day.setdefault(day, event)
 
+    for day, event in capex_by_day.items():
+        ctx = _capex_inventory_context(event)
         group = inv_by_date.get(day)
         if group is None or group.empty:
             raise GoldInventoryJoinError(
                 _missing_inventory_message(ctx, "no_inventory_row")
             )
-        if len(group) > 1:
-            raise GoldInventoryJoinError(
-                _missing_inventory_message(
-                    ctx, f"ambiguous_inventory_date, rows={len(group)}"
-                )
-            )
 
-        row = group.iloc[0]
-        instrument = str(row[Inventory.INSTRUMENT]).strip()
-        qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
-        if not instrument or pd.isna(qty):
-            raise GoldInventoryJoinError(
-                _missing_inventory_message(ctx, "incomplete_inventory_row")
-            )
-        require_one_ounce(row[Inventory.WEIGHT])
-        holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
+        for _, row in group.iterrows():
+            instrument = str(row[Inventory.INSTRUMENT]).strip()
+            qty = pd.to_numeric(row[Inventory.QUANTITY], errors="coerce")
+            if not instrument or pd.isna(qty):
+                raise GoldInventoryJoinError(
+                    _missing_inventory_message(ctx, "incomplete_inventory_row")
+                )
+            require_one_ounce(row[Inventory.WEIGHT])
+            holdings[instrument] = holdings.get(instrument, 0.0) + float(qty)
 
     return holdings, []
 

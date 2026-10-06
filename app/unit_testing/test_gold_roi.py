@@ -209,19 +209,39 @@ class GoldTerminalMtmTests(unittest.TestCase):
         )
         self.assertIn("no_inventory_row", msg)
 
-    def test_holdings_ambiguous_inventory_date_raises(self):
+    def test_holdings_multiple_instruments_same_date(self):
+        """Jeden CAPEX / wiele instrumentów tego samego dnia — OK (nie ambiguous)."""
         cashflows = pd.DataFrame([_capex_event(tx_date="2024-03-15")])
+        inventory = pd.DataFrame(
+            [
+                _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz", quantity=1),
+                _inventory_row(tx_date="2024-03-15", instrument="Maple Leaf 1oz", quantity=2),
+            ]
+        )
+        holdings, warnings = holdings_from_capex_and_inventory(
+            cashflows, inventory, date(2026, 7, 1)
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(holdings, {"Krugerrand 1oz": 1.0, "Maple Leaf 1oz": 2.0})
+
+    def test_holdings_same_date_multiple_capex_counts_inventory_once(self):
+        cashflows = pd.DataFrame(
+            [
+                _capex_event(tx_date="2024-03-15", amount=-10000.0, title="MENNICA A"),
+                _capex_event(tx_date="2024-03-15", amount=-5000.0, title="MENNICA B"),
+            ]
+        )
         inventory = pd.DataFrame(
             [
                 _inventory_row(tx_date="2024-03-15", instrument="Krugerrand 1oz", quantity=1),
                 _inventory_row(tx_date="2024-03-15", instrument="Maple Leaf 1oz", quantity=1),
             ]
         )
-        with self.assertRaises(GoldInventoryJoinError) as ctx:
-            holdings_from_capex_and_inventory(cashflows, inventory, date(2026, 7, 1))
-        msg = str(ctx.exception)
-        self.assertIn("ambiguous_inventory_date", msg)
-        self.assertIn("date=2024-03-15", msg)
+        holdings, warnings = holdings_from_capex_and_inventory(
+            cashflows, inventory, date(2026, 7, 1)
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(holdings, {"Krugerrand 1oz": 1.0, "Maple Leaf 1oz": 1.0})
 
     def test_resolve_gold_terminal_from_capex_join(self):
         cashflows = pd.DataFrame(
