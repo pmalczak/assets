@@ -14,3 +14,7 @@ __pycache__/
 
 # ROI config lives next to assets_1.xlsx in Dropbox, not in repo
 app/analyse_assets/analyse_assets_config.xlsx
+
+# Global momentum WIG backtest caches/plots — local runtime only
+/app/global_momentum/global_momentum_wig_backtest/*.csv
+/app/global_momentum/global_momentum_wig_backtest/*.png
