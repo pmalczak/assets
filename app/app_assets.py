@@ -33,6 +33,7 @@ from app_streamlit.render_fx import render_fx
 from app_streamlit.render_global_momentum import render_global_momentum
 from app_streamlit.render_main_reports import load_snapshot_for_date
 from app_streamlit.render_portfolio_shell import render_portfolio_shell
+from app_streamlit.render_rejestr import render_rejestr
 from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_maintenance import render_maintenance
@@ -262,6 +263,8 @@ def main():
                 render_fx()
             elif label == "Global momentum":
                 render_global_momentum()
+            elif label == "Rejestr":
+                render_rejestr()
             elif label == "Import wyciągów":
                 render_import_wyciagow()
             elif label == "Wyszukiwanie transakcji":

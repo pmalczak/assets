@@ -123,6 +123,27 @@ class UiPrefsTests(unittest.TestCase):
             save_last_tab("Waliduj", prefs_root=root)
             self.assertEqual(load_last_tab(prefs_root=root), "Waliduj")
 
+    def test_rejestr_tab_is_between_global_momentum_and_import(self):
+        self.assertIn("Rejestr", TAB_LABELS)
+        self.assertEqual(
+            TAB_LABELS[TAB_LABELS.index("Global momentum") + 1],
+            "Rejestr",
+        )
+        self.assertEqual(
+            TAB_LABELS[TAB_LABELS.index("Rejestr") + 1],
+            "Import wyciągów",
+        )
+
+    def test_save_and_load_rejestr_tab_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab("Rejestr", prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), "Rejestr")
+            self.assertEqual(
+                (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
+                "rejestr",
+            )
+
     def test_maintenance_tab_is_after_validate(self):
         self.assertIn(TAB_MAINTENANCE, TAB_LABELS)
         self.assertEqual(
