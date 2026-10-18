@@ -14,6 +14,7 @@ from portfolio_cf.adapters.degiro import adapt_degiro_ledger
 from portfolio_cf.adapters.deposits import adapt_deposits_ledger
 from portfolio_cf.adapters.ike import adapt_ike_ledger
 from portfolio_cf.adapters.robo import adapt_robo_ledger
+from portfolio_cf.adapters.traderepublic import adapt_traderepublic_ledger
 from portfolio_cf.adapters.xtb import adapt_xtb_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
@@ -70,6 +71,7 @@ def build_instrument_ledger(
         adapt_xtb_ledger,
         adapt_bonds_ledger,
         adapt_deposits_ledger,
+        adapt_traderepublic_ledger,
         adapt_ike_ledger,
     )
     for adapter in adapters:

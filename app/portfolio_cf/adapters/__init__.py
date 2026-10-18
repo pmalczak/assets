@@ -7,6 +7,7 @@ from portfolio_cf.adapters.degiro import adapt_degiro_ledger
 from portfolio_cf.adapters.deposits import adapt_deposits_ledger
 from portfolio_cf.adapters.ike import adapt_ike_ledger
 from portfolio_cf.adapters.robo import adapt_robo_ledger
+from portfolio_cf.adapters.traderepublic import adapt_traderepublic_ledger
 from portfolio_cf.adapters.xtb import adapt_xtb_ledger
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "adapt_deposits_ledger",
     "adapt_ike_ledger",
     "adapt_robo_ledger",
+    "adapt_traderepublic_ledger",
     "adapt_xtb_ledger",
 ]

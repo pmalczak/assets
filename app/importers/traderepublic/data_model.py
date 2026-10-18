@@ -64,6 +64,8 @@ class TradeRepublicFileCls(GenericStructureClass):
     PERIOD_END = "period_end"
 
     TYPE_CUSTOMER_INPAYMENT = "CUSTOMER_INPAYMENT"
+    TYPE_CUSTOMER_OUTPAYMENT = "CUSTOMER_OUTPAYMENT"
+    TYPE_INTEREST_PAYMENT = "INTEREST_PAYMENT"
 
     def expected_columns(self) -> set:
         return {

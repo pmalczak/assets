@@ -229,6 +229,7 @@ def _venue_roi_loaders():
     from roi.degiro_roi import compute_degiro_ticker_roi
     from roi.mbank_deposit_roi import compute_mbank_deposit_roi
     from roi.revolut_deposit_roi import compute_revolut_deposit_roi
+    from roi.traderepublic_deposit_roi import compute_traderepublic_roi
     from roi.xtb_roi import compute_xtb_ticker_roi
 
     def _catalog(vd: date):
@@ -243,6 +244,7 @@ def _venue_roi_loaders():
         compute_obligacje_broker_roi,
         compute_revolut_deposit_roi,
         compute_mbank_deposit_roi,
+        compute_traderepublic_roi,
     )
 
 

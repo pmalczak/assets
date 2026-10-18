@@ -33,6 +33,14 @@ from maintenance.move_downloaded_results import (
 )
 from maintenance.move_traderepublic_files import move_traderepublic_files
 from move_dowloaded import run_move_downloaded
+from roi.categories import CAPEX
+from roi.data_model import CashFlowEvent
+from roi.traderepublic_deposit_roi import (
+    build_traderepublic_cashflows,
+    compute_traderepublic_roi,
+    nav_as_of,
+)
+from roi.xirr import cashflows_for_xirr, compute_xirr
 
 
 _HEADER = (
@@ -48,14 +56,44 @@ def _row(
     tx_id: str,
     tx_type: str = "CUSTOMER_INPAYMENT",
     amount: str = "400.000000",
+    fee: str = "",
+    tax: str = "",
     currency: str = "PLN",
     description: str = "Card Top up",
 ) -> str:
     return (
         f'"{tx_date}T15:01:38.075386Z","{tx_date}","DEFAULT","CASH","{tx_type}",'
-        f'"","Piotr","","","","{amount}","","","{currency}","","","",'
+        f'"","Piotr","","","","{amount}","{fee}","{tax}","{currency}","","","",'
         f'"{description}","{tx_id}","Piotr","","",""'
     )
+
+
+def _sample_deposit_rows() -> list[str]:
+    """Realistyczna próbka: top-up + 2× INTEREST_PAYMENT z Belką w tax."""
+    return [
+        _row(
+            tx_date="2026-07-22",
+            tx_id="tx-in",
+            amount="400.000000",
+            description="Card Top up with ****8959",
+        ),
+        _row(
+            tx_date="2026-09-01",
+            tx_id="tx-int-1",
+            tx_type="INTEREST_PAYMENT",
+            amount="1.640000",
+            tax="-0.31",
+            description="Interest payment for payout collection 1",
+        ),
+        _row(
+            tx_date="2026-10-01",
+            tx_id="tx-int-2",
+            tx_type="INTEREST_PAYMENT",
+            amount="1.980000",
+            tax="-0.37",
+            description="Interest payment for payout collection 2",
+        ),
+    ]
 
 
 def _csv(rows: list[str]) -> str:
@@ -256,13 +294,13 @@ class EvaluateTradeRepublicTests(unittest.TestCase):
             }
         )
 
-    def test_evaluate_returns_zero_nav_row(self):
+    def test_evaluate_returns_deposit_nav(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             asset_dir = root / DEFAULT_TRADEREPUBLIC_ASSET_ID
             asset_dir.mkdir()
-            (asset_dir / "eksport-transakcji_2026-07-22_2026-07-22.csv").write_text(
-                _csv([_row(tx_date="2026-07-22", tx_id="tx-1")]),
+            (asset_dir / "eksport-transakcji_2026-07-22_2026-10-01.csv").write_text(
+                _csv(_sample_deposit_rows()),
                 encoding="utf-8",
             )
             with (
@@ -276,11 +314,16 @@ class EvaluateTradeRepublicTests(unittest.TestCase):
                 ),
             ):
                 result, warnings = evaluate_broker_traderepublic(
-                    root, DEFAULT_TRADEREPUBLIC_ASSET_ID, self._catalog_row(), date(2026, 8, 8)
+                    root,
+                    DEFAULT_TRADEREPUBLIC_ASSET_ID,
+                    self._catalog_row(),
+                    date(2026, 10, 18),
                 )
             self.assertEqual(len(result), 1)
-            self.assertEqual(float(result.iloc[0][AssetsDef.VALUE]), 0.0)
-            self.assertTrue(any("niezaimplementowana" in w for w in warnings))
+            self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 402.94, places=2)
+            self.assertEqual(result.iloc[0][AssetsDef.TYPE], TypeDomain.DEPOSIT)
+            self.assertEqual(result.iloc[0][AssetsDef.GROUP], GroupDomain.DEPOSIT)
+            self.assertFalse(any("niezaimplementowana" in w for w in warnings))
 
     def test_evaluate_missing_dir_warns_instead_of_raising(self):
         missing = Path("/tmp/definitely-missing-p_traderepublic")
@@ -297,6 +340,80 @@ class EvaluateTradeRepublicTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(float(result.iloc[0][AssetsDef.VALUE]), 0.0)
         self.assertTrue(any("Brak katalogu" in w for w in warnings))
+
+
+class TradeRepublicDepositRoiTests(unittest.TestCase):
+    def _blotter(self) -> pd.DataFrame:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "eksport-transakcji_2026-07-22_2026-10-01.csv").write_text(
+                _csv(_sample_deposit_rows()),
+                encoding="utf-8",
+            )
+            return _read_traderepublic_transactions(root)
+
+    def test_nav_full_and_cutoff(self):
+        blotter = self._blotter()
+        nav, warnings = nav_as_of(blotter, date(2026, 10, 18))
+        self.assertAlmostEqual(nav, 402.94, places=2)
+        self.assertEqual(warnings, [])
+
+        nav_cut, _ = nav_as_of(blotter, date(2026, 9, 15))
+        self.assertAlmostEqual(nav_cut, 401.33, places=2)
+
+    def test_cashflows_capex_only_no_interest(self):
+        blotter = self._blotter()
+        cf, warnings = build_traderepublic_cashflows(
+            blotter, DEFAULT_TRADEREPUBLIC_ASSET_ID
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(cf), 1)
+        self.assertEqual(cf.iloc[0][CashFlowEvent.CATEGORY], CAPEX)
+        self.assertAlmostEqual(float(cf.iloc[0][CashFlowEvent.AMOUNT]), -400.0)
+        self.assertFalse(
+            (cf[CashFlowEvent.DESCRIPTION] == "INTEREST_PAYMENT").any()
+        )
+
+    def test_unknown_type_warns_outside_nav(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "eksport-transakcji_2026-07-22_2026-07-22.csv").write_text(
+                _csv(
+                    [
+                        _row(tx_date="2026-07-22", tx_id="a", amount="100"),
+                        _row(
+                            tx_date="2026-07-22",
+                            tx_id="b",
+                            tx_type="WEIRD_TYPE",
+                            amount="50",
+                        ),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            blotter = _read_traderepublic_transactions(root)
+        nav, warnings = nav_as_of(blotter, date(2026, 8, 1))
+        self.assertAlmostEqual(nav, 100.0, places=2)
+        self.assertTrue(any("WEIRD_TYPE" in w for w in warnings))
+
+    def test_roi_terminal_and_xirr(self):
+        blotter = self._blotter()
+        nav, _ = nav_as_of(blotter, date(2026, 10, 18))
+        self.assertAlmostEqual(nav, 402.94, places=2)
+        summary, events, _warnings = compute_traderepublic_roi(
+            date(2026, 10, 18),
+            blotter=blotter,
+        )
+        self.assertEqual(len(summary), 1)
+        # roi_summary_to_row zaokrągla terminal (jak inne venue).
+        self.assertEqual(int(summary.iloc[0]["terminal_unrealized"]), round(nav))
+        self.assertFalse(bool(summary.iloc[0]["is_sold"]))
+        cf = events[DEFAULT_TRADEREPUBLIC_ASSET_ID]
+        dates, amounts = cashflows_for_xirr(cf, date(2026, 10, 18), nav)
+        self.assertAlmostEqual(amounts[-1], nav, places=2)
+        xirr = compute_xirr(dates, amounts)
+        self.assertIsNotNone(xirr)
+        self.assertGreater(float(xirr), 0.0)
 
 
 if __name__ == "__main__":

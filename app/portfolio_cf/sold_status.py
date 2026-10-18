@@ -37,6 +37,7 @@ def build_instrument_sold_map(
         _load_bonds_sold,
         _load_revolut_deposits_sold,
         _load_mbank_deposits_sold,
+        _load_traderepublic_sold,
     )
     for loader in soft_loaders:
         try:
@@ -197,4 +198,11 @@ def _load_mbank_deposits_sold(valuation_date: date) -> dict[str, bool]:
     from roi.mbank_deposit_roi import compute_mbank_deposit_roi
 
     summary, _events, *_rest = compute_mbank_deposit_roi(valuation_date)
+    return _summary_sold_map(summary)
+
+
+def _load_traderepublic_sold(valuation_date: date) -> dict[str, bool]:
+    from roi.traderepublic_deposit_roi import compute_traderepublic_roi
+
+    summary, _events, *_rest = compute_traderepublic_roi(valuation_date)
     return _summary_sold_map(summary)
