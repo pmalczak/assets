@@ -1,14 +1,24 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
+
 import datetime
 from pathlib import Path
+
 import pandas as pd
 
 from cache.cached_data_frame import CachedDataFrame, DataFrameCacheInvalid
-from nbp_pl_api.nbp_fx_rates_fetch import nbp_fx_rates_fetch, NBP_FX_DATE
+from nbp_pl_api.nbp_fx_rates_fetch import NBP_FX_DATE, nbp_fx_rates_fetch
 
 
 class NbpFxFileCache(CachedDataFrame):
+    """Cache kursów NBP A.
+
+    Lata zamknięte: ``NBP_FX_RATES.{year}.parquet`` (bez refetch).
+    Rok bieżący: ``NBP_FX_RATES.{year}.{mm_dd}_{HH}.parquet`` — bucket godzinowy,
+    żeby przed publikacją tabeli A na dziś nie „zabetonować” porannego fetchu
+    do północy, a jednocześnie nie spamować API (max ~1×/h).
+    """
+
     def __init__(self, target_directory: Path, year: int, delete_outdated_cache_files):
         self.target_directory = target_directory
         self.year = year
@@ -27,12 +37,14 @@ class NbpFxFileCache(CachedDataFrame):
         return result
 
     def parquet_file_name(self, the_file: Path = None, **_) -> Path:
-        today = datetime.datetime.today()
-        date = datetime.datetime.strftime(today, '%m_%d')
-        n = f'NBP_FX_RATES.{self.year}.parquet' if today.year > self.year \
-            else f'NBP_FX_RATES.{self.year}.{date}.parquet'
-        result = self.target_directory / n
-        return result
+        today = datetime.datetime.now()
+        if today.year > self.year:
+            name = f"NBP_FX_RATES.{self.year}.parquet"
+        else:
+            # Kalendarzowy dzień + godzina: refetch co najwyżej raz na godzinę.
+            stamp = today.strftime("%m_%d_%H")
+            name = f"NBP_FX_RATES.{self.year}.{stamp}.parquet"
+        return self.target_directory / name
 
     def validate(self, input_file_digest: Path, parquet_file: Path, **kwargs):
         if not parquet_file.is_file():
@@ -48,14 +60,12 @@ class NbpFxFileCache(CachedDataFrame):
         x = core.split('.')
         if len(x) == 2:
             return
-        elif len(x) == 3:
-            x[2] = '*'
-            core = '.'.join(x)
-            parquet_template = f'{core}{ext}'
+        elif len(x) >= 3:
+            # NBP_FX_RATES.{year}.* — usuń inne buckety (dzień/godzina) tego roku.
+            parquet_template = f"{x[0]}.{x[1]}.*{ext}"
             lst = list(parquet.parent.glob(parquet_template))
-            lst = list(filter(lambda x: x != parquet, lst))
-            list(map(lambda x: x.unlink(), lst))
+            lst = list(filter(lambda path: path != parquet, lst))
+            list(map(lambda path: path.unlink(), lst))
             return
         else:
             raise ValueError
-
