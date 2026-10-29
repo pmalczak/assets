@@ -12,6 +12,7 @@ from portfolios.assignment import (
     PORTFOLIO_REVOLUT_ROBO,
     portfolio_for_asset_id,
 )
+from roi.broker_investment_cycles import broker_base_instrument_id
 
 # Prefiksy kont brokerskich → portfel (tickery + CASH).
 _BROKER_PREFIX_PORTFOLIO: tuple[tuple[str, str], ...] = (
@@ -47,27 +48,30 @@ def portfolio_for_instrument(instrument_id: str | None) -> str:
     if not key:
         return PORTFOLIO_PLYNNY
 
-    override = INSTRUMENT_PORTFOLIO_OVERRIDES.get(key)
+    # Cykl zamknięty ``p_degiro:ISIN#data`` → ten sam portfel co goły ISIN.
+    base = broker_base_instrument_id(key)
+
+    override = INSTRUMENT_PORTFOLIO_OVERRIDES.get(base)
     if override is not None:
         return override
 
     for prefix, portfolio in _BROKER_PREFIX_PORTFOLIO:
-        if key.startswith(prefix):
+        if base.startswith(prefix):
             return portfolio
 
-    if key in _PROPERTY_INSTRUMENT_IDS:
+    if base in _PROPERTY_INSTRUMENT_IDS:
         return PORTFOLIO_NIERUCHOMOSCI
 
-    if key in PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS:
+    if base in PORTFOLIO_DLUGOTERMINOWY_ASSET_IDS:
         return PORTFOLIO_DLUGOTERMINOWY
 
     # Emisje obligacji: ten sam portfel co kontener obligacjeskarbowe.
-    if key.startswith("obligacjeskarbowe:"):
+    if base.startswith("obligacjeskarbowe:"):
         return PORTFOLIO_DLUGOTERMINOWY
 
     # Pojedyncze id katalogu / kontenera — jak assignment.py
-    if ":" not in key:
-        return portfolio_for_asset_id(key)
+    if ":" not in base:
+        return portfolio_for_asset_id(base)
 
     # np. p_re_eur:… depozyty — reszta inwestycji → Płynny
     return PORTFOLIO_PLYNNY

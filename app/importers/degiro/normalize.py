@@ -46,7 +46,11 @@ def normalize_degiro_positions(
                     BrokerPositionFrame.AVERAGE_COST: None,
                     BrokerPositionFrame.CURRENCY: str(row.get(DegiroPortfolioFile.LOCAL_CURRENCY) or "").strip(),
                     BrokerPositionFrame.MARKET_VALUE: _float_or_zero(row.get(DegiroPortfolioFile.VALUE_EUR)),
-                    BrokerPositionFrame.AS_OF: str(row.get(DegiroPortfolioFile.PERIOD_END) or ""),
+                    BrokerPositionFrame.AS_OF: str(
+                        row.get(DegiroPortfolioFile.FILE_DATE)
+                        or row.get(DegiroPortfolioFile.PERIOD_END)
+                        or ""
+                    ),
                 }
             )
     result = pd.DataFrame(rows, columns=list(BrokerPositionFrame.expected_columns()))
@@ -140,7 +144,11 @@ def normalize_degiro_cash_balances(
                     BrokerCashBalanceFrame.ACCOUNT_ID: account_id,
                     BrokerCashBalanceFrame.CURRENCY: currency,
                     BrokerCashBalanceFrame.AMOUNT: _float_or_zero(row.get(DegiroPortfolioFile.VALUE_EUR)),
-                    BrokerCashBalanceFrame.AS_OF: str(row.get(DegiroPortfolioFile.PERIOD_END) or ""),
+                    BrokerCashBalanceFrame.AS_OF: str(
+                        row.get(DegiroPortfolioFile.FILE_DATE)
+                        or row.get(DegiroPortfolioFile.PERIOD_END)
+                        or ""
+                    ),
                 }
             )
     result = pd.DataFrame(rows, columns=list(BrokerCashBalanceFrame.expected_columns()))

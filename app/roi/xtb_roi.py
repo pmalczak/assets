@@ -31,6 +31,11 @@ from importers.xtb.read_xtb import (
     read_xtb_open,
     xtb_open_position_rows,
 )
+from roi.broker_investment_cycles import (
+    broker_code_from_instrument_id,
+    is_closed_cycle_instrument_id,
+    partition_broker_cashflows,
+)
 from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.compute_roi import roi_summary_to_row
@@ -70,12 +75,14 @@ def compute_xtb_ticker_roi(
     )
     closed_positions_df = _filter_closed_on_or_before(closed_positions_df, valuation_date)
 
-    events_by_asset, type_warnings = build_xtb_cashflows(cash_operations_df, broker_id)
+    raw_events, type_warnings = build_xtb_cashflows(cash_operations_df, broker_id)
     warnings.extend(type_warnings)
+    events_by_asset, cycle_warnings = partition_broker_cashflows(raw_events)
+    warnings.extend(cycle_warnings)
     terminal_by_ticker = _terminal_by_instrument(open_latest)
     qty_by_ticker = _qty_by_instrument(open_latest)
     all_tickers = (
-        set(_instrument_from_asset_id(asset_id) for asset_id in events_by_asset)
+        set(broker_code_from_instrument_id(asset_id) for asset_id in events_by_asset)
         | set(terminal_by_ticker)
         | set(_closed_instruments(closed_positions_df))
     )
@@ -83,18 +90,62 @@ def compute_xtb_ticker_roi(
     mapping.require_xtb(all_tickers)
 
     rows = []
-    for ticker in sorted(t for t in all_tickers if t):
-        asset_id = ticker_asset_id(broker_id, ticker)
-        events = events_by_asset.get(asset_id, _empty_events())
-        terminal = float(terminal_by_ticker.get(ticker, 0.0))
-        qty = float(qty_by_ticker.get(ticker, 0.0))
-        open_qty = 1.0 if abs(qty) > 1e-12 and terminal != 0.0 else 0.0
+    open_bases = {a for a in events_by_asset if not is_closed_cycle_instrument_id(a)}
+    for cycle_id, events in sorted(events_by_asset.items()):
+        ticker = broker_code_from_instrument_id(cycle_id)
+        if is_closed_cycle_instrument_id(cycle_id):
+            open_qty = 0.0
+            last_price = 0.0
+        else:
+            terminal = float(terminal_by_ticker.get(ticker, 0.0))
+            qty = float(qty_by_ticker.get(ticker, 0.0))
+            open_qty = 1.0 if abs(qty) > 1e-12 and terminal != 0.0 else 0.0
+            last_price = terminal if open_qty else 0.0
         summary = compute_ticker_roi(
-            asset_id,
+            cycle_id,
             events,
             valuation_date,
             open_qty=open_qty,
-            last_price=terminal if open_qty else 0.0,
+            last_price=last_price,
+        )
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+        row["instrument"] = mapping.instrument_for_xtb(ticker)
+        rows.append(row)
+
+    for ticker in sorted(t for t in terminal_by_ticker if t):
+        bare = ticker_asset_id(broker_id, ticker)
+        if bare in open_bases:
+            continue
+        terminal = float(terminal_by_ticker.get(ticker, 0.0))
+        qty = float(qty_by_ticker.get(ticker, 0.0))
+        if abs(qty) <= 1e-12 or terminal == 0.0:
+            continue
+        summary = compute_ticker_roi(
+            bare,
+            _empty_events(),
+            valuation_date,
+            open_qty=1.0,
+            last_price=terminal,
+        )
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+        row["instrument"] = mapping.instrument_for_xtb(ticker)
+        rows.append(row)
+
+    # Zamknięte w Closed Positions bez CF w cash — jak wcześniej: pusty wiersz sold.
+    for ticker in sorted(_closed_instruments(closed_positions_df)):
+        bare = ticker_asset_id(broker_id, ticker)
+        if any(broker_code_from_instrument_id(a) == ticker for a in events_by_asset):
+            continue
+        if bare in open_bases:
+            continue
+        if ticker in terminal_by_ticker and abs(float(qty_by_ticker.get(ticker, 0.0))) > 1e-12:
+            continue
+        summary = compute_ticker_roi(
+            bare,
+            _empty_events(),
+            valuation_date,
+            open_qty=0.0,
+            last_price=0.0,
         )
         row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
         row["instrument"] = mapping.instrument_for_xtb(ticker)
@@ -143,11 +194,14 @@ def build_xtb_cashflows(
             amount = abs(amount)
 
         asset_id = ticker_asset_id(broker_id, instrument)
+        # Cash Operations XTB nie ma Volume — qty opcjonalne (cykle tylko gdy uda się uzupełnić).
         rows_by_asset.setdefault(asset_id, []).append(
             {
                 CashFlowEvent.ASSET_ID: asset_id,
                 CashFlowEvent.DATE: _date_str(row.get(XtbCashOperationsFile.TIME)),
                 CashFlowEvent.AMOUNT: amount,
+                CashFlowEvent.QUANTITY: None,
+                CashFlowEvent.UNIT_PRICE: None,
                 CashFlowEvent.CATEGORY: category,
                 CashFlowEvent.SOURCE: broker_id,
                 CashFlowEvent.DESCRIPTION: raw_type,
@@ -250,4 +304,4 @@ def _empty_events() -> pd.DataFrame:
 
 
 def _instrument_from_asset_id(asset_id: str) -> str:
-    return str(asset_id).split(":", 1)[-1]
+    return broker_code_from_instrument_id(asset_id)

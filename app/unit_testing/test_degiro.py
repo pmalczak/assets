@@ -147,8 +147,13 @@ class DegiroReadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             long_start, short_start, end = date(2026, 1, 8), date(2026, 8, 13), date(2026, 8, 17)
-            (root / dated_filename("portfolio", long_start, end)).write_text(PORTFOLIO, encoding="utf-8")
-            (root / dated_filename("portfolio", short_start, end)).write_text(PORTFOLIO, encoding="utf-8")
+            fetched = date(2026, 8, 17)
+            (root / dated_filename("portfolio", long_start, end, fetched)).write_text(
+                PORTFOLIO, encoding="utf-8"
+            )
+            (root / dated_filename("portfolio", short_start, end, fetched)).write_text(
+                PORTFOLIO, encoding="utf-8"
+            )
 
             combined = _read_degiro_portfolio(root)
             latest = latest_portfolio_as_of(combined, date(2026, 8, 20))
@@ -163,6 +168,68 @@ class DegiroReadTests(unittest.TestCase):
             self.assertAlmostEqual(float(positions.iloc[0][DegiroPortfolioFile.VALUE_EUR]), 402.28)
             self.assertAlmostEqual(float(latest[DegiroPortfolioFile.VALUE_EUR].sum()), 432.40)
             self.assertEqual(str(latest[DegiroPortfolioFile.PERIOD_START].iloc[0]), short_start.isoformat())
+            self.assertEqual(str(latest[DegiroPortfolioFile.FILE_DATE].iloc[0]), fetched.isoformat())
+
+    def test_portfolio_as_of_uses_file_date_not_account_period_end(self):
+        """Odświeżone Portfolio (to samo do z Account, nowa data pobrania) = świeższy MTM."""
+        older = """Produkt,Symbol/ISIN,Suma,Kurs,Lokalna wartość,,Wartość w EUR
+CASH & CASH FUND & FTX CASH (EUR),,,,EUR,"10,00","10,00"
+INTER RAO LIETUVA AB,LT0000128621,150,"11,54",PLN,"1731,00","400,00"
+"""
+        newer = """Produkt,Symbol/ISIN,Suma,Kurs,Lokalna wartość,,Wartość w EUR
+CASH & CASH FUND & FTX CASH (EUR),,,,EUR,"24,40","24,40"
+INTER RAO LIETUVA AB,LT0000128621,150,"11,54",PLN,"1731,00","393,46"
+ISHARES CORE MSCI JAPAN IMI UCITS,IE00B4L5YX21,207,"72,94",EUR,"15099,22","15099,22"
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / dated_filename("portfolio", date(2025, 1, 5), date(2026, 10, 1), date(2026, 10, 2))).write_text(
+                older, encoding="utf-8"
+            )
+            (root / dated_filename("portfolio", date(2026, 9, 30), date(2026, 10, 7), date(2026, 10, 29))).write_text(
+                newer, encoding="utf-8"
+            )
+            combined = _read_degiro_portfolio(root)
+
+            mid = latest_portfolio_as_of(combined, date(2026, 10, 15))
+            self.assertAlmostEqual(float(mid[DegiroPortfolioFile.VALUE_EUR].sum()), 410.0)
+            self.assertEqual(str(mid[DegiroPortfolioFile.FILE_DATE].iloc[0]), "2026-10-02")
+            self.assertEqual(str(mid[DegiroPortfolioFile.PERIOD_END].iloc[0]), "2026-10-01")
+
+            fresh = latest_portfolio_as_of(combined, date(2026, 10, 29))
+            self.assertAlmostEqual(float(fresh[DegiroPortfolioFile.VALUE_EUR].sum()), 15517.08)
+            self.assertEqual(str(fresh[DegiroPortfolioFile.FILE_DATE].iloc[0]), "2026-10-29")
+            self.assertEqual(str(fresh[DegiroPortfolioFile.PERIOD_END].iloc[0]), "2026-10-07")
+
+    def test_same_file_date_on_many_period_ends_does_not_sum_mtm(self):
+        """Stary cache DATA_STEP z max(FILE_DATE) na wszystkich pakietach nie może 2× MTM."""
+        older = """Produkt,Symbol/ISIN,Suma,Kurs,Lokalna wartość,,Wartość w EUR
+CASH & CASH FUND & FTX CASH (EUR),,,,EUR,"10,00","10,00"
+INTER RAO LIETUVA AB,LT0000128621,150,"11,54",PLN,"1731,00","400,00"
+"""
+        newer = """Produkt,Symbol/ISIN,Suma,Kurs,Lokalna wartość,,Wartość w EUR
+CASH & CASH FUND & FTX CASH (EUR),,,,EUR,"24,40","24,40"
+INTER RAO LIETUVA AB,LT0000128621,150,"11,54",PLN,"1731,00","393,46"
+ISHARES CORE MSCI JAPAN IMI UCITS,IE00B4L5YX21,207,"72,94",EUR,"15099,22","15099,22"
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / dated_filename("portfolio", date(2025, 1, 5), date(2026, 10, 1), date(2026, 10, 2))).write_text(
+                older, encoding="utf-8"
+            )
+            (root / dated_filename("portfolio", date(2026, 9, 30), date(2026, 10, 7), date(2026, 10, 29))).write_text(
+                newer, encoding="utf-8"
+            )
+            combined = _read_degiro_portfolio(root)
+            # Symuluj stary cache: jeden FILE_DATE na wszystkich wierszach.
+            combined[DegiroPortfolioFile.FILE_DATE] = "2026-10-29"
+            latest = latest_portfolio_as_of(combined, date(2026, 10, 29))
+            self.assertAlmostEqual(float(latest[DegiroPortfolioFile.VALUE_EUR].sum()), 15517.08)
+            self.assertEqual(str(latest[DegiroPortfolioFile.PERIOD_END].iloc[0]), "2026-10-07")
+            isin = latest[DegiroPortfolioFile.ISIN].astype(str)
+            japan = latest.loc[isin.str.contains("IE00B4L5YX21")]
+            self.assertEqual(len(japan), 1)
+            self.assertAlmostEqual(float(japan.iloc[0][DegiroPortfolioFile.VALUE_EUR]), 15099.22)
 
 
 class MoveDegiroTests(unittest.TestCase):

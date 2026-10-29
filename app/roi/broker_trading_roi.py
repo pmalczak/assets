@@ -26,6 +26,11 @@ from importers.assets.pool_id import REVOLUT_EUR
 from importers.assets.read_assets import read_assets
 from importers.revolut.read_r_trading import read_revolut_trading_transactions
 from importers.revolut.trading_data_model import RevolutTradingFile
+from roi.broker_investment_cycles import (
+    broker_code_from_instrument_id,
+    is_closed_cycle_instrument_id,
+    partition_broker_cashflows,
+)
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
@@ -210,7 +215,10 @@ def compute_broker_ticker_roi_from_trading(
     broker_id: str = DEFAULT_BROKER_ASSET_ID,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     filtered = filter_trading_on_or_before(trading_df, valuation_date)
-    events_by_asset = build_broker_ticker_cashflows(filtered, broker_id)
+    raw_events = build_broker_ticker_cashflows(filtered, broker_id)
+    events_by_asset, _cycle_warnings = partition_broker_cashflows(
+        raw_events, skip_codes=frozenset({ROBO_FEE_TICKER})
+    )
     state = ticker_open_state(filtered)
     eval_date = evaluation_date_from_frame(
         filtered, RevolutTradingFile.FILE_DATE, valuation_date
@@ -218,7 +226,7 @@ def compute_broker_ticker_roi_from_trading(
 
     rows = []
     for asset_id, events in sorted(events_by_asset.items()):
-        ticker = asset_id.split(":", 1)[-1]
+        ticker = broker_code_from_instrument_id(asset_id)
         if ticker == ROBO_FEE_TICKER:
             # Tylko OPEX; XIRR per wiersz zwykle None — OPEX wchodzi do Razem.
             summary = compute_ticker_roi(
@@ -233,13 +241,19 @@ def compute_broker_ticker_roi_from_trading(
             row["instrument"] = ROBO_FEE_TICKER
             rows.append(row)
             continue
-        st = state.get(ticker, {"qty": 0.0, "last_price": 0.0})
+        if is_closed_cycle_instrument_id(asset_id):
+            open_qty = 0.0
+            last_price = 0.0
+        else:
+            st = state.get(ticker, {"qty": 0.0, "last_price": 0.0})
+            open_qty = float(st["qty"])
+            last_price = float(st["last_price"])
         summary = compute_ticker_roi(
             asset_id,
             events,
             valuation_date,
-            open_qty=st["qty"],
-            last_price=st["last_price"],
+            open_qty=open_qty,
+            last_price=last_price,
         )
         row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
         row["instrument"] = ticker

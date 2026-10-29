@@ -10,6 +10,7 @@ from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID, XtbCashOperationsFile
 from importers.xtb.read_xtb import read_xtb_cash
 from portfolio_cf.adapters.base import empty_ledger, legacy_events_to_ledger
 from portfolio_cf.coverage import InstrumentCoverage
+from roi.broker_investment_cycles import partition_broker_cashflows
 from roi.xtb_roi import _asset_dir, _filter_xtb_rows_on_or_before, build_xtb_cashflows
 
 VENUE = "xtb"
@@ -32,8 +33,10 @@ def adapt_xtb_ledger(
     filtered = _filter_xtb_rows_on_or_before(
         cash_operations_df, XtbCashOperationsFile.TIME, valuation_date
     )
-    events, build_warnings = build_xtb_cashflows(filtered, broker_id)
+    raw_events, build_warnings = build_xtb_cashflows(filtered, broker_id)
     warnings.extend(build_warnings)
+    events, cycle_warnings = partition_broker_cashflows(raw_events)
+    warnings.extend(cycle_warnings)
     ticker_ledger, coverage = legacy_events_to_ledger(
         events,
         venue=VENUE,

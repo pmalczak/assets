@@ -25,6 +25,11 @@ from importers.degiro.read_degiro import (
     read_degiro_portfolio,
     read_degiro_transactions,
 )
+from roi.broker_investment_cycles import (
+    broker_code_from_instrument_id,
+    is_closed_cycle_instrument_id,
+    partition_broker_cashflows,
+)
 from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.compute_roi import roi_summary_to_row
@@ -77,26 +82,60 @@ def compute_degiro_ticker_roi(
     tx = _filter_degiro_rows_on_or_before(transactions_df, DegiroTransactionsFile.DATE, valuation_date)
     account = _filter_degiro_rows_on_or_before(account_df, DegiroAccountFile.BOOKING_DATE, valuation_date)
 
-    events_by_asset = build_degiro_cashflows(tx, account, broker_id)
+    raw_events = build_degiro_cashflows(tx, account, broker_id)
+    events_by_asset, cycle_warnings = partition_broker_cashflows(raw_events)
+    warnings.extend(cycle_warnings)
     terminal_by_isin = _terminal_by_isin(portfolio)
     qty_by_isin = _qty_by_isin(portfolio)
-    all_isins = set(_isin_from_asset_id(a) for a in events_by_asset) | set(terminal_by_isin)
+    all_isins = (
+        set(broker_code_from_instrument_id(a) for a in events_by_asset)
+        | set(terminal_by_isin)
+    )
     mapping = instruments if instruments is not None else load_instrument_map()
     mapping.require_degiro(all_isins)
 
     rows = []
-    for isin in sorted(i for i in all_isins if i):
-        asset_id = ticker_asset_id(broker_id, isin)
-        events = events_by_asset.get(asset_id, _empty_events())
-        terminal = float(terminal_by_isin.get(isin, 0.0))
-        qty = float(qty_by_isin.get(isin, 0.0))
-        open_qty = 1.0 if abs(qty) > 1e-12 and terminal != 0.0 else 0.0
+    open_bases = {
+        a
+        for a in events_by_asset
+        if not is_closed_cycle_instrument_id(a)
+    }
+    for cycle_id, events in sorted(events_by_asset.items()):
+        isin = broker_code_from_instrument_id(cycle_id)
+        if is_closed_cycle_instrument_id(cycle_id):
+            open_qty = 0.0
+            last_price = 0.0
+        else:
+            terminal = float(terminal_by_isin.get(isin, 0.0))
+            qty = float(qty_by_isin.get(isin, 0.0))
+            open_qty = 1.0 if abs(qty) > 1e-12 and terminal != 0.0 else 0.0
+            last_price = terminal if open_qty else 0.0
         summary = compute_ticker_roi(
-            asset_id,
+            cycle_id,
             events,
             valuation_date,
             open_qty=open_qty,
-            last_price=terminal if open_qty else 0.0,
+            last_price=last_price,
+        )
+        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
+        row["instrument"] = mapping.instrument_for_degiro(isin)
+        rows.append(row)
+
+    # Pozycja w Portfolio bez CF w oknie (brak w events) — rzadki edge.
+    for isin in sorted(i for i in terminal_by_isin if i):
+        bare = ticker_asset_id(broker_id, isin)
+        if bare in open_bases:
+            continue
+        terminal = float(terminal_by_isin.get(isin, 0.0))
+        qty = float(qty_by_isin.get(isin, 0.0))
+        if abs(qty) <= 1e-12 or terminal == 0.0:
+            continue
+        summary = compute_ticker_roi(
+            bare,
+            _empty_events(),
+            valuation_date,
+            open_qty=1.0,
+            last_price=terminal,
         )
         row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
         row["instrument"] = mapping.instrument_for_degiro(isin)
@@ -261,4 +300,4 @@ def _empty_events() -> pd.DataFrame:
 
 
 def _isin_from_asset_id(asset_id: str) -> str:
-    return str(asset_id).split(":", 1)[-1]
+    return broker_code_from_instrument_id(asset_id)

@@ -14,6 +14,7 @@ from importers.degiro.data_model import (
 from importers.degiro.read_degiro import read_degiro_account, read_degiro_transactions
 from portfolio_cf.adapters.base import empty_ledger, legacy_events_to_ledger
 from portfolio_cf.coverage import InstrumentCoverage
+from roi.broker_investment_cycles import partition_broker_cashflows
 from roi.degiro_roi import _filter_degiro_rows_on_or_before, build_degiro_cashflows
 
 VENUE = "degiro"
@@ -35,7 +36,9 @@ def adapt_degiro_ledger(
 
     tx = _filter_degiro_rows_on_or_before(transactions_df, DegiroTransactionsFile.DATE, valuation_date)
     account = _filter_degiro_rows_on_or_before(account_df, DegiroAccountFile.BOOKING_DATE, valuation_date)
-    events = build_degiro_cashflows(tx, account, broker_id)
+    raw_events = build_degiro_cashflows(tx, account, broker_id)
+    events, cycle_warnings = partition_broker_cashflows(raw_events)
+    warnings.extend(cycle_warnings)
     ticker_ledger, coverage = legacy_events_to_ledger(
         events,
         venue=VENUE,

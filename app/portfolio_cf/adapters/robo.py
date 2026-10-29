@@ -10,7 +10,8 @@ from evaluators.evaluate_broker_revolut import filter_trading_on_or_before
 from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
 from portfolio_cf.adapters.base import empty_ledger, legacy_events_to_ledger
 from portfolio_cf.coverage import InstrumentCoverage
-from roi.broker_trading_roi import build_broker_ticker_cashflows
+from roi.broker_investment_cycles import partition_broker_cashflows
+from roi.broker_trading_roi import ROBO_FEE_TICKER, build_broker_ticker_cashflows
 
 VENUE = "robo"
 CURRENCY = "EUR"
@@ -31,7 +32,11 @@ def adapt_robo_ledger(
         warnings.extend(load_warnings)
 
     filtered = filter_trading_on_or_before(trading_df, valuation_date)
-    events = build_broker_ticker_cashflows(filtered, broker_id)
+    raw_events = build_broker_ticker_cashflows(filtered, broker_id)
+    events, cycle_warnings = partition_broker_cashflows(
+        raw_events, skip_codes=frozenset({ROBO_FEE_TICKER})
+    )
+    warnings.extend(cycle_warnings)
     ticker_ledger, coverage = legacy_events_to_ledger(
         events,
         venue=VENUE,

@@ -426,17 +426,25 @@ def _instrument_labels(ledger: pd.DataFrame) -> dict[str, str]:
 
 
 def _label_for(instrument_id: str, mapping) -> str:
+    from roi.broker_investment_cycles import (
+        broker_base_instrument_id,
+        broker_code_from_instrument_id,
+        closed_cycle_label_suffix,
+    )
+
     key = str(instrument_id)
     if key.endswith(":CASH"):
         broker = key.rsplit(":", 1)[0]
         return f"Gotówka ({broker})"
+    suffix = closed_cycle_label_suffix(key)
+    base = broker_base_instrument_id(key)
     if mapping is None:
-        return key
+        return f"{base}{suffix}" if suffix else key
     try:
-        if key.startswith("p_degiro:"):
-            return mapping.instrument_for_degiro(key.split(":", 1)[1])
-        if key.startswith("p_xtb:"):
-            return mapping.instrument_for_xtb(key.split(":", 1)[1])
+        if base.startswith("p_degiro:"):
+            return f"{mapping.instrument_for_degiro(broker_code_from_instrument_id(base))}{suffix}"
+        if base.startswith("p_xtb:"):
+            return f"{mapping.instrument_for_xtb(broker_code_from_instrument_id(base))}{suffix}"
     except Exception:
-        return key
-    return key
+        return f"{base}{suffix}" if suffix else key
+    return f"{base}{suffix}" if suffix else key

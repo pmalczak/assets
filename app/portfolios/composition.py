@@ -21,6 +21,7 @@ from portfolios.assignment import (
     nav_pln_for_portfolio,
     portfolio_for_asset_id,
 )
+from roi.statement_valuation_date import evaluation_date_from_frame
 
 _DISPLAY_NAMES = {
     DEFAULT_DEGIRO_ASSET_ID: "DEGIRO",
@@ -558,7 +559,12 @@ def load_gm_position_lines(
             if portfolio.empty:
                 warnings.append(f"Brak portfolio DEGIRO <= {valuation_date.isoformat()}.")
                 continue
-            eval_date = str(portfolio[DegiroPortfolioFile.PERIOD_END].max())
+            eval_date = (
+                evaluation_date_from_frame(
+                    portfolio, DegiroPortfolioFile.FILE_DATE, valuation_date
+                )
+                or ""
+            )
             isin_col = portfolio[DegiroPortfolioFile.ISIN]
             has_isin = isin_col.notna() & isin_col.astype(str).str.strip().ne("")
             positions = portfolio.loc[has_isin]

@@ -168,15 +168,58 @@ def read_degiro_account(input_path: Path, asset_id: str) -> tuple[pd.DataFrame, 
 
 
 def latest_portfolio_as_of(portfolio_df: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
+    """Wybierz MTM z ``Portfolio.csv`` na datę pobrania (``FILE_DATE``), nie ``PERIOD_END``.
+
+    ``{od}_{do}`` w nazwie pliku to okno księgowań z ``Account.csv``. Przy braku
+    nowych txn ``replace_portfolio_only`` zostawia to samo ``do``, a odświeża MTM
+    i ``data_wyciągu``. Filtrowanie po ``PERIOD_END`` wtedy zostawia starą datę
+    wyceny mimo świeżego kursu.
+    """
     if portfolio_df.empty:
         return portfolio_df.copy()
-    end_dates = pd.to_datetime(portfolio_df[DegiroPortfolioFile.PERIOD_END], errors="coerce").dt.date
+    if DegiroPortfolioFile.FILE_DATE not in portfolio_df.columns:
+        return _latest_portfolio_by_period_end(portfolio_df, valuation_date)
+    file_dates = pd.to_datetime(
+        portfolio_df[DegiroPortfolioFile.FILE_DATE], errors="coerce"
+    ).dt.date
+    eligible = portfolio_df.loc[file_dates.notna() & (file_dates <= valuation_date)].copy()
+    if eligible.empty:
+        return eligible
+    latest_file = pd.to_datetime(
+        eligible[DegiroPortfolioFile.FILE_DATE], errors="coerce"
+    ).max()
+    latest = eligible.loc[
+        pd.to_datetime(eligible[DegiroPortfolioFile.FILE_DATE], errors="coerce") == latest_file
+    ].copy()
+    # Jeden pobrany Portfolio.csv = jeden MTM. Gdy stary cache DATA_STEP przybił
+    # ten sam FILE_DATE na wiele {od}_{do}, nie sumować pakietów — bierz najpóźniejszy do.
+    if DegiroPortfolioFile.PERIOD_END in latest.columns and not latest.empty:
+        latest_end = pd.to_datetime(
+            latest[DegiroPortfolioFile.PERIOD_END], errors="coerce"
+        ).max()
+        latest = latest.loc[
+            pd.to_datetime(latest[DegiroPortfolioFile.PERIOD_END], errors="coerce")
+            == latest_end
+        ].copy()
+    return _one_portfolio_snapshot_per_end(latest)
+
+
+def _latest_portfolio_by_period_end(
+    portfolio_df: pd.DataFrame, valuation_date: date
+) -> pd.DataFrame:
+    """Fallback gdy brak ``FILE_DATE`` (testy / ręczne ramki)."""
+    end_dates = pd.to_datetime(
+        portfolio_df[DegiroPortfolioFile.PERIOD_END], errors="coerce"
+    ).dt.date
     eligible = portfolio_df.loc[end_dates <= valuation_date].copy()
     if eligible.empty:
         return eligible
-    latest_end = pd.to_datetime(eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce").max()
+    latest_end = pd.to_datetime(
+        eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce"
+    ).max()
     latest = eligible.loc[
-        pd.to_datetime(eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce") == latest_end
+        pd.to_datetime(eligible[DegiroPortfolioFile.PERIOD_END], errors="coerce")
+        == latest_end
     ].copy()
     return _one_portfolio_snapshot_per_end(latest)
 
@@ -187,7 +230,7 @@ def _one_portfolio_snapshot_per_end(df: pd.DataFrame) -> pd.DataFrame:
     Overlapping exports can share the same PERIOD_END (Account.csv booking window).
     Concatenating them would double MTM. Keep one package per PERIOD_END — the one
     with the latest PERIOD_START — then one row per ISIN (empty ISIN = cash, keyed
-    by product).
+    by product). MTM as-of = ``FILE_DATE`` (data pobrania), nie ``PERIOD_END``.
     """
     if df.empty or DegiroPortfolioFile.PERIOD_END not in df.columns:
         return df
@@ -253,9 +296,12 @@ def _read_many(source_file: Path, prefix: str, reader, model) -> pd.DataFrame:
         records.append(df)
 
     result = pd.concat(records, ignore_index=True)
-    result[model.FILE_DATE] = max(
-        extract_download_date(path, prefix).isoformat() for path in input_files
-    )
+    # Portfolio = snapshot MTM na datę pobrania pliku — zostaw FILE_DATE per wiersz.
+    # Ledger (transactions/account): świeżość venue = max daty pobrania.
+    if prefix != PORTFOLIO_PREFIX:
+        result[model.FILE_DATE] = max(
+            extract_download_date(path, prefix).isoformat() for path in input_files
+        )
     model.check_structure(result)
     return result
 

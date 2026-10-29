@@ -36,7 +36,7 @@ Arkusze `a_config.xlsx`:
 | **REVENUES** | Przychody (odsetki, dywidendy) — nie zmniejszenie pozycji |
 | **OPEX** | Wydatki operacyjne (podatek, opłata) |
 | **DIVESTMENT** | Cashflow wyjścia kapitału; **nie** OPEX. Dla `investment.property` = sprzedaż (zamknięcie). Dla brokerów/obligacji/depozytów może być częściowe zmniejszenie pozycji |
-| **is_sold** | Brak otwartej ekspozycji: `investment.property` ⇔ jest DIVESTMENT ≤ data wyceny; brokerzy `qty≈0`; cash — data zamknięcia z manual |
+| **is_sold** | Brak otwartej ekspozycji: `investment.property` ⇔ jest DIVESTMENT ≤ data wyceny; brokerzy udziałowi — per **cykl ekspozycji** (zamknięty cykl `#data` zawsze sold; goły ISIN/ticker ⇔ qty≈0 w Portfolio/Open); cash — data zamknięcia z manual |
 | **FX_t** | Kurs NBP z **dnia CF** (przeliczenie `amount` → `amount_pln` w ledgerze) |
 | **FX_T** | Kurs NBP z **daty wyceny** (stały dla całej serii XIRR lokalnego / ROI_local) |
 | **XIRR lokalny** | Kanoniczna rentowność aktywów portfela: CF × FX_T + terminal NAV PLN — **bez ścieżki ruchu kursu** |
@@ -100,7 +100,8 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
 1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`. Brak osobnej zakładki `cash` w `a_config.xlsx`.
 2. **DIVESTMENT a is_sold** — zależy od `typ`:
    - **`investment.property`**: DIVESTMENT (bank lub manual) **=** sprzedaż / `is_sold` (nieruchomość nie ma częściowego „zmniejszenia zaangażowania” jak obligacje). ID w ROI.Katalog (`roi_def`, np. `horbaczewskiego`) **nie musi** być wierszem w arkuszu `assets` (tam rodzic `id=properties`, `RODZAJ*=assets.properties`); `is_sold` z DIVESTMENT w CF, nawet jednokrotnego.
-   - **brokerzy / obligacje**: DIVESTMENT może być częściowy; `is_sold` ⇔ `qty≈0`
+   - **brokerzy udziałowi** (DEGIRO / XTB / Robo): DIVESTMENT może być częściowy. Jednostka XIRR = **cykl ekspozycji** (running qty; pełne zejście do qty≈0 zamyka cykl). Zamknięty cykl → osobne `instrument_id` `{broker}:{code}#{YYYY-MM-DD}` (`is_sold=true`, terminal 0). Ponowne otwarcie tego samego papieru = nowy cykl na gołym `{broker}:{code}` (CF tylko od tego otwarcia + MTM). Częściowy DIVESTMENT bez split. Mapowanie portfela / `instruments` / skład GM po **bazowym** ID (strip `#…`). Ticker OPEX `REVOLUT-ROBO` bez cykli.
+   - **obligacje**: DIVESTMENT może być częściowy; `is_sold` ⇔ `qty≈0`
    - **depozyty** (Revolut savings, Trade Republic v1): `is_sold` ⇔ `|saldo/NAV| ≈ 0`
    - **`investment.cash`**: `is_sold` z daty zamknięcia w `roi_manual` (DIVESTMENT/CLOSING)
    - Arkusz wycen / `operacja=sprzedane` nie ustawia flagi sprzedaży.
@@ -220,8 +221,8 @@ Market Data --> GMS Ranking --> Target --------+
 - Merge wielu plików: usuwać duplikaty; luki w okresach nazw → ostrzeżenie.
 - Po wczytaniu blottera: SELL → `Quantity` ujemne; BUY → `Total Amount` ujemne; FX → `1/fx`.
 - **Snapshot:** 1 wiersz — Σ **ostatni kurs z blottera × qty** otwartych pozycji (MTM bez kursu bieżącego; qty z FIFO) **+ gotówka robocza z blottera** (TOP-UP / SELL / DIVIDEND − BUY / FEE). Brak ceny transakcji → fallback koszt FIFO lotu. Sama gotówka (wpłata bez kupna) też daje wiersz. `data wyceny` = `min(data snapshota, data-wyciągu)` — świeżość pobrania blottera, nie data ostatniej transakcji (brak transakcji nie oznacza starego wyciągu). XIRR portfela `1 REVOLUT-ROBO`: terminal = NAV **pozycji** (bez gotówki); gotówka tylko w składzie.
-- **ROI:** per ticker (`p_re_robo:PRAR`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; `ROBO MANAGEMENT FEE` → `OPEX` na sztucznym tickera `REVOLUT-ROBO` (`p_re_robo:REVOLUT-ROBO`; bez XIRR wiersza, `is_sold=false` — OPEX wchodzi do Razem); TOP-UP poza XIRR; `is_sold` ⇔ qty≈0 (poza `REVOLUT-ROBO`).
-- Terminal otwartych (ROI i snapshot pozycji) = last trade price × qty; `is_sold` ⇔ qty == 0.
+- **ROI:** per ticker z partycją cykli jak DEGIRO (`p_re_robo:PRAR` / `#data`); BUY → `CAPEX`; SELL → `DIVESTMENT`; DIVIDEND → `REVENUES`; `ROBO MANAGEMENT FEE` → `OPEX` na `REVOLUT-ROBO` (bez cykli; bez XIRR wiersza, `is_sold=false` — OPEX wchodzi do Razem); TOP-UP poza XIRR.
+- Terminal otwartego cyklu = last trade price × qty; zamknięty cykl → terminal 0.
 - Reconciliacja: Σ `CASH TOP-UP` vs `|To Robo portfolio|` na `revolut_eur` (tol. 0.01 EUR).
 
 ### DEGIRO
@@ -233,12 +234,12 @@ Market Data --> GMS Ranking --> Target --------+
 - Format eksportu PL: separator CSV `,`, liczby z przecinkiem dziesiętnym w cudzysłowie; w `Account.csv` są dwie kolumny `Data` i puste nagłówki walut — importer nadaje nazwy techniczne (`booking_date`, `value_date`, `change_currency`, `balance_currency`).
 - Przy przenoszeniu: istniejący identyczny/obejmujący pakiet (Account/Transactions) → skip + usunięcie incoming; **ten sam `{od}_{do}` z innym Portfolio** (świeższy MTM / nowe pozycje, ledger bez nowych wierszy) → podmiana samego `portfolio_*.csv` (nowa `data_wyciągu`); incoming z **nadzbiorem** księgowań → podmiana całego pakietu; rozjechane historie ledgeru → twardy konflikt.
 - Przy odczycie wielu pakietów: `Transactions` dedupe po `Identyfikator zlecenia` + polach transakcji; `Account` dedupe po pełnym kluczu księgowania. Overlap / zawarte okresy OK — luka = po **scaleniu** nazwanych `{od}_{do}` (`period_coverage`; `next.start ≤ prev.end + 1`). Soft warning w v1; ciche dni między oknami aktywności mogą nadal warnować. Zbędne pliki zawarte w dłuższym eksporcie tego samego prefixu: `maintenance/prune_contained_degiro.py` (dry-run; `--delete`).
-- `Portfolio.csv` nie jest ledgerem; to snapshot na datę. Okres pakietu pochodzi z `Account.csv`, więc dwa eksporty mogą mieć **ten sam `do`** (np. `2026-01-08_2026-08-17` i `2026-08-13_2026-08-17`). Nie sumować ich — jeden pakiet na `period_end` (najpóźniejszy `od`), potem jeden wiersz na ISIN. Inaczej MTM / `terminal_unrealized` wychodzi ~2× przy niededuplikowanym CAPEX.
-- Do snapshotu / ROI terminal: najnowszy `period_end <= data wyceny`, jeden snapshot jak wyżej.
+- `Portfolio.csv` nie jest ledgerem; to snapshot MTM na **datę pobrania** (`FILE_DATE` / trzecia data w nazwie). Okres pakietu `{od}_{do}` pochodzi z `Account.csv` (okno aktywności księgowań), więc przy braku nowych txn `replace_portfolio_only` zostawia to samo `do`, a podmienia tylko portfolio ze świeższą `data_wyciągu`. Dwa eksporty mogą też mieć **ten sam `do`** przy różnym `od` (np. `2026-01-08_2026-08-17` i `2026-08-13_2026-08-17`). Nie sumować ich — jeden pakiet na `period_end` (najpóźniejszy `od`), potem jeden wiersz na ISIN. Inaczej MTM / `terminal_unrealized` wychodzi ~2× przy niededuplikowanym CAPEX.
+- Do snapshotu / ROI terminal: najnowszy **`FILE_DATE` ≤ data wyceny** (nie `period_end` Account — inaczej po odświeżeniu samego Portfolio data wyceny zostaje przy ostatniej txn). Deduplikacja overlapów jak wyżej. **`data wyceny`** = `min(data snapshota, FILE_DATE)` — jak Robo.
 - **Snapshot:** 1 wiersz — Σ `Wartość w EUR` z `Portfolio.csv` dla gotówki i pozycji. To MTM, nie koszt FIFO.
-- **ROI:** per ISIN (`p_degiro:LT0000128621`); w UI nazwa z `instruments.instrument` (kolumna `degiro`). BUY → `CAPEX`; SELL → `DIVESTMENT`; `Dywidenda` → `REVENUES`; `is_sold` ⇔ qty≈0 / brak pozycji w najnowszym `Portfolio.csv`.
+- **ROI / ledger:** CF budowane per ISIN, potem partycja na **cykle ekspozycji** (`roi/broker_investment_cycles.py`) przy każdym liczeniu ≤ data wyceny. Otwarty cykl = `p_degiro:ISIN`; zamknięty = `p_degiro:ISIN#YYYY-MM-DD`. BUY → `CAPEX`; SELL → `DIVESTMENT`; `Dywidenda` → `REVENUES`. UI: nazwa z `instruments` (+ ` (zamk. …)` dla zamkniętych).
 - `portfolio` / `transactions` / `account` z jednego katalogu muszą się przebudowywać razem. Nowy `Portfolio.csv` + stary `Transactions.csv` daje **Wycena ~2× Inwestycja** (dokupienie w MTM, brak w CAPEX).
-- Terminal otwartych = `Wartość w EUR` z `Portfolio.csv` per ISIN; dla zamkniętych terminal = 0.
+- Terminal otwartego cyklu = `Wartość w EUR` z `Portfolio.csv` per ISIN; zamknięty cykl → terminal 0 / `is_sold`.
 - Do ROI transakcji używać `Wartość EUR`, a nie `Razem EUR`; opłaty, podatki, FX, cash sweep, depozyty/wypłaty i odsetki są poza XIRR per instrument w v1.
 - Implementacja: dedykowany importer DEGIRO, nie parser Revolut; źródła przez DATA_STEP (`01 source`), bez osobnego cache; testy obok istniejących testów brokerów.
 
@@ -252,7 +253,7 @@ Market Data --> GMS Ranking --> Target --------+
 - DATA_STEP (`01 source`): `p_xtb-open.parquet`, `p_xtb-closed.parquet`, `p_xtb-cash.parquet`. **Nie** używać nazw Revolut `p_xtb-trading` / `p_xtb-pnl`. Open to snapshoty (do wyceny brać najnowszy `period_end <= data wyceny`); Cash/Closed to ledger — merge wszystkich plików, dedupe; luka okresów Cash → soft warning po **scaleniu** nazwanych `{od}_{do}` z ZIP (`period_coverage`, jak DEGIRO). `FILE_DATE` (mtime) poza kontrolą luk.
 - Normalizacja instrumentów: klucz ROI = ISIN jeśli jest w eksporcie, inaczej ticker XTB (np. `ETFPZUW20M40.PL`). Prezentacja = `instruments.instrument` (kolumna `xtb`). Kolumna `gm` = ticker Yahoo rankingu U7 (osobny listing, np. `.WA` vs `.PL`).
 - **Snapshot:** 1 wiersz — Σ `Value` z najnowszego Open Positions ≤ data wyceny: pozycje (wiersze z tickerem) **+ gotówka**. Gotówka: najpierw summary Open (`Cash` / `Free funds`); gdy brak — `Amount` z footera `Type=Total`/`Suma` w Cash Operations (saldo PLN; **nie** CF/ROI). To MTM, nie koszt FIFO. Brak katalogu/raportu → brak wiersza (jak DEGIRO).
-- **ROI:** per ticker (`p_xtb:TICKER`); w UI nazwa z `instruments`. Merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`; `is_sold` ⇔ qty≈0 / brak w najnowszym Open. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Stopka `Total` poza warningiem. Nieznany prawdziwy `Type` → warning, nie cichy skip.
+- **ROI:** per ticker z partycją cykli jak DEGIRO (`p_xtb:TICKER` / `p_xtb:TICKER#data`) gdy CF mają `quantity`; Cash Operations XTB **bez Volume** → na razie brak split (jeden instrument; warning tylko gdy w historii jest i kupno, i sprzedaż bez qty). Merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Stopka `Total` poza warningiem. Nieznany prawdziwy `Type` → warning, nie cichy skip.
 - GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie. Wspólny model: `importers/xtb/normalize.py` → `BrokerPositionFrame` / `BrokerTransactionFrame` / `BrokerCashFlowFrame` / `BrokerCashBalanceFrame`.
 - Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), walidacja kolumn/typów operacji/duplikatów oraz testy obok istniejących testów brokerów.
 

@@ -10,7 +10,7 @@ from datetime import date
 
 SNAPSHOTS_STEP = "snapshots"
 # Wspólny sN dla ``_assets`` i ledger/XIRR/ROI. Bump unieważnia całe drzewo daty.
-SNAPSHOT_SCHEMA = 1
+SNAPSHOT_SCHEMA = 2
 ASSETS_SNAPSHOT_FILE = "_assets.parquet"
 
 # Dawne osobne produkty — całe drzewo wycina prune_stale_data_steps.

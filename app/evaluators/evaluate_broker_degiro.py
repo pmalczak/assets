@@ -11,6 +11,7 @@ from evaluators.broker_snapshot import BrokerHoldings, BrokerSnapshotEvaluator
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID, DegiroPortfolioFile
 from importers.degiro.read_degiro import latest_portfolio_as_of, read_degiro_portfolio
+from roi.statement_valuation_date import evaluation_date_from_frame
 
 
 def is_degiro_broker(assets_file_row: pd.Series) -> bool:
@@ -46,13 +47,16 @@ class DegiroSnapshotEvaluator(BrokerSnapshotEvaluator):
         has_isin = isin.notna() & isin.astype(str).str.strip().ne("")
         position_rows = portfolio.loc[has_isin]
         cash_rows = portfolio.loc[~has_isin]
+        eval_date = evaluation_date_from_frame(
+            portfolio, DegiroPortfolioFile.FILE_DATE, valuation_date
+        ) or ""
         return (
             BrokerHoldings(
                 positions_value=_eur_sum(position_rows),
                 cash_value=_eur_sum(cash_rows),
                 n_positions=len(position_rows),
                 n_cash_rows=len(cash_rows),
-                evaluation_date=str(portfolio[DegiroPortfolioFile.PERIOD_END].max()),
+                evaluation_date=eval_date,
                 currency="EUR",
             ),
             warnings,
