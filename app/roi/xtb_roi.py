@@ -6,12 +6,16 @@ from pathlib import Path
 
 import pandas as pd
 
+from analyse_assets.account_tx import AccountTx
+from analyse_assets.accounts_pools import load_accounts_pool
 from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsDef
 from importers.assets.instruments import InstrumentMap, load_instrument_map
+from importers.assets.pool_id import REVOLUT_PLN
 from importers.assets.read_assets import read_assets
 from importers.xtb.data_model import (
+    CASH_OP_DEPOSIT,
     CASH_OP_PURCHASE,
     CASH_OP_SALE,
     DEFAULT_XTB_ASSET_ID,
@@ -42,6 +46,11 @@ from roi.compute_roi import roi_summary_to_row
 from roi.data_model import CashFlowEvent
 from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 
+# Soft reconcile: kartowe Deposit (Adyen) vs Opis XTB na revolut_pln.
+RECONCILE_TOLERANCE_PLN = 0.01
+_XTB_CARD_DEPOSIT_COMMENT = "adyen"
+_REVOLUT_XTB_TITLE = r"\bxtb\b"
+
 
 def compute_xtb_ticker_roi(
     valuation_date: date,
@@ -51,6 +60,7 @@ def compute_xtb_ticker_roi(
     open_positions_df: pd.DataFrame | None = None,
     closed_positions_df: pd.DataFrame | None = None,
     instruments: InstrumentMap | None = None,
+    pool_tx: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], list[str]]:
     warnings: list[str] = []
     if cash_operations_df is None or open_positions_df is None:
@@ -151,7 +161,83 @@ def compute_xtb_ticker_roi(
         row["instrument"] = mapping.instrument_for_xtb(ticker)
         rows.append(row)
 
+    if pool_tx is None:
+        try:
+            pool_tx = load_accounts_pool(REVOLUT_PLN)
+        except Exception as exc:  # noqa: BLE001 — soft warning, nie crash
+            if _sum_xtb_card_deposits(cash_operations_df, valuation_date) > 1e-9:
+                warnings.append(
+                    f"Nie udało się wczytać {REVOLUT_PLN} do reconciliacji XTB: {exc}"
+                )
+            pool_tx = pd.DataFrame()
+    warnings.extend(
+        reconcile_xtb_card_funding(
+            cash_operations_df, pool_tx, valuation_date=valuation_date
+        )
+    )
+
     return pd.DataFrame(rows), events_by_asset, warnings
+
+
+def reconcile_xtb_card_funding(
+    cash_operations_df: pd.DataFrame,
+    pool_tx: pd.DataFrame,
+    *,
+    valuation_date: date | None = None,
+    tolerance: float = RECONCILE_TOLERANCE_PLN,
+) -> list[str]:
+    """Soft: Σ Deposit Adyen (XTB) vs |Σ Opis~XTB| na revolut_pln.
+
+    Wpłaty Pekao / inne banki poza zakresem (brak matcha do Revolut).
+    """
+    deposits = _sum_xtb_card_deposits(cash_operations_df, valuation_date)
+    payments = _sum_revolut_xtb_payments(pool_tx, valuation_date)
+    if abs(deposits) <= 1e-9 and abs(payments) <= 1e-9:
+        return []
+    diff = abs(deposits) - abs(payments)
+    if abs(diff) <= tolerance:
+        return []
+    return [
+        f"XTB funding mismatch: Adyen Deposit={deposits:.2f} PLN vs "
+        f"|Revolut XTB|={abs(payments):.2f} PLN (diff={diff:.2f} PLN)"
+    ]
+
+
+def _sum_xtb_card_deposits(
+    cash_operations_df: pd.DataFrame, valuation_date: date | None
+) -> float:
+    if cash_operations_df is None or cash_operations_df.empty:
+        return 0.0
+    df = cash_operations_df
+    if valuation_date is not None and XtbCashOperationsFile.TIME in df.columns:
+        df = _filter_xtb_rows_on_or_before(df, XtbCashOperationsFile.TIME, valuation_date)
+    if df.empty or XtbCashOperationsFile.TYPE not in df.columns:
+        return 0.0
+    type_ok = df[XtbCashOperationsFile.TYPE].map(classify_xtb_cash_type) == CASH_OP_DEPOSIT
+    comment = (
+        df[XtbCashOperationsFile.COMMENT].astype(str)
+        if XtbCashOperationsFile.COMMENT in df.columns
+        else pd.Series("", index=df.index)
+    )
+    card = comment.str.contains(_XTB_CARD_DEPOSIT_COMMENT, case=False, na=False)
+    amounts = pd.to_numeric(df.loc[type_ok & card, XtbCashOperationsFile.AMOUNT], errors="coerce")
+    return float(amounts.fillna(0.0).abs().sum())
+
+
+def _sum_revolut_xtb_payments(
+    pool_tx: pd.DataFrame, valuation_date: date | None
+) -> float:
+    if pool_tx is None or pool_tx.empty:
+        return 0.0
+    df = pool_tx
+    if AccountTx.TITLE not in df.columns or AccountTx.AMOUNT not in df.columns:
+        return 0.0
+    if valuation_date is not None and AccountTx.TRANSACTION_DATE in df.columns:
+        df = filter_excel_rows_on_or_before(df, AccountTx.TRANSACTION_DATE, valuation_date)
+    mask = df[AccountTx.TITLE].astype(str).str.contains(
+        _REVOLUT_XTB_TITLE, case=False, na=False, regex=True
+    )
+    return float(pd.to_numeric(df.loc[mask, AccountTx.AMOUNT], errors="coerce").fillna(0.0).sum())
 
 
 def build_xtb_cashflows(

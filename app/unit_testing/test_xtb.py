@@ -48,9 +48,10 @@ from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED, KI
 from maintenance.move_xtb_files import move_xtb_files, xtb_target_name
 from importers.assets.data_model import Instruments
 from importers.assets.instruments import instrument_map_from_frame, instrument_table_from_rows
+from analyse_assets.account_tx import AccountTx
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
 from roi.data_model import CashFlowEvent
-from roi.xtb_roi import compute_xtb_ticker_roi
+from roi.xtb_roi import compute_xtb_ticker_roi, reconcile_xtb_card_funding
 
 
 def _xtb_instruments(*pairs: tuple[str, str]):
@@ -570,6 +571,112 @@ class XtbRoiTests(unittest.TestCase):
             [CAPEX, DIVESTMENT],
         )
 
+    def test_peko_deposit_ignored_in_card_reconcile(self):
+        """Pekao nie wchodzi do sumy Adyen — sam nie trigguje mismatchu."""
+        cash_df = pd.DataFrame(
+            [
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-08-17",
+                    5700.0,
+                    comment="Pekao S.A. deposit, id=1",
+                ),
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-10-30",
+                    1000.0,
+                    comment="Adyen Cards deposit",
+                ),
+            ]
+        )
+        pool = pd.DataFrame([_pool_xtb_row("2026-10-30", -1000.0)])
+        self.assertEqual(
+            reconcile_xtb_card_funding(cash_df, pool, valuation_date=date(2026, 11, 1)),
+            [],
+        )
+
+    def test_adyen_deposit_matches_revolut_xtb(self):
+        cash_df = pd.DataFrame(
+            [
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-10-30",
+                    66000.0,
+                    comment="Adyen Cards deposit, id=40082671",
+                ),
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-10-30",
+                    1000.0,
+                    comment="Adyen Cards deposit, id=40081606",
+                ),
+            ]
+        )
+        pool = pd.DataFrame(
+            [
+                _pool_xtb_row("2026-10-30", -1000.0),
+                _pool_xtb_row("2026-10-30", -66000.0, title="XTB"),
+            ]
+        )
+        self.assertEqual(
+            reconcile_xtb_card_funding(cash_df, pool, valuation_date=date(2026, 11, 1)),
+            [],
+        )
+
+    def test_adyen_deposit_mismatch_warning(self):
+        cash_df = pd.DataFrame(
+            [
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-10-30",
+                    66000.0,
+                    comment="Adyen Cards deposit",
+                ),
+            ]
+        )
+        pool = pd.DataFrame([_pool_xtb_row("2026-10-30", -1000.0)])
+        warnings = reconcile_xtb_card_funding(
+            cash_df, pool, valuation_date=date(2026, 11, 1)
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("XTB funding mismatch", warnings[0])
+        self.assertIn("66000.00", warnings[0])
+        self.assertIn("1000.00", warnings[0])
+
+    def test_compute_roi_surfaces_funding_mismatch(self):
+        open_df = pd.DataFrame(
+            [_open_row(ticker="KEEP.PL", volume=1, value=10.0, period_end="2026-11-01")]
+        )
+        cash_df = pd.DataFrame(
+            [
+                _cash_row("Stock purchase", "KEEP.PL", "2026-10-01", -10.0),
+                _cash_row(
+                    "Deposit",
+                    "",
+                    "2026-10-30",
+                    100.0,
+                    comment="Adyen Cards deposit",
+                ),
+            ]
+        )
+        pool = pd.DataFrame([_pool_xtb_row("2026-10-30", -50.0)])
+        _summary, _events, warnings = compute_xtb_ticker_roi(
+            date(2026, 11, 1),
+            cash_operations_df=cash_df,
+            open_positions_df=open_df,
+            closed_positions_df=pd.DataFrame(
+                columns=list(XtbClosedPositionsFile.expected_columns())
+            ),
+            instruments=_xtb_instruments(("Keep", "KEEP.PL")),
+            pool_tx=pool,
+        )
+        self.assertTrue(any("XTB funding mismatch" in w for w in warnings))
+
 
 class XtbNormalizeTests(unittest.TestCase):
     def test_normalizes_xtb_frames_to_broker_model(self):
@@ -645,7 +752,9 @@ def _open_row(
     }
 
 
-def _cash_row(op_type: str, ticker: str, time: str, amount: float) -> dict:
+def _cash_row(
+    op_type: str, ticker: str, time: str, amount: float, *, comment: str = ""
+) -> dict:
     return {
         XtbCashOperationsFile.ID: "",
         XtbCashOperationsFile.TYPE: op_type,
@@ -654,13 +763,27 @@ def _cash_row(op_type: str, ticker: str, time: str, amount: float) -> dict:
         XtbCashOperationsFile.ISIN: "",
         XtbCashOperationsFile.TIME: time,
         XtbCashOperationsFile.AMOUNT: amount,
-        XtbCashOperationsFile.COMMENT: "",
+        XtbCashOperationsFile.COMMENT: comment,
         XtbCashOperationsFile.POSITION_ID: "",
         XtbCashOperationsFile.BALANCE: None,
         XtbCashOperationsFile.CURRENCY: "PLN",
         XtbCashOperationsFile.FILE_DATE: "2026-08-20",
         XtbCashOperationsFile.PERIOD_START: "2026-07-31",
         XtbCashOperationsFile.PERIOD_END: "2026-08-20",
+    }
+
+
+def _pool_xtb_row(day: str, amount: float, title: str = "Xtb") -> dict:
+    return {
+        AccountTx.TRANSACTION_DATE: pd.Timestamp(day),
+        AccountTx.OPERATION_TYPE: "Płatność kartą",
+        AccountTx.TITLE: title,
+        AccountTx.COUNTERPARTY: "",
+        AccountTx.ACCOUNT_NUMBER: "",
+        AccountTx.AMOUNT: amount,
+        AccountTx.BALANCE: 0.0,
+        AccountTx.ACCOUNT_ID: "p_re_pln",
+        AccountTx.POOL_ID: "revolut_pln",
     }
 
 

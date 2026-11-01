@@ -71,10 +71,18 @@ def deduplicate_overlapped_records(df1, df2, date_col, key_cols, overlap_start, 
     deduped_overlap = overlap_combined.drop_duplicates(subset=key_cols, keep='last')
     merged = pd.concat([df1_nonover, df2_nonover, deduped_overlap], ignore_index=True)
 
-    if (len(overlap_combined) > 0
-            and len(duplicates_report) == 0
-            and (overlap_end - overlap_start) > pd.Timedelta(days=2)):
-        raise ValueError
+    # Konflikt: obie strony mają wiersze w overlap >2 dni, ale zero wspólnych kluczy.
+    # Pusta jedna strona = dziura w envelope po wcześniejszym merge — nie błąd.
+    if (
+        len(df1_overlap) > 0
+        and len(df2_overlap) > 0
+        and len(duplicates_report) == 0
+        and (overlap_end - overlap_start) > pd.Timedelta(days=2)
+    ):
+        raise ValueError(
+            f"Nakładające się wyciągi {overlap_start.date()} — {overlap_end.date()} "
+            f"bez wspólnych rekordów ({len(df1_overlap)} vs {len(df2_overlap)})"
+        )
 
     if len(duplicates_report) > 0:
         print(f"{overlap_start.date()} — {overlap_end.date()} Usunięto {len(duplicates_report)} duplikatów")

@@ -60,13 +60,13 @@ def move_revolut_files(
     for file in files:
         fname = file.stem.split('_')
         if fname[0] == 'account-statement':
-            results.append(_move_file(file, file_owner, dropbox_cash_pool, 'account'))
+            results.extend(_move_account_file(file, file_owner, dropbox_cash_pool))
 
         elif fname[0] in _TRADING_PREFIXES:
             results.append(_move_trading_file(file, file_owner, assets_root))
 
         elif is_revolut_deposit_filename(file.stem):
-            results.append(_move_file(file, file_owner, dropbox_cash_pool, 'deposit'))
+            results.append(_move_deposit_file(file, file_owner, dropbox_cash_pool))
 
         elif fname[0] == SAVINGS_STATEMENT_PREFIX or is_savings_statement_filename(file.name):
             results.append(_move_savings_file(file, file_owner, dropbox_cash_pool))
@@ -115,17 +115,71 @@ def _is_trading_file_empty(file: Path) -> bool:
     return not any(line and line[0].isdigit() for line in text.splitlines())
 
 
-def _move_file(file: Path, file_owner: str, dropbox_cash_pool: Path, type: str) -> MoveResult:
+def _move_account_file(
+    file: Path, file_owner: str, dropbox_cash_pool: Path
+) -> list[MoveResult]:
+    """Przenieś account-statement; przy wielu walutach — split do osobnych katalogów."""
     df = pd.read_csv(file)
-    if type == 'deposit':
-        df = RevolutDepositFile.normalize_dtypes(df)
-        df[RevolutDepositFile.FILE_DATE] = ''
-        RevolutDepositFile.check_structure(df)
-    elif type == 'account':
-        df[RevolutAccountFile.FILE_DATE] = ''
-        RevolutAccountFile.check_structure(df)
-    else:
-        raise ValueError(type)
+    check_df = df.copy()
+    check_df[RevolutAccountFile.FILE_DATE] = ''
+    RevolutAccountFile.check_structure(check_df)
+
+    if df.empty:
+        file.unlink()
+        return [
+            MoveResult(
+                source=file,
+                destination=None,
+                action=ACTION_DELETED_EMPTY,
+                kind=KIND_REVOLUT,
+            )
+        ]
+
+    currencies = account_currencies(df)
+    if len(currencies) == 1:
+        currency = currencies[0]
+        target_dir = dropbox_cash_pool / f'{file_owner}_{currency}'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / file.name
+        file.rename(target)
+        return [
+            MoveResult(
+                source=file,
+                destination=target,
+                action=ACTION_MOVED,
+                kind=KIND_REVOLUT,
+            )
+        ]
+
+    results: list[MoveResult] = []
+    currency_col = df[RevolutAccountFile.CURRENCY].astype(str).str.strip().str.lower()
+    for currency in currencies:
+        subset = df.loc[currency_col == currency]
+        if subset.empty:
+            continue
+        target_dir = dropbox_cash_pool / f'{file_owner}_{currency}'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / file.name
+        subset.to_csv(target, index=False)
+        results.append(
+            MoveResult(
+                source=file,
+                destination=target,
+                action=ACTION_MOVED,
+                kind=KIND_REVOLUT,
+            )
+        )
+    file.unlink()
+    return results
+
+
+def _move_deposit_file(
+    file: Path, file_owner: str, dropbox_cash_pool: Path
+) -> MoveResult:
+    df = pd.read_csv(file)
+    df = RevolutDepositFile.normalize_dtypes(df)
+    df[RevolutDepositFile.FILE_DATE] = ''
+    RevolutDepositFile.check_structure(df)
 
     if df.empty:
         file.unlink()
@@ -137,7 +191,9 @@ def _move_file(file: Path, file_owner: str, dropbox_cash_pool: Path, type: str) 
         )
 
     currency = get_account_currency(df)
-    target = dropbox_cash_pool / f'{file_owner}_{currency}' / file.name
+    target_dir = dropbox_cash_pool / f'{file_owner}_{currency}'
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / file.name
     file.rename(target)
     return MoveResult(
         source=file,
@@ -183,8 +239,18 @@ def _move_savings_file(file: Path, file_owner: str, dropbox_cash_pool: Path) -> 
     )
 
 
+def account_currencies(df: pd.DataFrame) -> list[str]:
+    values = (
+        df[RevolutAccountFile.CURRENCY]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+    return sorted(c for c in values.unique().tolist() if c)
+
+
 def get_account_currency(df: pd.DataFrame) -> str:
-    result = df[RevolutAccountFile.CURRENCY].unique().tolist()
+    result = account_currencies(df)
     assert len(result) == 1
-    result = result[0].lower()
-    return result
+    return result[0]

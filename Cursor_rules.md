@@ -153,7 +153,7 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
 
 | Prefiks nazwy pliku | Zachowanie |
 |---------------------|------------|
-| `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`) |
+| `account-statement_*` | Wyciąg konta → katalog waluty; data końca okresu z 3. segmentu nazwy (dopuszczalne dodatkowe sufiksy, np. `_1`). Plik może zawierać wiele walut (kolumna `Waluta`) — przy przenoszeniu **split** wierszy do `*_pln` / `*_eur` (ta sama nazwa pliku w obu katalogach) |
 | `savings-statement_{od}_{do}_…` | Wyciąg depozytu (PL) → katalog waluty; **waluta z treści kwot** (`PLN` / `€`), nie z `kod1` w nazwie; nakładające się okresy → dedupe; **luka w pokryciu okresów → twardy błąd** |
 | stem = UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) | Legacy depozyt (EN) → katalog waluty; inne nazwy bez `_` → pomijane |
 | `Eksport transakcji.csv` | **Trade Republic** — przenoszone **przed** Revolut PM (osobna ścieżka, nie skip Revolut) |
@@ -254,6 +254,7 @@ Market Data --> GMS Ranking --> Target --------+
 - Normalizacja instrumentów: klucz ROI = ISIN jeśli jest w eksporcie, inaczej ticker XTB (np. `ETFPZUW20M40.PL`). Prezentacja = `instruments.instrument` (kolumna `xtb`). Kolumna `gm` = ticker Yahoo rankingu U7 (osobny listing, np. `.WA` vs `.PL`).
 - **Snapshot:** 1 wiersz — Σ `Value` z najnowszego Open Positions ≤ data wyceny: pozycje (wiersze z tickerem) **+ gotówka**. Gotówka: najpierw summary Open (`Cash` / `Free funds`); gdy brak — `Amount` z footera `Type=Total`/`Suma` w Cash Operations (saldo PLN; **nie** CF/ROI). To MTM, nie koszt FIFO. Brak katalogu/raportu → brak wiersza (jak DEGIRO).
 - **ROI:** per ticker z partycją cykli jak DEGIRO (`p_xtb:TICKER` / `p_xtb:TICKER#data`) gdy CF mają `quantity`; Cash Operations XTB **bez Volume** → na razie brak split (jeden instrument; warning tylko gdy w historii jest i kupno, i sprzedaż bez qty). Merge Cash Operations ze wszystkich eksportów. BUY/`Stock purchase` → `CAPEX`; SELL/`Stock sale` → `DIVESTMENT`; dywidendy → `REVENUES`. Wpłaty, wypłaty, prowizje, opłaty, podatki, FX, odsetki **poza XIRR per instrument w v1** (jak DEGIRO). Stopka `Total` poza warningiem. Nieznany prawdziwy `Type` → warning, nie cichy skip.
+- **Soft reconcile funding:** Σ `Deposit` z Comment~Adyen (Cash Operations) vs |Σ `Opis`~XTB| na `revolut_pln` (tol. 0.01 PLN) → warning przy mismatch; nie blokuje importu/snapshotu. Wpłaty Pekao / inne banki poza tą regułą. Saldo gotówki (Free funds / fallback `Total`) bez zmian.
 - GMS: XTB jest źródłem current portfolio/cash do porównania z target portfolio; system generuje rekomendowane transakcje/rebalancing, ale nie wykonuje zleceń automatycznie. Wspólny model: `importers/xtb/normalize.py` → `BrokerPositionFrame` / `BrokerTransactionFrame` / `BrokerCashFlowFrame` / `BrokerCashBalanceFrame`.
 - Implementacja: dedykowany importer XTB przez DATA_STEP (`01 source`), walidacja kolumn/typów operacji/duplikatów oraz testy obok istniejących testów brokerów.
 

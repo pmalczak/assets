@@ -21,8 +21,21 @@ def read_revolut_account_transactions(input_path: Path, asset_id: str) -> pd.Dat
     return result
 
 
+def _account_statement_period_key(path: Path) -> tuple[str, str, str]:
+    """Sort key: okres z nazwy (start, end), potem nazwa — merge chronologiczny."""
+    parts = path.stem.split("_")
+    start = parts[1] if len(parts) > 1 else ""
+    end = parts[2] if len(parts) > 2 else ""
+    return (start, end, path.name)
+
+
 def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame:
-    input_files = [f for f in source_file.glob("account-statement_*.csv")]
+    # Sortuj po okresie z nazwy — nieposortowany glob przy dziurach w zakresie dat
+    # fałszywie odpala ValueError w dedupe (overlap envelope bez wspólnych kluczy).
+    input_files = sorted(
+        source_file.glob("account-statement_*.csv"),
+        key=_account_statement_period_key,
+    )
 
     if not input_files:
         df = pd.DataFrame(data=None, columns=list(RevolutAccountFile.expected_columns()))

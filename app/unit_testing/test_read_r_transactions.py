@@ -41,6 +41,29 @@ class ExtractRevolutFileDateTests(unittest.TestCase):
             df = _read_revolut_account_transactions(root)
             self.assertEqual(len(df), 1)
 
+    def test_read_merges_noncontiguous_periods_regardless_of_glob_order(self):
+        """Plik późniejszy w globie, ale wcześniejszy okres — nie może padać na dedupe."""
+        row_early = (
+            "Transfer,,2026-01-10 00:00:00,2026-01-10 00:00:00,Early,10,0,PLN,ZAKOŃCZONO,10\n"
+        )
+        row_late = (
+            "Transfer,,2026-10-10 00:00:00,2026-10-10 00:00:00,Late,20,0,PLN,ZAKOŃCZONO,30\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Nazwy tak, by niesortowany glob często brał październik przed styczniem.
+            (root / "account-statement_2026-10-01_2026-10-31_pl-pl_zzz.csv").write_text(
+                ACCOUNT_HEADER + row_late, encoding="utf-8"
+            )
+            (root / "account-statement_2026-01-01_2026-01-31_pl-pl_aaa.csv").write_text(
+                ACCOUNT_HEADER + row_early, encoding="utf-8"
+            )
+
+            df = _read_revolut_account_transactions(root)
+            self.assertEqual(len(df), 2)
+            self.assertEqual(df["Opis"].tolist(), ["Early", "Late"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
