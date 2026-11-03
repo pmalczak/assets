@@ -27,6 +27,9 @@ from portfolio_cf.fx import to_pln
 
 _NEAR_ZERO = 1e-9
 
+# Bezwzględny szok kursu EUR/PLN do wrażliwości NAV w RAP 1 (nie % zmiany).
+FX_NAV_SHOCK_ABS = 0.1
+
 
 @dataclass(frozen=True)
 class FxRoiComponents:
@@ -49,6 +52,25 @@ def valuation_fx_rate(
     return float(
         to_pln(1.0, code, valuation_date, fx_rates=fx_rates).fx_rate
     )
+
+
+def format_fx_t_eur_label(
+    valuation_date: date,
+    *,
+    fx_rates: pd.DataFrame | None = None,
+) -> str:
+    """Etykieta FX_T EUR/PLN (ostatni kurs NBP ≤ data wyceny) — nagłówek RAP 1."""
+    conv = to_pln(1.0, NBP_API_EUR, valuation_date, fx_rates=fx_rates)
+    return f"FX_T EUR {conv.fx_rate:.4f} ({conv.fx_date})"
+
+
+def eur_nav_delta_pln(
+    native_eur: float,
+    *,
+    shock_abs: float = FX_NAV_SHOCK_ABS,
+) -> float:
+    """ΔNAV w PLN przy bezwzględnym ruchu EUR/PLN o ``shock_abs`` (np. 4.20→4.30)."""
+    return float(native_eur) * float(shock_abs)
 
 
 def valuation_fx_rates(

@@ -44,13 +44,19 @@ def render_main_reports(snapshot_date: date, assets: pd.DataFrame) -> None:
         xirr_by_portfolio = {}
         xirr_pln_by_portfolio = {}
 
-    st.code(
-        format_rap_table(
-            rap1(
-                assets,
-                xirr_by_portfolio=xirr_by_portfolio,
-                xirr_pln_by_portfolio=xirr_pln_by_portfolio,
-            )
-        ),
-        language=None,
-    )
+    try:
+        table = rap1(
+            assets,
+            xirr_by_portfolio=xirr_by_portfolio,
+            xirr_pln_by_portfolio=xirr_pln_by_portfolio,
+            valuation_date=snapshot_date,
+        )
+    except Exception as exc:
+        st.warning(f"Nie udało się pobrać FX_T do RAP 1: {exc}")
+        table = rap1(
+            assets,
+            xirr_by_portfolio=xirr_by_portfolio,
+            xirr_pln_by_portfolio=xirr_pln_by_portfolio,
+        )
+
+    st.code(format_rap_table(table), language=None)

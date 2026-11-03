@@ -122,6 +122,7 @@ def render_portfolio_shell(
         st.caption(
             f"Źródło: `{assets_snapshot_resource(selected_date)}`. "
             "RAP 1: **XIRR** = lokalny (FX_T), **XIRR PLN** = spot (FX_t); "
+            "**ΔNAV +0.1** = zmiana NAV_PLN przy EUR/PLN +0.1 (bezwzględnie, nie %); "
             "filtr pozycji z sidebara. Semantyka: `Cursor_rules.md` → XIRR portfela a FX."
         )
 

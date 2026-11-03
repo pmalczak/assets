@@ -4,25 +4,39 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import date
 
 import pandas as pd
 
 from importers.assets.data_model import AssetsDef
+from nbp_fx_repo.nbp_fx_repository import NBP_API_EUR
+from portfolio_cf.fx_attribution import (
+    FX_NAV_SHOCK_ABS,
+    eur_nav_delta_pln,
+    format_fx_t_eur_label,
+)
 from portfolios.assignment import KNOWN_PORTFOLIOS, attach_portfolio_column
 
 _COL_SPACE = 15
 _TOTAL = "Z RAZEM"
 _RAZEM = "RAZEM"
 _SHARE = "udział"
+_NAV_FX = f"ΔNAV +{FX_NAV_SHOCK_ABS:g}"
 _XIRR = "XIRR"
 _XIRR_PLN = "XIRR PLN"
 
 
 def format_rap_table(frame: pd.DataFrame, *, col_space: int = _COL_SPACE) -> str:
-    """Tabela RAP: nagłówki i wartości w tych samych kolumnach, wyrównane do prawej."""
+    """Tabela RAP: nagłówki i wartości w tych samych kolumnach, wyrównane do prawej.
+
+    ``columns.name`` (np. etykieta FX_T) idzie jako osobna linia nad tabelą —
+    nie w bloku indeksu, żeby nie psuć wyrównania kolumn.
+    """
     if frame is None or frame.empty:
         return ""
     work = frame.copy()
+    banner = "" if work.columns.name is None else str(work.columns.name).strip()
+    work.columns.name = None
     if not isinstance(work.index, pd.MultiIndex):
         work.index = pd.MultiIndex.from_arrays(
             [work.index],
@@ -56,8 +70,7 @@ def format_rap_table(frame: pd.DataFrame, *, col_space: int = _COL_SPACE) -> str
         widest_value = max((len(row[i]) for row in value_rows), default=0)
         col_widths.append(max(col_space, len(name) + 1, widest_value))
     index_block = sum(index_widths)
-    columns_name = "" if work.columns.name is None else str(work.columns.name)
-    header = (columns_name.ljust(index_block) if columns_name else " " * index_block)
+    header = " " * index_block
     header += "".join(name.rjust(width) for name, width in zip(col_names, col_widths))
     names_line = "".join(name.ljust(width) for name, width in zip(index_names, index_widths))
     names_line += " " * sum(col_widths)
@@ -66,7 +79,8 @@ def format_rap_table(frame: pd.DataFrame, *, col_space: int = _COL_SPACE) -> str
         line = "".join(label.ljust(width) for label, width in zip(index_row, index_widths))
         line += "".join(value.rjust(width) for value, width in zip(values, col_widths))
         lines.append(line)
-    return "\n".join(lines)
+    body = "\n".join(lines)
+    return f"{banner}\n{body}" if banner else body
 
 
 def format_xirr_cell(value: float | None) -> str:
@@ -80,15 +94,35 @@ def rap1(
     *,
     xirr_by_portfolio: Mapping[str, float | None] | None = None,
     xirr_pln_by_portfolio: Mapping[str, float | None] | None = None,
+    valuation_date: date | None = None,
+    fx_rates: pd.DataFrame | None = None,
+    fx_t_label: str | None = None,
+    fx_shock_abs: float = FX_NAV_SHOCK_ABS,
 ) -> pd.DataFrame:
-    """Jeden wiersz na portfel: RAZEM + udział NAV% + XIRR lokalny + XIRR PLN (spot)."""
+    """Jeden wiersz na portfel: RAZEM + udział + ΔNAV przy FX+shock + XIRR lokalny/PLN.
+
+    ``ΔNAV +0.1`` = Σ wartość_EUR × 0.1 (bezwzględny ruch kursu, nie %).
+    ``fx_t_label`` / ``valuation_date`` → ``columns.name`` = etykieta FX_T EUR.
+    """
     work = attach_portfolio_column(assets)
-    empty = pd.DataFrame(columns=[_RAZEM, _SHARE, _XIRR, _XIRR_PLN])
+    empty = pd.DataFrame(columns=[_RAZEM, _SHARE, _NAV_FX, _XIRR, _XIRR_PLN])
     empty.index.name = AssetsDef.PORTFOLIO
+    label = _resolve_fx_t_label(
+        fx_t_label=fx_t_label,
+        valuation_date=valuation_date,
+        fx_rates=fx_rates,
+    )
+    if label:
+        empty.columns.name = label
     if work is None or work.empty or AssetsDef.VALUE_PLN not in work.columns:
         return empty
 
-    a1 = work[[AssetsDef.PORTFOLIO, AssetsDef.VALUE_PLN]].copy()
+    cols = [AssetsDef.PORTFOLIO, AssetsDef.VALUE_PLN]
+    if AssetsDef.VALUE in work.columns:
+        cols.append(AssetsDef.VALUE)
+    if AssetsDef.CURRENCY in work.columns:
+        cols.append(AssetsDef.CURRENCY)
+    a1 = work[cols].copy()
     a1[AssetsDef.VALUE_PLN] = pd.to_numeric(a1[AssetsDef.VALUE_PLN], errors="coerce").fillna(0)
     has_portfolio = a1[AssetsDef.PORTFOLIO].astype(str).str.strip().ne("")
     a1 = a1.loc[has_portfolio]
@@ -100,6 +134,7 @@ def rap1(
         .sum()
         .reindex(list(KNOWN_PORTFOLIOS), fill_value=0)
     )
+    nav_fx = _nav_fx_sensitivity_by_portfolio(a1, shock_abs=fx_shock_abs)
     total = float(by_portfolio.sum())
     share = (by_portfolio / total * 100.0) if total else by_portfolio * 0.0
     xirr_map = dict(xirr_by_portfolio or {})
@@ -117,6 +152,7 @@ def rap1(
         {
             _RAZEM: by_portfolio,
             _SHARE: share,
+            _NAV_FX: nav_fx,
             _XIRR: xirr_series,
             _XIRR_PLN: xirr_pln_series,
         }
@@ -124,6 +160,7 @@ def rap1(
     out.loc[_TOTAL] = {
         _RAZEM: total,
         _SHARE: 100.0 if total else 0.0,
+        _NAV_FX: float(nav_fx.sum()),
         _XIRR: xirr_map.get(_TOTAL),
         _XIRR_PLN: xirr_pln_map.get(_TOTAL),
     }
@@ -134,6 +171,48 @@ def rap1(
         formatted[_RAZEM].round().astype(int).map("{:,}".format).str.replace(",", " ")
     )
     formatted[_SHARE] = formatted[_SHARE].map(lambda value: f"{float(value):.1f}%")
+    formatted[_NAV_FX] = (
+        formatted[_NAV_FX].round().astype(int).map("{:,}".format).str.replace(",", " ")
+    )
     formatted[_XIRR] = formatted[_XIRR].map(format_xirr_cell)
     formatted[_XIRR_PLN] = formatted[_XIRR_PLN].map(format_xirr_cell)
+    if label:
+        formatted.columns.name = label
     return formatted
+
+
+def _nav_fx_sensitivity_by_portfolio(
+    frame: pd.DataFrame,
+    *,
+    shock_abs: float,
+) -> pd.Series:
+    """ΔNAV_PLN per portfel przy EUR/PLN += shock_abs; pozycje nie-EUR → 0."""
+    zero = pd.Series(0.0, index=list(KNOWN_PORTFOLIOS), dtype=float)
+    if AssetsDef.VALUE not in frame.columns or AssetsDef.CURRENCY not in frame.columns:
+        return zero
+    native = pd.to_numeric(frame[AssetsDef.VALUE], errors="coerce").fillna(0.0)
+    currency = frame[AssetsDef.CURRENCY].astype(str).str.strip().str.upper()
+    delta = pd.Series(0.0, index=frame.index, dtype=float)
+    eur_mask = currency.eq(NBP_API_EUR)
+    delta.loc[eur_mask] = native.loc[eur_mask].map(
+        lambda value: eur_nav_delta_pln(value, shock_abs=shock_abs)
+    )
+    return (
+        delta.groupby(frame[AssetsDef.PORTFOLIO], dropna=False)
+        .sum()
+        .reindex(list(KNOWN_PORTFOLIOS), fill_value=0.0)
+    )
+
+
+def _resolve_fx_t_label(
+    *,
+    fx_t_label: str | None,
+    valuation_date: date | None,
+    fx_rates: pd.DataFrame | None,
+) -> str | None:
+    if fx_t_label is not None:
+        text = str(fx_t_label).strip()
+        return text or None
+    if valuation_date is None:
+        return None
+    return format_fx_t_eur_label(valuation_date, fx_rates=fx_rates)
