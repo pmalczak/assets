@@ -305,7 +305,7 @@ class EvaluateTradeRepublicTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "evaluators.evaluate_broker_traderepublic.resolve_asset_dir",
+                    "evaluators.evaluate_broker_traderepublic.require_asset_dir",
                     return_value=asset_dir,
                 ),
                 patch(
@@ -325,21 +325,20 @@ class EvaluateTradeRepublicTests(unittest.TestCase):
             self.assertEqual(result.iloc[0][AssetsDef.GROUP], GroupDomain.DEPOSIT)
             self.assertFalse(any("niezaimplementowana" in w for w in warnings))
 
-    def test_evaluate_missing_dir_warns_instead_of_raising(self):
+    def test_evaluate_missing_dir_raises(self):
         missing = Path("/tmp/definitely-missing-p_traderepublic")
         with patch(
-            "evaluators.evaluate_broker_traderepublic.resolve_asset_dir",
-            return_value=missing,
+            "evaluators.evaluate_broker_traderepublic.require_asset_dir",
+            side_effect=ValueError(f"Brak katalogu: {missing}"),
         ):
-            result, warnings = evaluate_broker_traderepublic(
-                Path("/tmp"),
-                DEFAULT_TRADEREPUBLIC_ASSET_ID,
-                self._catalog_row(),
-                date(2026, 8, 8),
-            )
-        self.assertEqual(len(result), 1)
-        self.assertEqual(float(result.iloc[0][AssetsDef.VALUE]), 0.0)
-        self.assertTrue(any("Brak katalogu" in w for w in warnings))
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_broker_traderepublic(
+                    Path("/tmp"),
+                    DEFAULT_TRADEREPUBLIC_ASSET_ID,
+                    self._catalog_row(),
+                    date(2026, 8, 8),
+                )
+        self.assertIn("Brak katalogu", str(ctx.exception))
 
 
 class TradeRepublicDepositRoiTests(unittest.TestCase):

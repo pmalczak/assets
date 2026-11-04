@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.broker_snapshot import BrokerHoldings, BrokerSnapshotEvaluator
+from roi.asset_dir import require_asset_dir
 from importers.assets.data_model import AssetsDef
 from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID, XtbOpenPositionsFile
 from importers.xtb.read_xtb import (
@@ -34,14 +34,8 @@ class XtbSnapshotEvaluator(BrokerSnapshotEvaluator):
         assets_file_row: pd.Series,
         valuation_date: date,
     ) -> tuple[BrokerHoldings | None, list[str]]:
-        p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
+        p = require_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
         warnings: list[str] = []
-        if not p.is_dir():
-            warnings.append(
-                f"Brak katalogu {p} — uruchom Import wyciągów "
-                f"(ZIP XTB → assets/{asset_id}/xtb_open_closed_cash_...)."
-            )
-            return None, warnings
 
         latest = latest_open_as_of(read_xtb_open(p, asset_id), valuation_date)
         if latest.empty:

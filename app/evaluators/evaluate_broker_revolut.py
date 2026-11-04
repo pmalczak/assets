@@ -9,9 +9,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.broker_snapshot import BrokerHoldings, BrokerSnapshotEvaluator
+from evaluators.valuation_date import filter_on_or_before
 from importers.assets.data_model import AssetsDef
+from roi.asset_dir import require_asset_dir
+from roi.eps import QTY_EPS
 from importers.revolut.read_r_trading import (
     read_revolut_trading_pnl,
     read_revolut_trading_transactions,
@@ -50,14 +52,8 @@ class RevolutRoboSnapshotEvaluator(BrokerSnapshotEvaluator):
         assets_file_row: pd.Series,
         valuation_date: date,
     ) -> tuple[BrokerHoldings | None, list[str]]:
-        p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
+        p = require_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
         warnings: list[str] = []
-        if not p.is_dir():
-            warnings.append(
-                f"Brak katalogu {p} — uruchom Import wyciągów "
-                f"(trading-account-statement → assets/{asset_id}/)."
-            )
-            return None, warnings
 
         trading_df, trading_warnings = read_revolut_trading_transactions(p, asset_id)
         warnings.extend(trading_warnings)
@@ -128,13 +124,8 @@ def revolut_working_cash(trading_df: pd.DataFrame) -> tuple[float, list[str]]:
 
 
 def filter_trading_on_or_before(df: pd.DataFrame, valuation_date: date) -> pd.DataFrame:
-    """Filtr daty dla ISO8601 UTC z blottera trading (filter_on_or_before jest tz-naive)."""
-    if df.empty:
-        return df.copy()
-    parsed = pd.to_datetime(df[RevolutTradingFile.DATE], format="ISO8601", utc=True).dt.normalize()
-    cutoff = pd.Timestamp(valuation_date, tz="UTC").normalize()
-    return df.loc[parsed <= cutoff].copy()
-
+    """Filtr blottera trading po dniu kalendarzowym (ISO; TZ → UTC date via valuation_date helpers)."""
+    return filter_on_or_before(df, RevolutTradingFile.DATE, valuation_date)
 
 def last_trade_prices(trading_df: pd.DataFrame) -> dict[str, float]:
     """Ostatnia cena BUY/SELL per ticker z blottera (przybliżenie MTM bez kursu bieżącego)."""
@@ -173,7 +164,7 @@ def open_positions_mtm_value(
     total = 0.0
     for ticker, info in open_holdings.items():
         qty = float(info.get("qty") or 0.0)
-        if qty <= 1e-12:
+        if qty <= QTY_EPS:
             continue
         price = float(prices.get(ticker) or 0.0)
         if price <= 0:
@@ -222,12 +213,12 @@ def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
             # Po normalize_trading_transactions Quantity SELL jest ujemne.
             remaining = abs(qty)
             open_lots = lots.setdefault(ticker, [])
-            while remaining > 1e-12 and open_lots:
+            while remaining > QTY_EPS and open_lots:
                 lot = open_lots[0]
                 take = min(lot["qty"], remaining)
                 lot["qty"] -= take
                 remaining -= take
-                if lot["qty"] <= 1e-12:
+                if lot["qty"] <= QTY_EPS:
                     open_lots.pop(0)
             if remaining > 1e-6:
                 raise ValueError(
@@ -237,7 +228,7 @@ def open_holdings_at_cost(trading_df: pd.DataFrame) -> dict[str, dict]:
     result = {}
     for ticker, open_lots in lots.items():
         qty = sum(lot["qty"] for lot in open_lots)
-        if qty <= 1e-12:
+        if qty <= QTY_EPS:
             continue
         cost = sum(lot["qty"] * lot["price"] for lot in open_lots)
         result[ticker] = {

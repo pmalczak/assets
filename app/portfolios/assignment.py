@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_step.parquet_safe import read_dataframe_parquet
 from importers.assets.data_model import AssetsDef
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
 from importers.revolut.trading_data_model import DEFAULT_REVOLUT_ROBO_ASSET_ID
@@ -241,10 +242,10 @@ def load_portfolio_nav_history(
     fallback = [AssetsDef.ID, AssetsDef.VALUE_PLN]
     for snapshot_date, path in list_snapshot_files(directory):
         try:
-            assets = pd.read_parquet(path, columns=preferred)
+            assets = read_dataframe_parquet(path, columns=preferred)
         except Exception:
             try:
-                assets = pd.read_parquet(path, columns=fallback)
+                assets = read_dataframe_parquet(path, columns=fallback)
             except Exception:
                 assets = load_snapshot(path)
         as_of = pd.Timestamp(snapshot_date).date()

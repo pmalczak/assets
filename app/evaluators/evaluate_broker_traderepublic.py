@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.broker_snapshot import (
     BrokerHoldings,
     BrokerSnapshotEvaluator,
@@ -20,6 +19,7 @@ from evaluators.valuation_date import filter_on_or_before
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.traderepublic.data_model import DEFAULT_TRADEREPUBLIC_ASSET_ID, TradeRepublicFile
 from importers.traderepublic.read_traderepublic import read_traderepublic_transactions
+from roi.asset_dir import require_asset_dir
 from roi.statement_valuation_date import evaluation_date_from_frame
 from roi.traderepublic_deposit_roi import nav_as_of
 
@@ -40,25 +40,9 @@ class TradeRepublicSnapshotEvaluator(BrokerSnapshotEvaluator):
         assets_file_row: pd.Series,
         valuation_date: date,
     ) -> tuple[BrokerHoldings | None, list[str]]:
-        p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
+        p = require_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
         warnings: list[str] = []
         catalog_ccy = str(assets_file_row.get(AssetsDef.CURRENCY) or "").strip() or None
-        if not p.is_dir():
-            warnings.append(
-                f"Brak katalogu {p} — uruchom Import wyciągów "
-                f"(Eksport transakcji.csv → assets/{asset_id}/)."
-            )
-            return (
-                BrokerHoldings(
-                    positions_value=0.0,
-                    cash_value=0.0,
-                    n_positions=0,
-                    n_cash_rows=0,
-                    evaluation_date=valuation_date.isoformat(),
-                    currency=catalog_ccy,
-                ),
-                warnings,
-            )
 
         blotter = read_traderepublic_transactions(p, asset_id)
         if blotter.empty:

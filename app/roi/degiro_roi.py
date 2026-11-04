@@ -6,11 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import AssetsDef
 from importers.assets.instruments import InstrumentMap, load_instrument_map
-from importers.assets.read_assets import read_assets
+from roi.asset_dir import require_broker_asset_dir
 from importers.degiro.data_model import (
     DEFAULT_DEGIRO_ASSET_ID,
     DegiroAccountFile,
@@ -25,16 +23,15 @@ from importers.degiro.read_degiro import (
     read_degiro_portfolio,
     read_degiro_transactions,
 )
+from roi.broker_cycle_roi import empty_cashflow_events, summarize_broker_cycle_roi
 from roi.broker_investment_cycles import (
     broker_code_from_instrument_id,
-    is_closed_cycle_instrument_id,
     partition_broker_cashflows,
 )
-from roi.broker_trading_roi import compute_ticker_roi, ticker_asset_id
+from roi.broker_trading_roi import ticker_asset_id
 from roi.categories import CAPEX, DIVESTMENT, REVENUES
-from roi.compute_roi import roi_summary_to_row
 from roi.data_model import CashFlowEvent
-from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
+from roi.statement_valuation_date import evaluation_date_from_frame
 
 
 def build_degiro_cashflows(
@@ -94,53 +91,15 @@ def compute_degiro_ticker_roi(
     mapping = instruments if instruments is not None else load_instrument_map()
     mapping.require_degiro(all_isins)
 
-    rows = []
-    open_bases = {
-        a
-        for a in events_by_asset
-        if not is_closed_cycle_instrument_id(a)
-    }
-    for cycle_id, events in sorted(events_by_asset.items()):
-        isin = broker_code_from_instrument_id(cycle_id)
-        if is_closed_cycle_instrument_id(cycle_id):
-            open_qty = 0.0
-            last_price = 0.0
-        else:
-            terminal = float(terminal_by_isin.get(isin, 0.0))
-            qty = float(qty_by_isin.get(isin, 0.0))
-            open_qty = 1.0 if abs(qty) > 1e-12 and terminal != 0.0 else 0.0
-            last_price = terminal if open_qty else 0.0
-        summary = compute_ticker_roi(
-            cycle_id,
-            events,
-            valuation_date,
-            open_qty=open_qty,
-            last_price=last_price,
-        )
-        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
-        row["instrument"] = mapping.instrument_for_degiro(isin)
-        rows.append(row)
-
-    # Pozycja w Portfolio bez CF w oknie (brak w events) — rzadki edge.
-    for isin in sorted(i for i in terminal_by_isin if i):
-        bare = ticker_asset_id(broker_id, isin)
-        if bare in open_bases:
-            continue
-        terminal = float(terminal_by_isin.get(isin, 0.0))
-        qty = float(qty_by_isin.get(isin, 0.0))
-        if abs(qty) <= 1e-12 or terminal == 0.0:
-            continue
-        summary = compute_ticker_roi(
-            bare,
-            _empty_events(),
-            valuation_date,
-            open_qty=1.0,
-            last_price=terminal,
-        )
-        row = attach_evaluation_date(roi_summary_to_row(summary), eval_date)
-        row["instrument"] = mapping.instrument_for_degiro(isin)
-        rows.append(row)
-
+    rows = summarize_broker_cycle_roi(
+        broker_id=broker_id,
+        valuation_date=valuation_date,
+        events_by_asset=events_by_asset,
+        terminal_by_code=terminal_by_isin,
+        qty_by_code=qty_by_isin,
+        eval_date=eval_date,
+        instrument_name=mapping.instrument_for_degiro,
+    )
     return pd.DataFrame(rows), events_by_asset, warnings
 
 
@@ -284,19 +243,11 @@ def _has_isin(df: pd.DataFrame, col: str) -> pd.Series:
 
 
 def _asset_dir(broker_id: str) -> Path:
-    assets = read_assets()
-    rows = assets[assets[AssetsDef.ID].astype(str) == broker_id]
-    if rows.empty:
-        raise ValueError(f"Brak aktywa brokerskiego {broker_id!r} w a_config.xlsx (arkusz assets)")
-    row = rows.iloc[0]
-    asset_dir = resolve_asset_dir(broker_id, row[AssetsDef.TYPE])
-    if not Path(asset_dir).is_dir():
-        raise ValueError(f"Brak katalogu brokera: {asset_dir}")
-    return asset_dir
+    return require_broker_asset_dir(broker_id)
 
 
 def _empty_events() -> pd.DataFrame:
-    return pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
+    return empty_cashflow_events()
 
 
 def _isin_from_asset_id(asset_id: str) -> str:

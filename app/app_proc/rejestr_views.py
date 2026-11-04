@@ -238,8 +238,8 @@ def _catalog_row(asset_id: str) -> tuple[pd.Series | None, list[str]]:
 
 
 def _obligacje_view(as_of: date) -> RejestrAssetView:
-    from app_proc.data_root import resolve_asset_dir
     from importers.pkobp.data_model import PkoBpBonds, PkoBpStan
+    from roi.asset_dir import require_asset_dir
     from importers.pkobp.read_historia import qty_signed_ops, read_obligacje_historia
     from importers.pkobp.read_stan import read_obligacje_stan, select_stan_as_of, stan_mtm_total
 
@@ -276,25 +276,7 @@ def _obligacje_view(as_of: date) -> RejestrAssetView:
         )
 
     typ = str(row.get(AssetsDef.TYPE) or "").strip()
-    asset_dir = resolve_asset_dir(_OBLIGACJE_ID, typ)
-    if not asset_dir.is_dir():
-        warnings.append(f"Brak katalogu {asset_dir}.")
-        return RejestrAssetView(
-            asset=ASSET_OBLIGACJE,
-            has_ruchy=True,
-            stan=RejestrLayer(frame=empty_stan, warnings=warnings),
-            ruchy=RejestrLayer(
-                frame=pd.DataFrame(
-                    columns=[
-                        PkoBpBonds.DATE,
-                        PkoBpBonds.CODE,
-                        PkoBpBonds.ORDER_TYPE,
-                        PkoBpBonds.BONDS_NO,
-                    ]
-                ),
-                warnings=warnings,
-            ),
-        )
+    asset_dir = require_asset_dir(_OBLIGACJE_ID, typ)
 
     stan_raw = read_obligacje_stan(asset_dir, _OBLIGACJE_ID)
     selected = select_stan_as_of(stan_raw, as_of)
@@ -450,8 +432,8 @@ def _broker_stan_from_positions(
 
 
 def _degiro_view(as_of: date) -> RejestrAssetView:
-    from app_proc.data_root import resolve_asset_dir
     from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID
+    from roi.asset_dir import require_asset_dir
     from importers.degiro.normalize import normalize_degiro_positions
     from importers.degiro.read_degiro import latest_portfolio_as_of, read_degiro_portfolio
 
@@ -465,14 +447,7 @@ def _degiro_view(as_of: date) -> RejestrAssetView:
             stan=_broker_stan_from_positions(pd.DataFrame(), venue="degiro", warnings=warnings),
         )
     typ = str(row.get(AssetsDef.TYPE) or "").strip()
-    asset_dir = resolve_asset_dir(DEFAULT_DEGIRO_ASSET_ID, typ)
-    if not asset_dir.is_dir():
-        warnings.append(f"Brak katalogu {asset_dir}.")
-        return RejestrAssetView(
-            asset=ASSET_DEGIRO,
-            has_ruchy=False,
-            stan=_broker_stan_from_positions(pd.DataFrame(), venue="degiro", warnings=warnings),
-        )
+    asset_dir = require_asset_dir(DEFAULT_DEGIRO_ASSET_ID, typ)
     portfolio = latest_portfolio_as_of(
         read_degiro_portfolio(asset_dir, DEFAULT_DEGIRO_ASSET_ID), as_of
     )
@@ -489,8 +464,8 @@ def _degiro_view(as_of: date) -> RejestrAssetView:
 
 
 def _xtb_view(as_of: date) -> RejestrAssetView:
-    from app_proc.data_root import resolve_asset_dir
     from importers.xtb.data_model import DEFAULT_XTB_ASSET_ID
+    from roi.asset_dir import require_asset_dir
     from importers.xtb.normalize import normalize_xtb_positions
     from importers.xtb.read_xtb import latest_open_as_of, read_xtb_open
 
@@ -504,14 +479,7 @@ def _xtb_view(as_of: date) -> RejestrAssetView:
             stan=_broker_stan_from_positions(pd.DataFrame(), venue="xtb", warnings=warnings),
         )
     typ = str(row.get(AssetsDef.TYPE) or "").strip()
-    asset_dir = resolve_asset_dir(DEFAULT_XTB_ASSET_ID, typ)
-    if not asset_dir.is_dir():
-        warnings.append(f"Brak katalogu {asset_dir}.")
-        return RejestrAssetView(
-            asset=ASSET_XTB,
-            has_ruchy=False,
-            stan=_broker_stan_from_positions(pd.DataFrame(), venue="xtb", warnings=warnings),
-        )
+    asset_dir = require_asset_dir(DEFAULT_XTB_ASSET_ID, typ)
     latest = latest_open_as_of(read_xtb_open(asset_dir, DEFAULT_XTB_ASSET_ID), as_of)
     if latest.empty:
         warnings.append(f"Brak raportu XTB open ≤ {as_of.isoformat()}.")
@@ -526,7 +494,6 @@ def _xtb_view(as_of: date) -> RejestrAssetView:
 
 
 def _robo_view(as_of: date) -> RejestrAssetView:
-    from app_proc.data_root import resolve_asset_dir
     from evaluators.evaluate_broker_revolut import (
         filter_trading_on_or_before,
         last_trade_prices,
@@ -537,6 +504,7 @@ def _robo_view(as_of: date) -> RejestrAssetView:
         DEFAULT_REVOLUT_ROBO_ASSET_ID,
         RevolutTradingFile,
     )
+    from roi.asset_dir import require_asset_dir
 
     warnings: list[str] = []
     cols = ["ticker", "qty", "avg_cost", "last_price", AssetsDef.VALUE, "currency"]
@@ -549,14 +517,7 @@ def _robo_view(as_of: date) -> RejestrAssetView:
             stan=RejestrLayer(frame=pd.DataFrame(columns=cols), warnings=warnings),
         )
     typ = str(row.get(AssetsDef.TYPE) or "").strip()
-    asset_dir = resolve_asset_dir(DEFAULT_REVOLUT_ROBO_ASSET_ID, typ)
-    if not asset_dir.is_dir():
-        warnings.append(f"Brak katalogu {asset_dir}.")
-        return RejestrAssetView(
-            asset=ASSET_ROBO,
-            has_ruchy=False,
-            stan=RejestrLayer(frame=pd.DataFrame(columns=cols), warnings=warnings),
-        )
+    asset_dir = require_asset_dir(DEFAULT_REVOLUT_ROBO_ASSET_ID, typ)
 
     trading_df, load_warnings = read_revolut_trading_transactions(
         asset_dir, DEFAULT_REVOLUT_ROBO_ASSET_ID

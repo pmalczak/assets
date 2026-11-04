@@ -79,11 +79,11 @@ def get_assets_file() -> Path:
 def read_asset_sheet(sheet_name: str) -> pd.DataFrame:
     source_file = get_assets_file()
     assert source_file.is_file(), source_file
-    return pd.read_excel(source_file, sheet_name=sheet_name)
+    return pd.read_excel(source_file, sheet_name=sheet_name, engine="openpyxl")
 
 
 def _first_existing_sheet(source_file: Path, candidates: tuple[str, ...]) -> str | None:
-    sheet_names = set(pd.ExcelFile(source_file).sheet_names)
+    sheet_names = set(pd.ExcelFile(source_file, engine="openpyxl").sheet_names)
     for name in candidates:
         if name in sheet_names:
             return name
@@ -98,7 +98,7 @@ def read_inventory() -> pd.DataFrame:
     )
     if sheet is None:
         return pd.DataFrame()
-    inventory = pd.read_excel(source_file, sheet_name=sheet)
+    inventory = pd.read_excel(source_file, sheet_name=sheet, engine="openpyxl")
     if sheet == LEGACY_INVENTORY_SHEET and "moneta" in inventory.columns and Inventory.INSTRUMENT not in inventory.columns:
         inventory = inventory.rename(columns={"moneta": Inventory.INSTRUMENT})
     if not inventory.empty:
@@ -112,7 +112,7 @@ def read_unit_price_evaluation() -> pd.DataFrame:
     sheet = _first_existing_sheet(source_file, (UNIT_PRICE_EVALUATION_SHEET,))
     if sheet is None:
         return pd.DataFrame()
-    prices = pd.read_excel(source_file, sheet_name=sheet)
+    prices = pd.read_excel(source_file, sheet_name=sheet, engine="openpyxl")
     if not prices.empty:
         UnitPriceEvaluation.check_structure(prices, file=source_file)
     return prices
@@ -121,7 +121,7 @@ def read_unit_price_evaluation() -> pd.DataFrame:
 def read_property_valuations() -> pd.DataFrame:
     source_file = get_assets_file()
     sheet_name = _asset_evaluation_sheet_name(source_file)
-    valuations = pd.read_excel(source_file, sheet_name=sheet_name)
+    valuations = pd.read_excel(source_file, sheet_name=sheet_name, engine="openpyxl")
     PropertyValuations.check_structure(valuations, file=source_file)
     return valuations
 
@@ -142,7 +142,7 @@ def _asset_evaluation_sheet_name(source_file: Path) -> str:
 
 def _read_assets(source_file=None) -> pd.DataFrame:
     assert source_file.is_file()
-    assets = pd.read_excel(source_file, sheet_name='assets')
+    assets = pd.read_excel(source_file, sheet_name='assets', engine="openpyxl")
     # pool_id jest wyliczany w read_assets(); ignoruj jeśli ktoś dopisał do Excela.
     assets = _drop_runtime_columns(assets)
     AssetsFile.check_structure(assets)

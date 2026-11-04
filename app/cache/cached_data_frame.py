@@ -8,7 +8,7 @@ import pandas as pd
 from pyarrow import ArrowInvalid
 
 from cache.non_cached_data_frame import NonCachedDataFrame
-from data_step.parquet_safe import write_dataframe_parquet
+from data_step.parquet_safe import read_dataframe_parquet, write_dataframe_parquet
 from utils.create_missing_path import create_missing_paths
 
 
@@ -107,7 +107,7 @@ class CachedDataFrame(NonCachedDataFrame):
 
         try:
             self.validate(the_file, self._parquet_file_name, **kwargs)
-            result = pd.read_parquet(self._parquet_file_name)
+            result = read_dataframe_parquet(self._parquet_file_name)
 
         except DataFrameCacheInvalid:
             result = self._import_and_save_data(the_file, **kwargs)

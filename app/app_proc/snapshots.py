@@ -13,6 +13,7 @@ from app_proc.snapshot_step import (
     assets_snapshot_resource,
 )
 from app_proc.data_steps_root import get_data_steps_root
+from data_step.parquet_safe import read_dataframe_parquet
 
 SNAPSHOT_DATE_DIR_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})$")
 SNAPSHOT_SCHEMA_DIR = f"s{SNAPSHOT_SCHEMA}"
@@ -41,4 +42,4 @@ def list_snapshot_files(snapshots_dir: Path) -> list[tuple[date, Path]]:
 
 
 def load_snapshot(path: Path) -> pd.DataFrame:
-    return pd.read_parquet(path)
+    return read_dataframe_parquet(path)

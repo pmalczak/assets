@@ -13,8 +13,8 @@ import pandas as pd
 
 from roi.categories import CAPEX, DIVESTMENT
 from roi.data_model import CashFlowEvent
+from roi.eps import QTY_EPS
 
-QTY_EPS = 1e-12
 CYCLE_ID_SEP = "#"
 
 

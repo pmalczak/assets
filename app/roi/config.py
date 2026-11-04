@@ -65,11 +65,11 @@ def read_analyse_config(config_path: Path | None = None) -> dict[str, pd.DataFra
     source = get_config_file(config_path)
     assert source.is_file(), source
 
-    catalog = pd.read_excel(source, sheet_name=CATALOG_SHEET)
+    catalog = pd.read_excel(source, sheet_name=CATALOG_SHEET, engine="openpyxl")
     rules = _normalize_rules_columns(
-        _drop_incomplete_rules(pd.read_excel(source, sheet_name=RULES_SHEET))
+        _drop_incomplete_rules(pd.read_excel(source, sheet_name=RULES_SHEET, engine="openpyxl"))
     )
-    manual = pd.read_excel(source, sheet_name=MANUAL_SHEET)
+    manual = pd.read_excel(source, sheet_name=MANUAL_SHEET, engine="openpyxl")
 
     catalog = _normalize_catalog_pool_id(catalog)
 

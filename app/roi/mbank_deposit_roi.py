@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
+from roi.asset_dir import require_asset_dir
 from evaluators.valuation_date import filter_excel_rows_on_or_before, filter_on_or_before
 from importers.assets.data_model import AssetsDef, KindDomain
 from importers.assets.read_assets import read_assets
@@ -191,10 +190,7 @@ def _load_mbank_statements() -> tuple[dict[str, pd.DataFrame], list[str]]:
     statements: dict[str, pd.DataFrame] = {}
     for _, asset_row in rows.iterrows():
         account_id = str(asset_row[AssetsDef.ID]).strip()
-        asset_dir = resolve_asset_dir(account_id, asset_row[AssetsDef.TYPE])
-        if not Path(asset_dir).is_dir():
-            warnings.append(f"[{account_id}] Brak katalogu {asset_dir}")
-            continue
+        asset_dir = require_asset_dir(account_id, asset_row[AssetsDef.TYPE])
         try:
             statements[account_id] = read_m_transactions(asset_dir, account_id)
         except ValueError as exc:

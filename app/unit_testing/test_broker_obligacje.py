@@ -346,7 +346,7 @@ class BondsRoiAndSnapshotTests(unittest.TestCase):
             row = _catalog_row()
 
             with patch(
-                "evaluators.evaluate_broker_obligacje.resolve_asset_dir",
+                "evaluators.evaluate_broker_obligacje.require_asset_dir",
                 return_value=asset_dir,
             ), patch(
                 "evaluators.evaluate_broker_obligacje.read_obligacje_stan",

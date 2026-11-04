@@ -136,7 +136,7 @@ def load_unallocated_pool(
         path = out_dir / unallocated_excel_filename(pid)
         if not path.is_file():
             continue
-        frames.append(add_account_tx_ymd_columns(pd.read_excel(path)))
+        frames.append(add_account_tx_ymd_columns(pd.read_excel(path, engine="openpyxl")))
 
     if not frames:
         return empty_account_tx()

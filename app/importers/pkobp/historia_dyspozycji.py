@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from importers.excel_io import read_excel
 from importers.pkobp.data_model import PkoBpBonds
 
 HISTORIA_DYSPOZYCJI_FILE = "HistoriaDyspozycji.xls"
@@ -38,7 +39,7 @@ def dated_historia_filename(first: date, last: date, fetched: date | None = None
 
 
 def read_historia_excel(path: Path) -> pd.DataFrame:
-    return pd.read_excel(path)
+    return read_excel(path)
 
 
 def disposition_date_range_from_df(df: pd.DataFrame) -> tuple[date, date]:

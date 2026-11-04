@@ -798,15 +798,9 @@ def _load_traderepublic() -> pd.DataFrame:
 
 
 def _broker_dir(broker_id: str) -> Path:
-    assets = read_assets()
-    rows = assets[assets[AssetsDef.ID].astype(str) == broker_id]
-    if rows.empty:
-        raise ValueError(f"Brak aktywa {broker_id!r} w a_config.xlsx")
-    typ = str(rows.iloc[0][AssetsDef.TYPE])
-    asset_dir = resolve_asset_dir(broker_id, typ)
-    if not Path(asset_dir).is_dir():
-        raise ValueError(f"Brak katalogu: {asset_dir}")
-    return asset_dir
+    from roi.asset_dir import require_broker_asset_dir
+
+    return require_broker_asset_dir(broker_id)
 
 
 __all__ = [

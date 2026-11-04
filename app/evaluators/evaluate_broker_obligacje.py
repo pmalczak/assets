@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.valuation_date import format_date_columns
+from roi.asset_dir import require_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.pkobp.data_model import PkoBpStan
 from importers.pkobp.read_stan import read_obligacje_stan, select_stan_as_of, stan_mtm_total
@@ -22,9 +22,7 @@ def evaluate_broker_obligacje(
     assets_file_row: pd.Series,
     valuation_date: date,
 ) -> tuple[pd.DataFrame, list[str]]:
-    p = resolve_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
-    if not p.is_dir():
-        raise ValueError(p)
+    p = require_asset_dir(asset_id, assets_file_row[AssetsDef.TYPE])
 
     warnings: list[str] = []
     stan_df = read_obligacje_stan(p, asset_id)

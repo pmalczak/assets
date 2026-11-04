@@ -1,0 +1,37 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
+
+from importers.excel_io import read_excel
+
+
+class ReadExcelEngineTests(unittest.TestCase):
+    def test_xls_uses_xlrd(self):
+        with patch("importers.excel_io.pd.read_excel", return_value=pd.DataFrame()) as mock:
+            read_excel("/tmp/foo.xls")
+        self.assertEqual(mock.call_args.kwargs.get("engine"), "xlrd")
+
+    def test_xlsx_uses_openpyxl(self):
+        with patch("importers.excel_io.pd.read_excel", return_value=pd.DataFrame()) as mock:
+            read_excel("/tmp/foo.xlsx")
+        self.assertEqual(mock.call_args.kwargs.get("engine"), "openpyxl")
+
+    def test_explicit_engine_preserved(self):
+        with patch("importers.excel_io.pd.read_excel", return_value=pd.DataFrame()) as mock:
+            read_excel("/tmp/foo.xls", engine="openpyxl")
+        self.assertEqual(mock.call_args.kwargs.get("engine"), "openpyxl")
+
+    def test_real_stan_xls_readable(self):
+        path = Path.home() / "Dropbox/INWESTYCJE/assets/obligacjeskarbowe/StanRachunkuRejestrowego_2026-09-03.xls"
+        if not path.is_file():
+            self.skipTest(f"Brak lokalnego pliku: {path}")
+        df = read_excel(path)
+        self.assertFalse(df.empty)
+        self.assertIn("EMISJA", df.columns)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -144,7 +144,7 @@ def load_instrument_map(config_path: Path | None = None) -> InstrumentMap:
     source = config_path if config_path is not None else get_assets_file()
     if not source.is_file():
         raise InstrumentMapError(f"Brak pliku konfiguracji: {source}")
-    with pd.ExcelFile(source) as xf:
+    with pd.ExcelFile(source, engine="openpyxl") as xf:
         names = set(xf.sheet_names)
     if INSTRUMENTS_SHEET not in names:
         raise InstrumentMapError(
@@ -152,7 +152,7 @@ def load_instrument_map(config_path: Path | None = None) -> InstrumentMap:
             "Klucz = instrument (nazwa pokazywana w aplikacji); "
             "kolumny degiro (ISIN), xtb (ticker), gm (ticker Yahoo U7)."
         )
-    table = pd.read_excel(source, sheet_name=INSTRUMENTS_SHEET)
+    table = pd.read_excel(source, sheet_name=INSTRUMENTS_SHEET, engine="openpyxl")
     return instrument_map_from_frame(table, source=str(source))
 
 

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_step.parquet_safe import read_dataframe_parquet
 from importers.assets.data_model import INSTRUMENTS_SHEET, Instruments
 from importers.assets.instruments import empty_instruments_table
 from importers.assets.read_assets import get_assets_file
@@ -56,7 +57,7 @@ def _seed_from_extracts() -> pd.DataFrame:
     portfolio = root / "p_degiro-portfolio.parquet"
     transactions = root / "p_degiro-transactions.parquet"
     if portfolio.is_file():
-        frame = pd.read_parquet(portfolio)
+        frame = read_dataframe_parquet(portfolio)
         for _, row in frame.iterrows():
             isin = _cell(row.get(DegiroPortfolioFile.ISIN))
             if not isin or isin in seen_degiro:
@@ -69,7 +70,7 @@ def _seed_from_extracts() -> pd.DataFrame:
                 )
             )
     if transactions.is_file():
-        frame = pd.read_parquet(transactions)
+        frame = read_dataframe_parquet(transactions)
         for _, row in frame.iterrows():
             isin = _cell(row.get(DegiroTransactionsFile.ISIN))
             if not isin or isin in seen_degiro:
@@ -85,7 +86,7 @@ def _seed_from_extracts() -> pd.DataFrame:
         path = root / name
         if not path.is_file():
             continue
-        frame = pd.read_parquet(path)
+        frame = read_dataframe_parquet(path)
         ticker_col = (
             XtbOpenPositionsFile.TICKER if XtbOpenPositionsFile.TICKER in frame.columns
             else XtbCashOperationsFile.TICKER

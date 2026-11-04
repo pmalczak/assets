@@ -9,7 +9,7 @@ from data_step.data_step_frame import DataStepFrame
 from data_step.data_strep_data_types import REFRESHED, CACHED
 from data_step.metadata_class import Metadata, MetadataUpdateError, MTIME, DIGEST
 from data_step.metadata_primitives_class import HOME_PATH
-from data_step.parquet_safe import write_dataframe_parquet
+from data_step.parquet_safe import read_dataframe_parquet, write_dataframe_parquet
 
 
 class DataStepPrimitives:
@@ -94,7 +94,7 @@ class DataStepPrimitives:
         _, extension = os.path.splitext(data_file.name)
 
         if extension == '.parquet':
-            result = pd.read_parquet(data_file)
+            result = read_dataframe_parquet(data_file)
         elif extension == '.pickle':
             result = pd.read_pickle(data_file, compression=None)
         elif extension == '.xlsx':

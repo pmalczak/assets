@@ -10,10 +10,11 @@ from evaluators.valuation_date import filter_excel_rows_on_or_before
 from importers.assets.data_model import AssetsDef
 from roi.compute_roi import RoiSummary, roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.eps import MONEY_EPS
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 VENUE_TOTAL_ASSET_ID = "Razem"
-_NEAR_ZERO = 1e-9
+_NEAR_ZERO = MONEY_EPS
 
 _MONEY_COLUMNS = (
     "capex",

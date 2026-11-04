@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from importers.excel_io import read_excel
 from importers.pkobp.data_model import PkoBpStan
 
 _STAN_NAME_RE = re.compile(
@@ -35,7 +36,7 @@ def import_stan_files(source_file: Path = None) -> pd.DataFrame:
         file_date = stan_file_date(path)
         if file_date is None:
             continue
-        df = pd.read_excel(path)
+        df = read_excel(path)
         missing = PkoBpStan.source_columns() - set(df.columns)
         if missing:
             raise ValueError(f"Brak kolumn w {path.name}: {missing}")

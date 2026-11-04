@@ -168,7 +168,7 @@ def _step_effective_source(step_rules: pd.DataFrame, default_source: str) -> str
 
 
 def _read_raw_rules(config_path: Path) -> pd.DataFrame:
-    return pd.read_excel(config_path, sheet_name=RULES_SHEET)
+    return pd.read_excel(config_path, sheet_name=RULES_SHEET, engine="openpyxl")
 
 
 def _validate_raw_sheet_columns(
@@ -180,7 +180,7 @@ def _validate_raw_sheet_columns(
 ) -> pd.DataFrame | None:
     """Sprawdza surowy Excel: kolumna ``source`` = błąd; wymagany ``pool_id``."""
     try:
-        df = pd.read_excel(config_path, sheet_name=sheet)
+        df = pd.read_excel(config_path, sheet_name=sheet, engine="openpyxl")
     except Exception as exc:  # noqa: BLE001
         report.add(
             "error",
@@ -438,148 +438,198 @@ def _validate_rules(
     }
 
     for idx, row in rules.iterrows():
-        asset_id = row.get(AnalyseAssetsRules.ASSET_ID)
-        step_id = row.get(AnalyseAssetsRules.STEP_ID)
-        loc = _loc_rule(asset_id, step_id, idx)
+        _validate_one_rule(row, idx, catalog_ids, catalog_source_by_id, report)
 
-        if is_blank_rule_value(asset_id):
-            report.add("error", RULES_SHEET, loc, "blank_asset_id", "Puste asset_id")
-            continue
-        asset_id = str(asset_id).strip()
-        loc = _loc_rule(asset_id, step_id, idx)
+    _validate_rules_step_consistency(rules, report)
 
-        if asset_id not in catalog_ids:
-            report.add(
-                "error",
-                RULES_SHEET,
-                loc,
-                "unknown_asset_id",
-                "asset_id nie występuje w arkuszu assets",
-            )
 
-        mapping = rule_cell_str(row.get(AnalyseAssetsRules.MAPPING))
-        if mapping is None:
-            report.add("error", RULES_SHEET, loc, "blank_mapping", "Puste mapping")
-        elif mapping not in MAPPING_NAMES or mapping not in MAPPING_MAP:
-            report.add(
-                "error",
-                RULES_SHEET,
-                loc,
-                "unknown_mapping",
-                f"mapping={mapping!r} nie jest zdefiniowane w procedurach "
-                f"(dozwolone: {sorted(MAPPING_MAP)})",
-            )
+def _validate_one_rule(
+    row: pd.Series,
+    idx,
+    catalog_ids: set[str],
+    catalog_source_by_id: dict[str, str],
+    report: ValidationReport,
+) -> None:
+    asset_id = row.get(AnalyseAssetsRules.ASSET_ID)
+    step_id = row.get(AnalyseAssetsRules.STEP_ID)
+    loc = _loc_rule(asset_id, step_id, idx)
 
-        field_name = rule_cell_str(row.get(AnalyseAssetsRules.FIELD))
-        operator = rule_cell_str(row.get(AnalyseAssetsRules.OPERATOR))
+    if is_blank_rule_value(asset_id):
+        report.add("error", RULES_SHEET, loc, "blank_asset_id", "Puste asset_id")
+        return
+    asset_id = str(asset_id).strip()
+    loc = _loc_rule(asset_id, step_id, idx)
 
-        if field_name is None or operator is None:
-            # read_analyse_config usuwa takie wiersze — tu nie powinno ich być
-            report.add(
-                "warning",
-                RULES_SHEET,
-                loc,
-                "incomplete_rule",
-                "Niepełna reguła (brak field/operator) — zostanie pominięta przy wczytaniu",
-            )
-            continue
-
-        if field_name in LEGACY_FIELD_ALIASES:
-            report.add(
-                "error",
-                RULES_SHEET,
-                loc,
-                "legacy_field",
-                f"field={field_name!r} to alias wsteczny — użyj "
-                f"{LEGACY_FIELD_ALIASES[field_name]!r}",
-            )
-        elif field_name not in CANONICAL_FIELDS:
-            report.add(
-                "error",
-                RULES_SHEET,
-                loc,
-                "unknown_field",
-                f"field={field_name!r} nie jest obsługiwane "
-                f"(dozwolone: {sorted(CANONICAL_FIELDS)})",
-            )
-        if operator not in OPERATOR_NAMES:
-            report.add(
-                "error",
-                RULES_SHEET,
-                loc,
-                "unknown_operator",
-                f"operator={operator!r} nie jest obsługiwany "
-                f"(dozwolone: {sorted(OPERATOR_NAMES)})",
-            )
-
-        rule_source = row.get(AnalyseAssetsRules.POOL_ID)
-        if not is_blank_rule_value(rule_source):
-            rule_source = str(rule_source).strip()
-            if rule_source == MANUAL_TRANSACTION_SOURCE:
-                report.add(
-                    "error",
-                    RULES_SHEET,
-                    loc,
-                    "invalid_rule_source",
-                    f"pool_id={rule_source!r} jest zarezerwowane dla wierszy manual",
-                )
-            elif rule_source not in SUPPORTED_POOL_IDS:
-                report.add(
-                    "error",
-                    RULES_SHEET,
-                    loc,
-                    "unsupported_source",
-                    f"pool_id={rule_source!r} nie jest obsługiwane "
-                    f"(puste=inherit, dozwolone: {sorted(SUPPORTED_POOL_IDS)})",
-                )
-
-        default_source = catalog_source_by_id.get(asset_id, DEFAULT_POOL_ID)
-        effective = (
-            str(rule_source).strip()
-            if not is_blank_rule_value(row.get(AnalyseAssetsRules.POOL_ID))
-            else default_source
+    if asset_id not in catalog_ids:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "unknown_asset_id",
+            "asset_id nie występuje w arkuszu assets",
         )
-        allowed_fields = FIELDS_BY_SOURCE.get(effective)
-        if (
-            allowed_fields is not None
-            and field_name is not None
-            and field_name not in LEGACY_FIELD_ALIASES
-            and field_name not in allowed_fields
-        ):
+
+    _validate_rule_mapping(row, loc, report)
+    field_name = rule_cell_str(row.get(AnalyseAssetsRules.FIELD))
+    operator = rule_cell_str(row.get(AnalyseAssetsRules.OPERATOR))
+
+    if field_name is None or operator is None:
+        report.add(
+            "warning",
+            RULES_SHEET,
+            loc,
+            "incomplete_rule",
+            "Niepełna reguła (brak field/operator) — zostanie pominięta przy wczytaniu",
+        )
+        return
+
+    _validate_rule_field_operator(field_name, operator, loc, report)
+    effective = _validate_rule_pool_and_effective_source(
+        row, asset_id, catalog_source_by_id, loc, report
+    )
+    _validate_rule_field_for_source(field_name, effective, loc, report)
+    _validate_rule_operator_for_field(field_name, operator, loc, report)
+
+    if field_name in CANONICAL_FIELDS:
+        _validate_rule_value(
+            field_name,
+            operator,
+            row.get(AnalyseAssetsRules.VALUE),
+            report,
+            loc,
+        )
+
+
+def _validate_rule_mapping(row: pd.Series, loc: str, report: ValidationReport) -> None:
+    mapping = rule_cell_str(row.get(AnalyseAssetsRules.MAPPING))
+    if mapping is None:
+        report.add("error", RULES_SHEET, loc, "blank_mapping", "Puste mapping")
+    elif mapping not in MAPPING_NAMES or mapping not in MAPPING_MAP:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "unknown_mapping",
+            f"mapping={mapping!r} nie jest zdefiniowane w procedurach "
+            f"(dozwolone: {sorted(MAPPING_MAP)})",
+        )
+
+
+def _validate_rule_field_operator(
+    field_name: str,
+    operator: str,
+    loc: str,
+    report: ValidationReport,
+) -> None:
+    if field_name in LEGACY_FIELD_ALIASES:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "legacy_field",
+            f"field={field_name!r} to alias wsteczny — użyj "
+            f"{LEGACY_FIELD_ALIASES[field_name]!r}",
+        )
+    elif field_name not in CANONICAL_FIELDS:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "unknown_field",
+            f"field={field_name!r} nie jest obsługiwane "
+            f"(dozwolone: {sorted(CANONICAL_FIELDS)})",
+        )
+    if operator not in OPERATOR_NAMES:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "unknown_operator",
+            f"operator={operator!r} nie jest obsługiwany "
+            f"(dozwolone: {sorted(OPERATOR_NAMES)})",
+        )
+
+
+def _validate_rule_pool_and_effective_source(
+    row: pd.Series,
+    asset_id: str,
+    catalog_source_by_id: dict[str, str],
+    loc: str,
+    report: ValidationReport,
+) -> str:
+    rule_source = row.get(AnalyseAssetsRules.POOL_ID)
+    if not is_blank_rule_value(rule_source):
+        rule_source = str(rule_source).strip()
+        if rule_source == MANUAL_TRANSACTION_SOURCE:
             report.add(
                 "error",
                 RULES_SHEET,
                 loc,
-                "field_source_mismatch",
-                f"field={field_name!r} nie pasuje do źródła {effective!r} "
-                f"(dozwolone: {sorted(allowed_fields)})",
+                "invalid_rule_source",
+                f"pool_id={rule_source!r} jest zarezerwowane dla wierszy manual",
             )
-
-        if field_name in OPERATORS_BY_FIELD and operator is not None:
-            allowed_ops = OPERATORS_BY_FIELD[field_name]
-            if operator not in allowed_ops:
-                report.add(
-                    "error",
-                    RULES_SHEET,
-                    loc,
-                    "operator_field_mismatch",
-                    f"operator={operator!r} nie jest typowy dla field={field_name!r} "
-                    f"(oczekiwane: {sorted(allowed_ops)})",
-                )
-
-        if (
-            field_name is not None
-            and operator is not None
-            and field_name in CANONICAL_FIELDS
-        ):
-            _validate_rule_value(
-                field_name,
-                operator,
-                row.get(AnalyseAssetsRules.VALUE),
-                report,
+        elif rule_source not in SUPPORTED_POOL_IDS:
+            report.add(
+                "error",
+                RULES_SHEET,
                 loc,
+                "unsupported_source",
+                f"pool_id={rule_source!r} nie jest obsługiwane "
+                f"(puste=inherit, dozwolone: {sorted(SUPPORTED_POOL_IDS)})",
             )
 
+    default_source = catalog_source_by_id.get(asset_id, DEFAULT_POOL_ID)
+    if not is_blank_rule_value(row.get(AnalyseAssetsRules.POOL_ID)):
+        return str(row.get(AnalyseAssetsRules.POOL_ID)).strip()
+    return default_source
+
+
+def _validate_rule_field_for_source(
+    field_name: str,
+    effective: str,
+    loc: str,
+    report: ValidationReport,
+) -> None:
+    allowed_fields = FIELDS_BY_SOURCE.get(effective)
+    if (
+        allowed_fields is not None
+        and field_name not in LEGACY_FIELD_ALIASES
+        and field_name not in allowed_fields
+    ):
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "field_source_mismatch",
+            f"field={field_name!r} nie pasuje do źródła {effective!r} "
+            f"(dozwolone: {sorted(allowed_fields)})",
+        )
+
+
+def _validate_rule_operator_for_field(
+    field_name: str,
+    operator: str,
+    loc: str,
+    report: ValidationReport,
+) -> None:
+    if field_name not in OPERATORS_BY_FIELD:
+        return
+    allowed_ops = OPERATORS_BY_FIELD[field_name]
+    if operator not in allowed_ops:
+        report.add(
+            "error",
+            RULES_SHEET,
+            loc,
+            "operator_field_mismatch",
+            f"operator={operator!r} nie jest typowy dla field={field_name!r} "
+            f"(oczekiwane: {sorted(allowed_ops)})",
+        )
+
+
+def _validate_rules_step_consistency(
+    rules: pd.DataFrame,
+    report: ValidationReport,
+) -> None:
     if rules.empty:
         return
 

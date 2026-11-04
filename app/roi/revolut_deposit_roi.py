@@ -19,12 +19,13 @@ from importers.revolut.savings_statement import (
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
 from roi.data_model import CashFlowEvent
+from roi.eps import MONEY_EPS
 from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 from roi.xirr import cashflows_for_xirr, compute_xirr
 
 DEPOSIT_ASSET_IDS = ("p_re_eur", "p_re_pln", "g_re_eur", "g_re_pln")
 TAX_RATE = 0.19
-BALANCE_EPS = 1e-9
+BALANCE_EPS = MONEY_EPS
 
 
 def tax_liability_asset_id(deposit_id: str, year: int) -> str:

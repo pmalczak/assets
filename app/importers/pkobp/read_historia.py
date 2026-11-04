@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_step.data_step import DATA_STEP
+from importers.excel_io import read_excel
 from importers.pkobp.data_model import (
     MANUAL_CASHFLOW_ROWS,
     PAPER_SELL_TYPES,
@@ -31,7 +32,7 @@ def import_historia(source_file: Path = None) -> pd.DataFrame:
     assert source_file is not None and source_file.is_dir()
     input_file = resolve_historia_file(source_file)
 
-    transactions = pd.read_excel(input_file)
+    transactions = read_excel(input_file)
     PkoBpBonds.check_structure(transactions)
 
     print(f"PLIK:{input_file} {len(transactions):>4} rekord/ów")

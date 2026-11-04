@@ -95,6 +95,29 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
 
 ---
 
+## Brak źródła vs treść wyciągu (błędy)
+
+- **Hard fail (`raise ValueError`):** brak wiersza w `assets`, brak katalogu aktywa/brokera na dysku, brak wymaganego arkusza konfiguracji. Dotyczy brokerów **i** depozytów (mBank/Revolut/TR) — bez partial result przez `warnings` + `continue`.
+- **Soft (`warnings`):** treść wyciągu — puste CF, nieznany typ transakcji, brak operacji w pliku, brak raportu ≤ data wyceny *gdy katalog istnieje*.
+- Resolver: `roi/asset_dir.py` (`require_asset_dir` / `require_broker_asset_dir`).
+
+## Epsilon (prawie zero)
+
+- **`QTY_EPS = 1e-12`** — ilości / jednostki / loty (`roi/eps.py`).
+- **`MONEY_EPS = 1e-9`** — salda, kwoty, NAV „sold”.
+- W kodzie domenowym używać nazwanych stałych, nie gołych literałów.
+
+## Daty w DataFrame (kontrakt)
+
+- **Kanon w kolumnach domenowych:** string ISO **`YYYY-MM-DD`** (dzień kalendarzowy).
+- **`Timestamp` / `datetime.date`:** tylko wewnątrz helperów (`evaluators/valuation_date.py`: `to_iso_date`, `as_iso_date`, `filter_on_or_before`, arytmetyka dni).
+- **Cutoff / filtr ≤ data wyceny:** wyłącznie przez `filter_on_or_before` / `filter_excel_rows_on_or_before` (porównanie stringów ISO po normalizacji). Zakaz ad-hoc `tz="UTC"` cutoffów.
+- **Wartości ze strefą (np. blotter Revolut ISO8601 Z):** dzień kalendarzowy = data w **UTC**; bez lokalnego przesunięcia przy cutoff.
+- **Null:** nieparsowalne / puste → brak daty (odrzucane przez filtr); nie mieszać `""`, `"NaT"` i Timestamp w jednej kolumnie po normalizacji.
+- **UI / export:** ten sam ISO string — bez drugiej reprezentacji „dla prezentacji”.
+
+---
+
 ## Założenia domenowe (obowiązujące)
 
 1. **Brak ewidencji gotówki bieżącej** — nie prowadzimy osobnego salda „portfel gotówkowy”; `typ=investment.cash`. Brak osobnej zakładki `cash` w `a_config.xlsx`.

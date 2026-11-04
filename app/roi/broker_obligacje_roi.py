@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
-from app_proc.data_root import resolve_asset_dir
 from evaluators.evaluate_broker_obligacje import DEFAULT_BONDS_BROKER_ID
-from importers.assets.data_model import AssetsDef, KindDomain, TypeDomain
-from importers.assets.read_assets import read_assets
 from importers.pkobp.data_model import PkoBpBonds, PkoBpStan
+from roi.asset_dir import require_broker_asset_dir
+from roi.eps import QTY_EPS
 from importers.pkobp.read_historia import (
     filter_cashflow_register,
     filter_historia_on_or_before,
@@ -144,7 +142,7 @@ def compute_bonds_broker_roi_from_frames(
 
     for code, st in state.items():
         asset_id = ticker_asset_id(broker_id, code)
-        if asset_id not in events_by_asset and abs(st["qty"]) > 1e-12:
+        if asset_id not in events_by_asset and abs(st["qty"]) > QTY_EPS:
             events_by_asset[asset_id] = pd.DataFrame(columns=list(CashFlowEvent.COLUMN_ORDER))
 
     rows = []
@@ -152,7 +150,7 @@ def compute_bonds_broker_roi_from_frames(
         code = asset_id.split(":", 1)[-1]
         st = state.get(code, {"qty": 0.0, "terminal": 0.0, "last_price": 0.0})
         qty = float(st["qty"])
-        if abs(qty) > 1e-12:
+        if abs(qty) > QTY_EPS:
             last_price = float(st["terminal"]) / qty if qty else 0.0
         else:
             last_price = 0.0
@@ -177,19 +175,7 @@ def compute_obligacje_broker_roi(
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], list[str]]:
     warnings: list[str] = []
     if historia is None or stan_df is None:
-        assets = read_assets()
-        rows = assets[assets[AssetsDef.ID].astype(str) == broker_id]
-        if rows.empty:
-            broker_mask = assets[AssetsDef.KIND].astype(str).str.startswith(KindDomain.BROKER)
-            bonds_mask = assets[AssetsDef.TYPE].astype(str) == TypeDomain.BONDS
-            rows = assets.loc[broker_mask & bonds_mask]
-            rows = rows[rows[AssetsDef.ID].astype(str) == broker_id]
-        if rows.empty:
-            raise ValueError(f"Brak aktywa brokerskiego {broker_id!r} w a_config.xlsx (arkusz assets)")
-        row = rows.iloc[0]
-        asset_dir = resolve_asset_dir(broker_id, row[AssetsDef.TYPE])
-        if not Path(asset_dir).is_dir():
-            raise ValueError(f"Brak katalogu brokera: {asset_dir}")
+        asset_dir = require_broker_asset_dir(broker_id)
         if historia is None:
             historia = read_obligacje_historia(asset_dir, broker_id)
         if stan_df is None:

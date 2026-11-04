@@ -425,7 +425,7 @@ class EvaluateBrokerTests(unittest.TestCase):
                     return_value=(pd.DataFrame(), pnl_warnings or []),
                 ),
                 patch(
-                    "evaluators.evaluate_broker_revolut.resolve_asset_dir",
+                    "evaluators.evaluate_broker_revolut.require_asset_dir",
                     return_value=root / "p_re_robo",
                 ),
             ):

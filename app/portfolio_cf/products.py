@@ -12,6 +12,7 @@ from app_proc.data_steps_root import get_data_steps_root
 from app_proc.ui_prefs import SOLD_FILTER_LABELS
 from data_step.data_step import DATA_STEP
 from data_step.data_step_frame import DataStepFrame
+from data_step.parquet_safe import read_dataframe_parquet
 from portfolio_cf.assemble import AssemblyResult, build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
@@ -351,7 +352,7 @@ def _read_snapshot(source_file: Path | None) -> pd.DataFrame:
     path = Path(source_file)
     if not path.is_file():
         return pd.DataFrame()
-    return pd.read_parquet(path)
+    return read_dataframe_parquet(path)
 
 
 def _stash_key(valuation_date: date) -> str:

@@ -136,7 +136,9 @@ class AssetsSnapshotParquetFileTests(unittest.TestCase):
         snapshot_path = get_data_steps_root() / assets_snapshot_resource(date.today())
         if not snapshot_path.is_file():
             self.skipTest(f"Brak lokalnego snapshotu: {snapshot_path}")
-        df = pd.read_parquet(snapshot_path)
+        from data_step.parquet_safe import read_dataframe_parquet
+
+        df = read_dataframe_parquet(snapshot_path)
         self.assertFalse(df.empty)
         # Data snapshota = nazwa pliku; kolumna data_wyceny_portfela nie jest wymagana.
 

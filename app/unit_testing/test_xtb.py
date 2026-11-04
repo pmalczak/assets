@@ -430,7 +430,7 @@ class EvaluateXtbTests(unittest.TestCase):
             asset_dir = root / DEFAULT_XTB_ASSET_ID
             asset_dir.mkdir()
             with (
-                patch("evaluators.evaluate_broker_xtb.resolve_asset_dir", return_value=asset_dir),
+                patch("evaluators.evaluate_broker_xtb.require_asset_dir", return_value=asset_dir),
                 patch("evaluators.evaluate_broker_xtb.read_xtb_open", return_value=open_df),
             ):
                 result, warnings = evaluate_broker_xtb(
@@ -460,7 +460,7 @@ class EvaluateXtbTests(unittest.TestCase):
             asset_dir = root / DEFAULT_XTB_ASSET_ID
             asset_dir.mkdir()
             with (
-                patch("evaluators.evaluate_broker_xtb.resolve_asset_dir", return_value=asset_dir),
+                patch("evaluators.evaluate_broker_xtb.require_asset_dir", return_value=asset_dir),
                 patch("evaluators.evaluate_broker_xtb.read_xtb_open", return_value=open_df),
                 patch(
                     "evaluators.evaluate_broker_xtb.resolve_xtb_cash_value",
@@ -475,14 +475,17 @@ class EvaluateXtbTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.iloc[0][AssetsDef.VALUE]), 21644.15)
         self.assertIn("1 poz. + 1 cash", result.iloc[0][AssetsDef.DESCR])
 
-    def test_evaluate_missing_dir_returns_empty(self):
+    def test_evaluate_missing_dir_raises(self):
         missing = Path("/tmp/definitely-missing-p_xtb")
-        with patch("evaluators.evaluate_broker_xtb.resolve_asset_dir", return_value=missing):
-            result, warnings = evaluate_broker_xtb(
-                Path("/tmp"), DEFAULT_XTB_ASSET_ID, _catalog_row(), date(2026, 8, 20)
-            )
-        self.assertTrue(result.empty)
-        self.assertTrue(any("Brak katalogu" in msg for msg in warnings))
+        with patch(
+            "evaluators.evaluate_broker_xtb.require_asset_dir",
+            side_effect=ValueError(f"Brak katalogu: {missing}"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_broker_xtb(
+                    Path("/tmp"), DEFAULT_XTB_ASSET_ID, _catalog_row(), date(2026, 8, 20)
+                )
+        self.assertIn("Brak katalogu", str(ctx.exception))
 
 
 class XtbRoiTests(unittest.TestCase):

@@ -7,13 +7,11 @@ OPEX wchodzi do Razem). TOP-UP poza ROI ticker.
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
 from analyse_assets.account_tx import AccountTx
 from analyse_assets.accounts_pools import load_accounts_pool
-from app_proc.data_root import resolve_asset_dir
 from evaluators.evaluate_broker_revolut import (
     filter_trading_on_or_before,
     last_trade_prices,
@@ -21,9 +19,7 @@ from evaluators.evaluate_broker_revolut import (
     parse_trading_number,
 )
 from evaluators.valuation_date import filter_excel_rows_on_or_before
-from importers.assets.data_model import AssetsDef, KindDomain
 from importers.assets.pool_id import REVOLUT_EUR
-from importers.assets.read_assets import read_assets
 from importers.revolut.read_r_trading import read_revolut_trading_transactions
 from importers.revolut.trading_data_model import RevolutTradingFile
 from roi.broker_investment_cycles import (
@@ -31,8 +27,10 @@ from roi.broker_investment_cycles import (
     is_closed_cycle_instrument_id,
     partition_broker_cashflows,
 )
+from roi.asset_dir import require_broker_asset_dir
 from roi.categories import CAPEX, DIVESTMENT, OPEX, REVENUES
 from roi.compute_roi import RoiSummary, _aggregate_category, roi_summary_to_row
+from roi.eps import QTY_EPS
 from roi.data_model import CashFlowEvent
 from roi.statement_valuation_date import attach_evaluation_date, evaluation_date_from_frame
 from roi.xirr import cashflows_for_xirr, compute_xirr
@@ -162,7 +160,7 @@ def compute_ticker_roi(
     capex = _aggregate_category(filtered, CAPEX)
     opex = _aggregate_category(filtered, OPEX)
     revenue = _aggregate_category(filtered, REVENUES)
-    sold = abs(open_qty) <= 1e-12
+    sold = abs(open_qty) <= QTY_EPS
     if filtered.empty:
         terminal_realized = 0.0
     else:
@@ -298,17 +296,7 @@ def compute_revolut_robo_ticker_roi(
 
 
 def _load_broker_trading(broker_id: str) -> tuple[pd.DataFrame, list[str]]:
-    assets = read_assets()
-    rows = assets[assets[AssetsDef.ID].astype(str) == broker_id]
-    if rows.empty:
-        broker_mask = assets[AssetsDef.KIND].astype(str).str.startswith(KindDomain.BROKER)
-        rows = assets.loc[broker_mask & (assets[AssetsDef.ID].astype(str) == broker_id)]
-    if rows.empty:
-        raise ValueError(f"Brak aktywa brokerskiego {broker_id!r} w a_config.xlsx (arkusz assets)")
-    row = rows.iloc[0]
-    asset_dir = resolve_asset_dir(broker_id, row[AssetsDef.TYPE])
-    if not Path(asset_dir).is_dir():
-        raise ValueError(f"Brak katalogu brokera: {asset_dir}")
+    asset_dir = require_broker_asset_dir(broker_id)
     return read_revolut_trading_transactions(asset_dir, broker_id)
 
 
