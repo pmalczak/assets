@@ -1,0 +1,28 @@
+---
+description: SHIP — commit on dev, merge to main, push main, return to dev
+alwaysApply: true
+---
+
+# SHIP — `dev` → `main` → GitHub → `dev`
+
+Gdy użytkownik wydaje instrukcję **SHIP** (case-insensitive: `ship`, `SHIP`, `Ship`; także „zrób SHIP”), wykonaj poniższy ciąg **atomowo**. SHIP = wyraźna prośba o commit i push `main` (nie koliduje z „nie commituj bez prośby”).
+
+Spójne z regułą sync-only-`main`: push tylko `main`; `dev` pozostaje lokalna.
+
+## Sekwencja (kolejno)
+
+1. **Gałąź** — bieżąca musi być `dev`. Jeśli nie: **STOP**, poproś o przełączenie na `dev` (nie przełączaj sam).
+2. **Commit** — jeśli są zmiany do zacommitowania (staged / unstaged / untracked, z wyłączeniem ignorowanych i sekretów): commit wg protokołu użytkownika (status, diff staged+unstaged, log stylu, `git add` relevantnych plików, message przez HEREDOC, bez `--no-verify` / force). Brak zmian = pomiń commit (to **nie** jest błąd).
+3. **Merge** — `git checkout main`, potem `git merge dev` (zwykły merge, bez rebase, bez force).
+4. **Push** — tylko `git push origin main` (bez `-u` dla innych gałęzi; nie pushuj `dev`).
+5. **Powrót** — `git checkout dev`.
+
+Po sukcesie: jedno zdanie — że `main` jest na origin i jesteś z powrotem na `dev` (ew. krótki hash).
+
+## Stop przy pierwszym błędzie
+
+- Pierwszy non-zero exit, konflikt merge, odrzucenie commita przez hook → **natychmiast STOP**.
+- Nie wykonuj kolejnych kroków.
+- Krótko: który krok padł i dlaczego (stderr / konflikt).
+- W ramach SHIP **nie**: naprawiaj konfliktów, `reset --hard`, `push --force`, push `dev`, twórz PR, ustawiaj upstream dla `dev`.
+- Po fail pushu: STOP w bieżącym stanie (zwykle na `main`); nie zakładaj powrotu na `dev`.
