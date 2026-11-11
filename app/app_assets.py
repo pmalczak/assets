@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+import faulthandler
 
 import pandas as pd
 import streamlit as st
@@ -276,8 +277,6 @@ def main():
 
 if __name__ == "__main__":
     # infer_string + pyarrow na CPython 3.14 bywa przyczyną segfaultu Streamlit.
-    import faulthandler
-
     faulthandler.enable(all_threads=True)
-    pd.options.future.infer_string = False
+    # pd.options.future.infer_string = False
     main()
