@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from evaluators.valuation_date import filter_on_or_before, format_date_columns
+from evaluators.valuation_date import (
+    evaluation_date_from_statement,
+    filter_on_or_before,
+    format_date_columns,
+)
 from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.mbank.data_model import MBankFile
@@ -38,8 +42,10 @@ def evaluate_mbank(
         statement_date = _row[MBankFile.FILE_DATE]
         assets_row[AssetsDef.LAST_TRANSACTION_DATE] = last_txn
         assets_row[AssetsDef.STATEMENT_DATE] = statement_date
-        # Stara kolumna: data ostatniej txn (nie wyciągu); UI Cash pool jej nie pokazuje.
-        assets_row[AssetsDef.EVALUATION_DATE] = last_txn
+        # Świeżość źródła: min(snapshot, data-wyciągu), nie ostatnia txn.
+        assets_row[AssetsDef.EVALUATION_DATE] = evaluation_date_from_statement(
+            valuation_date, statement_date
+        )
         break
 
     data = [assets_row]

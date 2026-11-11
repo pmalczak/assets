@@ -95,3 +95,15 @@ def filter_excel_rows_on_or_before(
 def format_date_columns(df: pd.DataFrame, *columns: str) -> pd.DataFrame:
     """Normalize date columns to ISO strings for parquet / UI (invalid → ``None``)."""
     return normalize_iso_date_columns(df, *columns)
+
+
+def evaluation_date_from_statement(
+    valuation_date: date | datetime | str | pd.Timestamp,
+    statement_date: Any,
+) -> str:
+    """Świeżość źródła: min(snapshot, data-wyciągu). Nie data ostatniej transakcji."""
+    snapshot = as_iso_date(valuation_date)
+    statement = to_iso_date(statement_date)
+    if statement is None:
+        return snapshot
+    return min(snapshot, statement)

@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from evaluators.valuation_date import filter_on_or_before, format_date_columns
+from evaluators.valuation_date import (
+    evaluation_date_from_statement,
+    filter_on_or_before,
+    format_date_columns,
+)
 from app_proc.data_root import resolve_asset_dir
 from importers.assets.data_model import AssetsDef, GroupDomain, TypeDomain
 from importers.revolut.account_data_model import RevolutAccountFile
@@ -43,8 +47,10 @@ def evaluate_revolut(
         statement_date = row[RevolutAccountFile.FILE_DATE]
         assets_row[AssetsDef.LAST_TRANSACTION_DATE] = last_txn
         assets_row[AssetsDef.STATEMENT_DATE] = statement_date
-        # Stara kolumna: data ostatniej txn (nie wyciągu); UI Cash pool jej nie pokazuje.
-        assets_row[AssetsDef.EVALUATION_DATE] = last_txn
+        # Świeżość źródła: min(snapshot, data-wyciągu), nie ostatnia txn.
+        assets_row[AssetsDef.EVALUATION_DATE] = evaluation_date_from_statement(
+            valuation_date, statement_date
+        )
         assets_row[AssetsDef.VALUE] = row[RevolutAccountFile.BALANCE]
         break
     data = [assets_row]
@@ -53,7 +59,9 @@ def evaluate_revolut(
     df_dep = filter_on_or_before(df_dep, RevolutDepositFile.DATE, valuation_date)
     if not df_dep.empty:
         balance = latest_deposit_balance(df_dep, valuation_date)
-        ref_date = df_accounts[RevolutAccountFile.FILE_DATE].unique()[0]
+        ref_date = evaluation_date_from_statement(
+            valuation_date, df_accounts[RevolutAccountFile.FILE_DATE].unique()[0]
+        )
         deposit_row = AssetsDef.as_assets_row(assets_file_row)
         deposit_row[AssetsDef.EVALUATION_DATE] = ref_date
         deposit_row[AssetsDef.VALUE] = balance

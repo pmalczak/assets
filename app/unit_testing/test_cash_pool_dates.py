@@ -126,8 +126,25 @@ class EvaluateMbankCashPoolDatesTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[AssetsDef.STATEMENT_DATE].iloc[0], "2026-07-15")
         self.assertEqual(result[AssetsDef.LAST_TRANSACTION_DATE].iloc[0], "2026-09-01")
-        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-09-01")
+        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-07-15")
         self.assertEqual(float(result[AssetsDef.VALUE].iloc[0]), 120.0)
+
+    def test_evaluation_date_clamps_to_snapshot_when_file_newer(self):
+        tx = pd.DataFrame(
+            [
+                {
+                    **_empty_mbank_row("2026-08-01", 100.0),
+                    MBankFile.FILE_DATE: "2026-09-20",
+                },
+            ]
+        )
+        row = _catalog_row("p_m_test", "mbank.PM")
+        with patch("evaluators.evaluate_mbank.read_m_transactions", return_value=tx):
+            with patch("evaluators.evaluate_mbank.resolve_asset_dir", return_value=Path(".")):
+                with patch("evaluators.evaluate_mbank._evaluate_deposits_mbank", return_value=[]):
+                    result = evaluate_mbank(Path("."), "p_m_test", row, date(2026, 9, 10))
+        self.assertEqual(result[AssetsDef.STATEMENT_DATE].iloc[0], "2026-09-20")
+        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-09-10")
 
 
 class EvaluateRevolutCashPoolDatesTests(unittest.TestCase):
@@ -174,7 +191,38 @@ class EvaluateRevolutCashPoolDatesTests(unittest.TestCase):
                     result = evaluate_revolut("p_re_pln", row, date(2026, 9, 10))
         self.assertEqual(result[AssetsDef.STATEMENT_DATE].iloc[0], "2026-08-01")
         self.assertEqual(result[AssetsDef.LAST_TRANSACTION_DATE].iloc[0], "2026-08-31")
-        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-08-31")
+        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-08-01")
+
+    def test_evaluation_date_clamps_to_snapshot_when_file_newer(self):
+        row = _catalog_row("p_re_pln", "revolut.PM", "PLN")
+        fake_dir = MagicMock()
+        fake_dir.is_dir.return_value = True
+        full_tx = pd.DataFrame(
+            [
+                {
+                    RevolutAccountFile.KIND: "Transfer",
+                    RevolutAccountFile.PRODUCT: "Current",
+                    RevolutAccountFile.INIT_DATE: "2026-08-20",
+                    RevolutAccountFile.DATE: "2026-08-20",
+                    RevolutAccountFile.DESCRIPTION: "x",
+                    RevolutAccountFile.AMOUNT: 50.0,
+                    RevolutAccountFile.FEE: 0,
+                    RevolutAccountFile.CURRENCY: "PLN",
+                    RevolutAccountFile.STATE: RevolutFileState.CLOSED,
+                    RevolutAccountFile.BALANCE: 50.0,
+                    RevolutAccountFile.FILE_DATE: "2026-09-20",
+                },
+            ]
+        )
+        with patch("evaluators.evaluate_revolut.read_revolut_account_transactions", return_value=full_tx):
+            with patch(
+                "evaluators.evaluate_revolut.read_revolut_deposit_transactions",
+                return_value=pd.DataFrame(),
+            ):
+                with patch("evaluators.evaluate_revolut.resolve_asset_dir", return_value=fake_dir):
+                    result = evaluate_revolut("p_re_pln", row, date(2026, 9, 10))
+        self.assertEqual(result[AssetsDef.STATEMENT_DATE].iloc[0], "2026-09-20")
+        self.assertEqual(result[AssetsDef.EVALUATION_DATE].iloc[0], "2026-09-10")
 
 
 class CashPoolDaysAfterValuationTests(unittest.TestCase):
