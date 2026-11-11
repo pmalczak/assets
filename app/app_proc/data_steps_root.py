@@ -18,6 +18,9 @@ def init_app_data_step(start: Path | None = None) -> Path:
 
     Idempotentne dla tego samego roota. Nie wywoływać z adapterów / downloadów.
     """
+    from importers.excel_io import silence_openpyxl_default_style_warning
+
+    silence_openpyxl_default_style_warning()
     root = get_data_steps_root(start=start)
     DATA_STEP.init_steps(root=root)
     return root

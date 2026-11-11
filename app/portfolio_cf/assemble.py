@@ -34,10 +34,14 @@ class AssemblyResult:
             return pd.DataFrame(
                 columns=["instrument_id", "status", "reason", "venue", "is_sold"]
             )
+        from portfolio_cf.sold_status import is_instrument_sold
+
         rows = []
         for item in self.coverage:
             row = item.to_row()
-            row["is_sold"] = bool(self.is_sold_by_instrument.get(item.instrument_id, False))
+            row["is_sold"] = is_instrument_sold(
+                item.instrument_id, self.is_sold_by_instrument
+            )
             rows.append(row)
         return pd.DataFrame(rows)
 

@@ -1,11 +1,11 @@
-import tempfile
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 
-from importers.excel_io import read_excel
+from importers.excel_io import _OPENPYXL_NO_DEFAULT_STYLE, read_excel
 
 
 class ReadExcelEngineTests(unittest.TestCase):
@@ -32,6 +32,19 @@ class ReadExcelEngineTests(unittest.TestCase):
         self.assertFalse(df.empty)
         self.assertIn("EMISJA", df.columns)
 
+    def test_openpyxl_default_style_warning_silenced_in_read_excel(self):
+        def _warn_then_frame(*_a, **_k):
+            warnings.warn(_OPENPYXL_NO_DEFAULT_STYLE, UserWarning)
+            return pd.DataFrame({"a": [1]})
+
+        with patch("importers.excel_io.pd.read_excel", side_effect=_warn_then_frame):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                read_excel("/tmp/foo.xlsx")
+        self.assertEqual(
+            [w for w in caught if _OPENPYXL_NO_DEFAULT_STYLE in str(w.message)],
+            [],
+        )
 
 if __name__ == "__main__":
     unittest.main()

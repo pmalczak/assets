@@ -10,7 +10,7 @@ import pandas as pd
 from portfolio_cf.adapters.base import empty_ledger
 from portfolio_cf.assemble import build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus, InstrumentCoverage
-from portfolio_cf.sold_status import build_instrument_sold_map
+from portfolio_cf.sold_status import build_instrument_sold_map, is_instrument_sold
 
 
 def _empty_adapter(_vd, **_kwargs):
@@ -85,6 +85,57 @@ class SoldMapCatalogHardFailTests(unittest.TestCase):
         self.assertFalse(sold["ppe"])
 
 
+class ClosedCycleAlwaysSoldTests(unittest.TestCase):
+    def test_hash_cycle_id_sold_even_when_map_missing_or_false(self):
+        closed = "p_degiro:DE000A0Q4RZ9#2026-09-03"
+        self.assertTrue(is_instrument_sold(closed, None))
+        self.assertTrue(is_instrument_sold(closed, {}))
+        self.assertTrue(is_instrument_sold(closed, {closed: False}))
+        bare = "p_degiro:DE000A0Q4RZ9"
+        self.assertFalse(is_instrument_sold(bare, {}))
+        self.assertFalse(is_instrument_sold(bare, {bare: False}))
+        self.assertTrue(is_instrument_sold(bare, {bare: True}))
+
+    def test_coverage_frame_marks_closed_cycle_sold_without_sold_map(self):
+        def _degiro(_vd, **_kwargs):
+            cov = [
+                InstrumentCoverage(
+                    instrument_id="p_degiro:DE000A0Q4RZ9#2026-09-03",
+                    status=CoverageStatus.COVERED,
+                    reason="adapter venue",
+                    venue="degiro",
+                )
+            ]
+            return empty_ledger(), cov, []
+
+        with (
+            patch("portfolio_cf.assemble.adapt_catalog_ledger", side_effect=_empty_adapter),
+            patch("portfolio_cf.assemble.adapt_robo_ledger", side_effect=_empty_adapter),
+            patch("portfolio_cf.assemble.adapt_degiro_ledger", side_effect=_degiro),
+            patch("portfolio_cf.assemble.adapt_xtb_ledger", side_effect=_empty_adapter),
+            patch("portfolio_cf.assemble.adapt_bonds_ledger", side_effect=_empty_adapter),
+            patch(
+                "portfolio_cf.assemble.adapt_deposits_ledger", side_effect=_empty_adapter
+            ),
+            patch(
+                "portfolio_cf.assemble.adapt_traderepublic_ledger",
+                side_effect=_empty_adapter,
+            ),
+            patch("portfolio_cf.assemble.adapt_ike_ledger", side_effect=_empty_adapter),
+            patch(
+                "portfolio_cf.sold_status.build_instrument_sold_map",
+                return_value={},
+            ),
+        ):
+            asm = build_instrument_ledger(date(2026, 11, 11), catalog_summary=pd.DataFrame())
+
+        frame = asm.coverage_frame()
+        row = frame.loc[
+            frame["instrument_id"] == "p_degiro:DE000A0Q4RZ9#2026-09-03"
+        ].iloc[0]
+        self.assertTrue(bool(row["is_sold"]))
+
+
 class AssembleCatalogSoldTests(unittest.TestCase):
     def test_coverage_gets_is_sold_from_catalog_summary(self):
         def _catalog(_vd, **_kwargs):
@@ -112,6 +163,10 @@ class AssembleCatalogSoldTests(unittest.TestCase):
             patch(
                 "portfolio_cf.assemble.adapt_deposits_ledger", side_effect=_empty_adapter
             ),
+            patch(
+                "portfolio_cf.assemble.adapt_traderepublic_ledger",
+                side_effect=_empty_adapter,
+            ),
             patch("portfolio_cf.assemble.adapt_ike_ledger", side_effect=_empty_adapter),
         ):
             asm = build_instrument_ledger(
@@ -136,6 +191,10 @@ class AssembleCatalogSoldTests(unittest.TestCase):
             patch("portfolio_cf.assemble.adapt_bonds_ledger", side_effect=_empty_adapter),
             patch(
                 "portfolio_cf.assemble.adapt_deposits_ledger", side_effect=_empty_adapter
+            ),
+            patch(
+                "portfolio_cf.assemble.adapt_traderepublic_ledger",
+                side_effect=_empty_adapter,
             ),
             patch("portfolio_cf.assemble.adapt_ike_ledger", side_effect=_empty_adapter),
             patch(

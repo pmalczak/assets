@@ -10,6 +10,7 @@ from app_proc.ui_prefs import SOLD_COLUMN, current_sold_filter, filter_by_sold
 from portfolio_cf.coverage import InstrumentCoverage
 from portfolio_cf.data_model import InstrumentCashFlow
 from portfolio_cf.instrument_portfolio import portfolio_for_instrument
+from roi.broker_investment_cycles import is_closed_cycle_instrument_id
 
 
 def build_instrument_sold_map(
@@ -55,10 +56,16 @@ def is_instrument_sold(
     instrument_id: str,
     sold_by_instrument: dict[str, bool] | None,
 ) -> bool:
-    """Brak wpisu → traktuj jako niesprzedane (np. CASH, UNCOVERED bez venue ROI)."""
+    """Brak wpisu → traktuj jako niesprzedane (np. CASH, UNCOVERED bez venue ROI).
+
+    Zamknięty cykl ekspozycji (``…#YYYY-MM-DD``) jest zawsze sprzedany — nawet gdy
+    sold_map z ROI nie ma klucza (mismatch ledger vs summary) albo coverage ma False.
+    """
+    key = str(instrument_id).strip()
+    if is_closed_cycle_instrument_id(key):
+        return True
     if not sold_by_instrument:
         return False
-    key = str(instrument_id).strip()
     if key in sold_by_instrument:
         return bool(sold_by_instrument[key])
     # CASH brokerski nie ma wiersza ROI — w filtrze jak otwarte.

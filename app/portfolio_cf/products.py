@@ -384,7 +384,12 @@ def _assembly_from_frames(
                 )
             )
             if "is_sold" in coverage_df.columns:
-                sold_map[instrument_id] = bool(row.get("is_sold"))
+                from portfolio_cf.sold_status import is_instrument_sold
+
+                # ``#data`` zawsze sold — nawet gdy stary coverage ma False.
+                sold_map[instrument_id] = is_instrument_sold(
+                    instrument_id, {instrument_id: bool(row.get("is_sold"))}
+                )
     if ledger is None or ledger.empty:
         ledger = pd.DataFrame(columns=list(InstrumentCashFlow.COLUMN_ORDER))
     return AssemblyResult(
