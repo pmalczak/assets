@@ -34,8 +34,6 @@ def render_validate() -> None:
     st.subheader("Walidacja")
     _render_analyse_config_section()
     st.divider()
-    _render_funding_section()
-    st.divider()
     _render_assets_evaluation_section()
 
 
@@ -60,89 +58,6 @@ def _render_analyse_config_section() -> None:
         return
 
     _render_report(report)
-
-
-def _render_funding_section() -> None:
-    st.markdown("#### Funding cash-pool ↔ venue (Σ, bez korekty NAV)")
-    st.caption(
-        "Korytarze: Robo, DEGIRO/XTB (Revolut + mBank), Trade Republic, Revolut savings. "
-        "Kolumny tx_a/tx_b = daty i kwoty legów. "
-        "Mismatch = możliwy bias Σ majątku przy lukach wyciągów."
-    )
-    valuation_date = st.date_input(
-        "Data wyceny (funding)",
-        value=date.today(),
-        key="validate_funding_valuation_date",
-    )
-    if st.button("Sprawdź funding", key="validate_funding_button"):
-        try:
-            from roi.funding_report import build_funding_report
-
-            with st.spinner(f"Raport funding na {valuation_date:%Y-%m-%d}..."):
-                report, warnings = build_funding_report(valuation_date)
-            st.session_state["validate_funding_report"] = {
-                "valuation_date": valuation_date.isoformat(),
-                "result": report,
-                "warnings": warnings,
-            }
-        except Exception as exc:
-            st.error("Nie udało się zbudować raportu funding.")
-            st.exception(exc)
-            return
-
-    payload = st.session_state.get("validate_funding_report")
-    if payload is None:
-        st.info("Kliknij przycisk, aby porównać Σ przepływów funding.")
-        return
-
-    result: pd.DataFrame = payload["result"]
-    warnings: list[str] = payload["warnings"]
-    n_mismatch = (
-        int((result["status"] == "mismatch").sum()) if not result.empty else 0
-    )
-    n_error = int((result["status"] == "error").sum()) if not result.empty else 0
-    n_b_only = int((result["status"] == "b_only").sum()) if not result.empty else 0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Korytarze", len(result))
-    c2.metric("Mismatch", n_mismatch)
-    c3.metric("B-only", n_b_only)
-    c4.metric("Błędy", n_error)
-    st.caption(f"Data wyceny: {payload['valuation_date']}")
-
-    if n_error:
-        st.error("Część korytarzy nie policzyła się (status=error).")
-    elif n_mismatch:
-        st.warning("Są niesparowane Σ funding (status=mismatch).")
-    else:
-        st.success("Brak mismatch — Σ korytarzy w tolerancji (Pekao B-only OK).")
-
-    if warnings:
-        st.dataframe(
-            pd.DataFrame({"warning": warnings}),
-            width="stretch",
-            hide_index=True,
-            height=min(220, 40 + 28 * len(warnings)),
-        )
-
-    if result.empty:
-        return
-
-    display = result.copy()
-    for col in ("amount_a", "amount_b", "diff"):
-        if col in display.columns:
-            display[col] = pd.to_numeric(display[col], errors="coerce")
-    st.dataframe(
-        display,
-        width="stretch",
-        hide_index=True,
-        height=min(420, 40 + 28 * max(len(display), 1)),
-        column_config={
-            "amount_a": st.column_config.NumberColumn(format="%.2f"),
-            "amount_b": st.column_config.NumberColumn(format="%.2f"),
-            "diff": st.column_config.NumberColumn(format="%.2f"),
-        },
-    )
 
 
 def _render_assets_evaluation_section() -> None:

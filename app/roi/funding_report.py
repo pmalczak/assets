@@ -68,6 +68,28 @@ STATUS_MISMATCH = "mismatch"
 STATUS_B_ONLY = "b_only"
 STATUS_ERROR = "error"
 
+# Max |data_A − data_B| przy sparowaniu po kwocie (opóźnienie rozliczenia).
+MATCH_SETTLEMENT_DAYS = 7
+
+MATCH_KIND_EXACT = "exact"
+MATCH_KIND_SETTLEMENT = "settlement"
+MATCH_KIND_A_ONLY = "a_only"
+MATCH_KIND_B_ONLY = "b_only"
+
+MATCHED_LEG_COLUMNS = [
+    "date_a",
+    "amount_a",
+    "date_b",
+    "amount_b",
+    "date_skew_days",
+    "match",
+]
+
+
+def _side(asset_id: str, description: str) -> str:
+    """Etykieta strony korytarza: ``{id aktywa}: {opis transakcji}``."""
+    return f"{asset_id}: {description}"
+
 REPORT_COLUMNS = [
     "corridor",
     "currency",
@@ -184,6 +206,167 @@ def format_flow_legs(legs: list[FlowLeg]) -> str:
     return "; ".join(f"{leg.date}: {leg.amount:.2f}" for leg in ordered)
 
 
+def parse_flow_legs(tx: str) -> list[FlowLeg]:
+    """Odwrotność ``format_flow_legs`` — ``YYYY-MM-DD: kwota`` rozdzielone ``;``."""
+    legs: list[FlowLeg] = []
+    for part in str(tx or "").split(";"):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        date_s, amount_s = part.split(":", 1)
+        date_s = date_s.strip()
+        amount = pd.to_numeric(amount_s.strip(), errors="coerce")
+        if not date_s or pd.isna(amount):
+            continue
+        legs.append(FlowLeg(date_s, float(amount)))
+    return legs
+
+
+@dataclass(frozen=True)
+class MatchedLegPair:
+    date_a: str | None
+    amount_a: float | None
+    date_b: str | None
+    amount_b: float | None
+    match: str
+
+    @property
+    def date_skew_days(self) -> int | None:
+        if not self.date_a or not self.date_b:
+            return None
+        return abs(
+            (date.fromisoformat(self.date_a) - date.fromisoformat(self.date_b)).days
+        )
+
+    def as_dict(self) -> dict:
+        return {
+            "date_a": self.date_a or "",
+            "amount_a": None if self.amount_a is None else round(float(self.amount_a), 2),
+            "date_b": self.date_b or "",
+            "amount_b": None if self.amount_b is None else round(float(self.amount_b), 2),
+            "date_skew_days": self.date_skew_days,
+            "match": self.match,
+        }
+
+
+def match_flow_legs(
+    legs_a: list[FlowLeg],
+    legs_b: list[FlowLeg],
+    *,
+    amount_tolerance: float = 0.01,
+    max_date_skew_days: int = MATCH_SETTLEMENT_DAYS,
+) -> list[MatchedLegPair]:
+    """Paruje legi A↔B: najpierw data+kwota, potem kwota z tolerancją daty rozliczenia."""
+    a_list = list(legs_a)
+    b_list = list(legs_b)
+    used_a: set[int] = set()
+    used_b: set[int] = set()
+    pairs: list[tuple[int, int, str]] = []
+
+    def _amount_ok(la: FlowLeg, lb: FlowLeg) -> bool:
+        return abs(float(la.amount) - float(lb.amount)) <= amount_tolerance
+
+    def _skew(la: FlowLeg, lb: FlowLeg) -> int:
+        return abs(
+            (date.fromisoformat(la.date) - date.fromisoformat(lb.date)).days
+        )
+
+    # Faza 1: ta sama data + kwota.
+    for i, la in enumerate(a_list):
+        for j, lb in enumerate(b_list):
+            if j in used_b:
+                continue
+            if la.date == lb.date and _amount_ok(la, lb):
+                used_a.add(i)
+                used_b.add(j)
+                pairs.append((i, j, MATCH_KIND_EXACT))
+                break
+
+    # Faza 2: kwota + najbliższa data ≤ max_date_skew_days.
+    for i, la in enumerate(a_list):
+        if i in used_a:
+            continue
+        best_j: int | None = None
+        best_key: tuple[int, float, int] | None = None
+        for j, lb in enumerate(b_list):
+            if j in used_b or not _amount_ok(la, lb):
+                continue
+            skew = _skew(la, lb)
+            if skew > max_date_skew_days:
+                continue
+            key = (skew, abs(float(la.amount) - float(lb.amount)), j)
+            if best_key is None or key < best_key:
+                best_j, best_key = j, key
+        if best_j is not None:
+            used_a.add(i)
+            used_b.add(best_j)
+            pairs.append((i, best_j, MATCH_KIND_SETTLEMENT))
+
+    rows: list[MatchedLegPair] = []
+    for i, j, kind in pairs:
+        la, lb = a_list[i], b_list[j]
+        rows.append(
+            MatchedLegPair(
+                date_a=la.date,
+                amount_a=la.amount,
+                date_b=lb.date,
+                amount_b=lb.amount,
+                match=kind,
+            )
+        )
+    for i, la in enumerate(a_list):
+        if i in used_a:
+            continue
+        rows.append(
+            MatchedLegPair(
+                date_a=la.date,
+                amount_a=la.amount,
+                date_b=None,
+                amount_b=None,
+                match=MATCH_KIND_A_ONLY,
+            )
+        )
+    for j, lb in enumerate(b_list):
+        if j in used_b:
+            continue
+        rows.append(
+            MatchedLegPair(
+                date_a=None,
+                amount_a=None,
+                date_b=lb.date,
+                amount_b=lb.amount,
+                match=MATCH_KIND_B_ONLY,
+            )
+        )
+
+    def _sort_key(row: MatchedLegPair) -> tuple[str, str, float]:
+        d = row.date_a or row.date_b or ""
+        other = row.date_b or row.date_a or ""
+        amt = float(row.amount_a if row.amount_a is not None else row.amount_b or 0.0)
+        return (d, other, amt)
+
+    return sorted(rows, key=_sort_key)
+
+
+def matched_legs_frame(
+    tx_a: str,
+    tx_b: str,
+    *,
+    amount_tolerance: float = 0.01,
+    max_date_skew_days: int = MATCH_SETTLEMENT_DAYS,
+) -> pd.DataFrame:
+    """Ramka sparowanych legów z ``tx_a`` / ``tx_b`` (format ``format_flow_legs``)."""
+    pairs = match_flow_legs(
+        parse_flow_legs(tx_a),
+        parse_flow_legs(tx_b),
+        amount_tolerance=amount_tolerance,
+        max_date_skew_days=max_date_skew_days,
+    )
+    if not pairs:
+        return pd.DataFrame(columns=MATCHED_LEG_COLUMNS)
+    return pd.DataFrame([p.as_dict() for p in pairs], columns=MATCHED_LEG_COLUMNS)
+
+
 def _resolve_pool(
     provided: pd.DataFrame | None, pool_id: str
 ) -> tuple[pd.DataFrame, str | None]:
@@ -259,8 +442,8 @@ def _corridor_robo(
     trading_df: pd.DataFrame | None,
     warnings: list[str],
 ) -> CorridorRow:
-    side_a = "|To Robo portfolio|"
-    side_b = "CASH TOP-UP"
+    side_a = _side(REVOLUT_EUR, "|To Robo portfolio|")
+    side_b = _side(DEFAULT_BROKER_ASSET_ID, "CASH TOP-UP")
     try:
         if trading_df is None:
             trading_df = _load_robo_trading()
@@ -292,7 +475,10 @@ def _corridors_degiro(
     warnings: list[str],
 ) -> list[CorridorRow]:
     """Dwa źródła funding: Revolut EUR oraz mBank PLN (osobne waluty Depozyt)."""
-    side_b = "Depozyt (Account)"
+    side_a_revolut = _side(REVOLUT_EUR, "|To Stichting DEGIRO|")
+    side_a_mbank = _side(MBANK_PLN, "|STICHTING DEGIRO|")
+    side_b_eur = _side(DEFAULT_DEGIRO_ASSET_ID, "Depozyt EUR")
+    side_b_pln = _side(DEFAULT_DEGIRO_ASSET_ID, "Depozyt PLN")
     try:
         if account_df is None:
             account_df = _load_degiro_account()
@@ -309,9 +495,9 @@ def _corridors_degiro(
             CorridorRow(
                 "degiro_revolut",
                 "EUR",
-                "|To Stichting DEGIRO|",
+                side_a_revolut,
                 0.0,
-                side_b,
+                side_b_eur,
                 0.0,
                 STATUS_ERROR,
                 msg,
@@ -323,9 +509,9 @@ def _corridors_degiro(
             corridor_id="degiro_revolut",
             corridor_label="DEGIRO Revolut",
             currency="EUR",
-            side_a="|To Stichting DEGIRO|",
+            side_a=side_a_revolut,
             legs_a=legs_revolut,
-            side_b=f"{side_b} EUR",
+            side_b=side_b_eur,
             legs_b=legs_eur,
             tolerance=RECONCILE_TOLERANCE_EUR,
         ),
@@ -333,9 +519,9 @@ def _corridors_degiro(
             corridor_id="degiro_mbank",
             corridor_label="DEGIRO mBank",
             currency="PLN",
-            side_a="|STICHTING DEGIRO| (mbank_pln)",
+            side_a=side_a_mbank,
             legs_a=legs_mbank,
-            side_b=f"{side_b} PLN",
+            side_b=side_b_pln,
             legs_b=legs_pln,
             tolerance=RECONCILE_TOLERANCE_PLN,
         ),
@@ -350,10 +536,10 @@ def _corridors_xtb(
     warnings: list[str],
 ) -> list[CorridorRow]:
     """Dwa źródła: karta Revolut (Adyen) oraz przelew mBank (Comment~Pekao na XTB)."""
-    side_a_revolut = "|Revolut XTB|"
-    side_b_adyen = "Adyen Deposit (XTB)"
-    side_a_mbank = f"|XTB {DEFAULT_XTB_CLIENT_ID}| (mbank_pln)"
-    side_b_pekao = "Pekao Deposit (XTB Comment)"
+    side_a_revolut = _side(REVOLUT_PLN, "|Revolut XTB|")
+    side_b_adyen = _side(DEFAULT_XTB_ASSET_ID, "Adyen Deposit")
+    side_a_mbank = _side(MBANK_PLN, f"|XTB {DEFAULT_XTB_CLIENT_ID}|")
+    side_b_pekao = _side(DEFAULT_XTB_ASSET_ID, "Pekao Deposit")
     try:
         if cash_df is None:
             cash_df = _load_xtb_cash(warnings)
@@ -413,8 +599,8 @@ def _corridor_traderepublic(
     blotter: pd.DataFrame | None,
     warnings: list[str],
 ) -> CorridorRow:
-    side_a = "|Trade Republic| (karta)"
-    side_b = "CUSTOMER_INPAYMENT"
+    side_a = _side(REVOLUT_PLN, "|Trade Republic| (karta)")
+    side_b = _side(DEFAULT_TRADEREPUBLIC_ASSET_ID, "CUSTOMER_INPAYMENT")
     try:
         if blotter is None:
             blotter = _load_traderepublic()
@@ -453,6 +639,11 @@ def _corridors_savings(
         pool = eur_pool if currency == "EUR" else pln_pool
         tol = RECONCILE_TOLERANCE_EUR if currency == "EUR" else RECONCILE_TOLERANCE_PLN
         corridor_deposit = f"savings_deposit:{account_id}"
+        pool_id = REVOLUT_EUR if currency == "EUR" else REVOLUT_PLN
+        side_a_deposit = _side(pool_id, "Depositing savings")
+        side_b_deposit = _side(account_id, "Depozyt")
+        side_a_withdraw = _side(pool_id, "Withdrawing savings")
+        side_b_withdraw = _side(account_id, "Wypłata")
         try:
             dep_df = _resolve_savings(account_id, savings_by_account)
             legs_depositing = _legs_pool_title(
@@ -476,9 +667,9 @@ def _corridors_savings(
                 CorridorRow(
                     corridor_deposit,
                     currency,
-                    "Depositing savings",
+                    side_a_deposit,
                     0.0,
-                    "Depozyt",
+                    side_b_deposit,
                     0.0,
                     STATUS_ERROR,
                     msg,
@@ -491,9 +682,9 @@ def _corridors_savings(
                 corridor_id=corridor_deposit,
                 corridor_label=f"Savings deposit {account_id}",
                 currency=currency,
-                side_a="Depositing savings",
+                side_a=side_a_deposit,
                 legs_a=legs_depositing,
-                side_b="Depozyt",
+                side_b=side_b_deposit,
                 legs_b=legs_depozyt,
                 tolerance=tol,
             )
@@ -504,9 +695,9 @@ def _corridors_savings(
                     corridor_id=f"savings_withdraw:{account_id}",
                     corridor_label=f"Savings withdraw {account_id}",
                     currency=currency,
-                    side_a="Withdrawing savings",
+                    side_a=side_a_withdraw,
                     legs_a=legs_withdrawing,
-                    side_b="Wypłata",
+                    side_b=side_b_withdraw,
                     legs_b=legs_wyplata,
                     tolerance=tol,
                 )
@@ -804,6 +995,13 @@ def _broker_dir(broker_id: str) -> Path:
 
 
 __all__ = [
+    "MATCHED_LEG_COLUMNS",
+    "MATCH_KIND_A_ONLY",
+    "MATCH_KIND_B_ONLY",
+    "MATCH_KIND_EXACT",
+    "MATCH_KIND_SETTLEMENT",
+    "MATCH_SETTLEMENT_DAYS",
+    "MatchedLegPair",
     "REPORT_COLUMNS",
     "STATUS_B_ONLY",
     "STATUS_ERROR",
@@ -813,4 +1011,7 @@ __all__ = [
     "TO_ROBO_TITLE",
     "build_funding_report",
     "format_flow_legs",
+    "match_flow_legs",
+    "matched_legs_frame",
+    "parse_flow_legs",
 ]

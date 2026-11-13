@@ -8,6 +8,8 @@ import pandas as pd
 TAB_PORTFOLIO = "Portfel"
 TAB_MAINTENANCE = "Maintenance"
 
+TAB_VALIDATE_CF = "Walidacja CF"
+
 TAB_LABELS = [
     TAB_PORTFOLIO,
     "FX",
@@ -16,6 +18,7 @@ TAB_LABELS = [
     "Import wyciągów",
     "Wyszukiwanie transakcji",
     "Waliduj",
+    TAB_VALIDATE_CF,
     TAB_MAINTENANCE,
 ]
 DEFAULT_TAB = TAB_PORTFOLIO
@@ -40,6 +43,7 @@ SLUG_TO_LABEL = {
     "rejestr": "Rejestr",
     "import": "Import wyciągów",
     "waliduj": "Waliduj",
+    "walidacja-cf": TAB_VALIDATE_CF,
     "maintenance": TAB_MAINTENANCE,
 }
 LABEL_TO_SLUG = {}

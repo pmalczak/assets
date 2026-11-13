@@ -15,10 +15,18 @@ from importers.traderepublic.data_model import TradeRepublicFile
 from importers.xtb.data_model import XtbCashOperationsFile
 from roi.broker_trading_roi import TO_ROBO_TITLE
 from roi.funding_report import (
+    MATCH_KIND_A_ONLY,
+    MATCH_KIND_B_ONLY,
+    MATCH_KIND_EXACT,
+    MATCH_KIND_SETTLEMENT,
     STATUS_MISMATCH,
     STATUS_OK,
     TO_DEGIRO_TITLE,
+    FlowLeg,
     build_funding_report,
+    match_flow_legs,
+    matched_legs_frame,
+    parse_flow_legs,
 )
 
 
@@ -220,7 +228,16 @@ class FundingReportTests(unittest.TestCase):
         self.assertAlmostEqual(float(by_id.loc["degiro_mbank", "amount_a"]), 3000.0)
         self.assertAlmostEqual(float(by_id.loc["degiro_mbank", "amount_b"]), 3000.0)
         self.assertEqual(by_id.loc["xtb_adyen", "status"], STATUS_OK)
+        self.assertEqual(
+            by_id.loc["xtb_adyen", "side_a"], "revolut_pln: |Revolut XTB|"
+        )
+        self.assertEqual(by_id.loc["xtb_adyen", "side_b"], "p_xtb: Adyen Deposit")
         self.assertEqual(by_id.loc["xtb_mbank", "status"], STATUS_OK)
+        self.assertEqual(
+            by_id.loc["xtb_mbank", "side_a"], "mbank_pln: |XTB 55260027|"
+        )
+        self.assertEqual(by_id.loc["robo", "side_a"], "revolut_eur: |To Robo portfolio|")
+        self.assertEqual(by_id.loc["robo", "side_b"], "p_re_robo: CASH TOP-UP")
         self.assertAlmostEqual(float(by_id.loc["xtb_mbank", "amount_a"]), 21420.0)
         self.assertAlmostEqual(float(by_id.loc["xtb_mbank", "amount_b"]), 21420.0)
         self.assertEqual(by_id.loc["traderepublic", "status"], STATUS_OK)
@@ -257,6 +274,54 @@ class FundingReportTests(unittest.TestCase):
             report.set_index("corridor").loc["robo", "status"], STATUS_MISMATCH
         )
         self.assertTrue(any("Robo" in w and "mismatch" in w for w in warnings))
+
+
+class MatchFlowLegsTests(unittest.TestCase):
+    def test_exact_date_and_amount(self):
+        pairs = match_flow_legs(
+            [FlowLeg("2026-08-14", 15000.0)],
+            [FlowLeg("2026-08-14", 15000.0)],
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0].match, MATCH_KIND_EXACT)
+        self.assertEqual(pairs[0].date_skew_days, 0)
+
+    def test_settlement_date_skew_within_window(self):
+        pairs = match_flow_legs(
+            [FlowLeg("2020-10-04", 100.0)],
+            [FlowLeg("2020-10-05", 100.0)],
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0].match, MATCH_KIND_SETTLEMENT)
+        self.assertEqual(pairs[0].date_skew_days, 1)
+
+    def test_unmatched_when_skew_too_large(self):
+        pairs = match_flow_legs(
+            [FlowLeg("2026-01-01", 50.0)],
+            [FlowLeg("2026-02-01", 50.0)],
+            max_date_skew_days=7,
+        )
+        kinds = {p.match for p in pairs}
+        self.assertEqual(kinds, {MATCH_KIND_A_ONLY, MATCH_KIND_B_ONLY})
+
+    def test_matched_legs_frame_from_tx_strings(self):
+        frame = matched_legs_frame(
+            "2026-09-02: 21420.00",
+            "2026-09-03: 21420.00",
+        )
+        self.assertEqual(len(frame), 1)
+        self.assertEqual(frame.iloc[0]["match"], MATCH_KIND_SETTLEMENT)
+        self.assertEqual(int(frame.iloc[0]["date_skew_days"]), 1)
+
+    def test_parse_roundtrip(self):
+        legs = [FlowLeg("2026-01-02", 10.5), FlowLeg("2026-01-01", 3.0)]
+        from roi.funding_report import format_flow_legs
+
+        parsed = parse_flow_legs(format_flow_legs(legs))
+        self.assertEqual([(p.date, p.amount) for p in parsed], [
+            ("2026-01-01", 3.0),
+            ("2026-01-02", 10.5),
+        ])
 
 
 if __name__ == "__main__":

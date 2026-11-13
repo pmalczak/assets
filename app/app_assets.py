@@ -20,6 +20,7 @@ from app_proc.ui_prefs import (
     TAB_LABELS,
     TAB_MAINTENANCE,
     TAB_PORTFOLIO,
+    TAB_VALIDATE_CF,
     TABS_STATE_KEY,
     load_last_tab,
     on_tab_changed,
@@ -39,6 +40,7 @@ from app_streamlit.render_snapshot_result import render_snapshot_results
 from app_streamlit.render_transaction_search import _load_transactions_cached, render_transaction_search
 from app_streamlit.render_maintenance import render_maintenance
 from app_streamlit.render_validate import render_validate
+from app_streamlit.render_validate_cf import render_validate_cf
 from app_streamlit.safe_download import opt_in_download_button
 
 
@@ -272,6 +274,8 @@ def main():
                 render_transaction_search()
             elif label == "Waliduj":
                 render_validate()
+            elif label == TAB_VALIDATE_CF:
+                render_validate_cf()
             elif label == TAB_MAINTENANCE:
                 render_maintenance()
 

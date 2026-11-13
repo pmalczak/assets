@@ -14,6 +14,7 @@ from app_proc.ui_prefs import (
     TAB_LABELS,
     TAB_MAINTENANCE,
     TAB_PORTFOLIO,
+    TAB_VALIDATE_CF,
     filter_by_sold,
     is_export_product_excel_enabled,
     load_last_tab,
@@ -144,12 +145,29 @@ class UiPrefsTests(unittest.TestCase):
                 "rejestr",
             )
 
-    def test_maintenance_tab_is_after_validate(self):
-        self.assertIn(TAB_MAINTENANCE, TAB_LABELS)
+    def test_validate_cf_tab_is_after_validate(self):
+        self.assertIn(TAB_VALIDATE_CF, TAB_LABELS)
         self.assertEqual(
             TAB_LABELS[TAB_LABELS.index("Waliduj") + 1],
+            TAB_VALIDATE_CF,
+        )
+
+    def test_maintenance_tab_is_after_validate_cf(self):
+        self.assertIn(TAB_MAINTENANCE, TAB_LABELS)
+        self.assertEqual(
+            TAB_LABELS[TAB_LABELS.index(TAB_VALIDATE_CF) + 1],
             TAB_MAINTENANCE,
         )
+
+    def test_save_and_load_validate_cf_tab_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_last_tab(TAB_VALIDATE_CF, prefs_root=root)
+            self.assertEqual(load_last_tab(prefs_root=root), TAB_VALIDATE_CF)
+            self.assertEqual(
+                (root / "last_tab.txt").read_text(encoding="utf-8").strip(),
+                "walidacja-cf",
+            )
 
     def test_save_and_load_maintenance_tab_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
