@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Pomiar niesparowanych przepływów funding cash-pool ↔ venue (scenariusz B).
+"""Pomiar niesparowanych przepływów funding cash-pool ↔ venue (+ pool↔pool).
 
 Σ per korytarz; bez korekty NAV. Soft reconcile Robo/XTB Adyen zostają w ROI —
-tu wspólny raport strukturalny (+ DEGIRO/XTB Revolut+mBank, Trade Republic, savings).
+tu wspólny raport strukturalny (+ DEGIRO/XTB Revolut+mBank, Trade Republic,
+savings, mBank↔Revolut).
 """
 from __future__ import annotations
 
@@ -21,10 +22,11 @@ from evaluators.evaluate_broker_revolut import (
 )
 from evaluators.valuation_date import filter_excel_rows_on_or_before, filter_on_or_before
 from importers.assets.data_model import AssetsDef, TypeDomain
-from importers.assets.pool_id import MBANK_PLN, REVOLUT_EUR, REVOLUT_PLN
+from importers.assets.pool_id import MBANK_EUR, MBANK_PLN, REVOLUT_EUR, REVOLUT_PLN
 from importers.assets.read_assets import read_assets
 from importers.degiro.data_model import DEFAULT_DEGIRO_ASSET_ID, DegiroAccountFile
 from importers.degiro.read_degiro import parse_degiro_date, read_degiro_account
+from importers.mbank.data_model import MbankOperationType
 from importers.revolut.deposit_data_model import RevolutDepositFile
 from importers.revolut.read_r_deposits import read_revolut_deposit_transactions
 from importers.revolut.savings_statement import OPIS_DEPOSIT, OPIS_WITHDRAWAL
@@ -62,6 +64,28 @@ _MBANK_XTB_COUNTERPARTY = r"xtb\s+sp[oó][lł]ka"
 _MBANK_XTB_TITLE = rf"\b{DEFAULT_XTB_CLIENT_ID}\b"
 TITLE_DEPOSITING_SAVINGS = "Depositing savings"
 TITLE_WITHDRAWING_SAVINGS = "Withdrawing savings"
+
+# mBank ↔ Revolut (pool↔pool): przelewy + doładowania kartą.
+_MBANK_CARD_OP = MbankOperationType.ZAKUP_PRZY_UZYCIU_KARTY
+_REVOLUT_TOKEN = r"revolut"
+# Karta: Revolut**… / REVOLUT*… oraz historyczne REVO*PiotrMalczak (bez pełnego „revolut”).
+_REVOLUT_CARD_TITLE = r"revolut|revo\*"
+_MBANK_FROM_REVOLUT_TITLE = r"wyslano\s+z\s+revolut"
+# Revolut Bank UAB (LT): IBAN LT##32500… — bywa bez „Revolut” w kontrahencie (np. PIOTR MALCZAK).
+_REVOLUT_LT_IBAN = r"LT\d{2}32500"
+# Rachunki PL bez słowa „Revolut” w tytule/kontrahencie (Express Elixir / własne ROR Revolut).
+# 58109… = kanał Express Elixir; 29/83 2910 0006… = własne konta Revolut PL (Piotr / Małgorzata).
+_REVOLUT_PL_ACCOUNT = (
+    r"(?:58109028510000000147575158|"
+    r"29291000062469800209237093|"
+    r"83291000062469800209398790)"
+)
+_REVOLUT_BANK_TOPUP = r"p[lł]atno[sś][cć]\s+od\s+.*malczak"
+_REVOLUT_CARD_TOPUP = r"zasilenie\s+o\s+\*|zasilenie.*(?:xpay|card)"
+_REVOLUT_TO_OWN_ROR = (
+    r"^(?:to\s+(?:piotr\s+bernard\s+malczak|ma[lł]gorzata\s+malczak)"
+    r"|przelew\s+swift\s+do:\s*piotr\s+bernard\s+malczak)$"
+)
 
 STATUS_OK = "ok"
 STATUS_MISMATCH = "mismatch"
@@ -150,6 +174,7 @@ def build_funding_report(
     revolut_eur_pool: pd.DataFrame | None = None,
     revolut_pln_pool: pd.DataFrame | None = None,
     mbank_pln_pool: pd.DataFrame | None = None,
+    mbank_eur_pool: pd.DataFrame | None = None,
     robo_trading: pd.DataFrame | None = None,
     degiro_account: pd.DataFrame | None = None,
     xtb_cash: pd.DataFrame | None = None,
@@ -173,7 +198,21 @@ def build_funding_report(
     mbank_pool, mbank_err = _resolve_pool(mbank_pln_pool, MBANK_PLN)
     if mbank_err:
         warnings.append(mbank_err)
+    mbank_eur, mbank_eur_err = _resolve_pool(mbank_eur_pool, MBANK_EUR)
+    if mbank_eur_err:
+        warnings.append(mbank_eur_err)
 
+    # Pool↔pool na początku tabeli Walidacji CF; potem cash-pool ↔ venue.
+    rows.extend(
+        _corridors_mbank_revolut(
+            valuation_date,
+            mbank_pool,
+            mbank_eur,
+            pln_pool,
+            eur_pool,
+            warnings,
+        )
+    )
     rows.append(_corridor_robo(valuation_date, eur_pool, robo_trading, warnings))
     rows.extend(
         _corridors_degiro(
@@ -202,7 +241,7 @@ def build_funding_report(
 def format_flow_legs(legs: list[FlowLeg]) -> str:
     if not legs:
         return ""
-    ordered = sorted(legs, key=lambda leg: (leg.date, leg.amount))
+    ordered = sorted(legs, key=lambda leg: (leg.date, leg.amount), reverse=True)
     return "; ".join(f"{leg.date}: {leg.amount:.2f}" for leg in ordered)
 
 
@@ -345,7 +384,8 @@ def match_flow_legs(
         amt = float(row.amount_a if row.amount_a is not None else row.amount_b or 0.0)
         return (d, other, amt)
 
-    return sorted(rows, key=_sort_key)
+    # Najnowsze na górze (tabela Transakcje korytarza).
+    return sorted(rows, key=_sort_key, reverse=True)
 
 
 def matched_legs_frame(
@@ -703,6 +743,159 @@ def _corridors_savings(
                 )
             )
     return rows
+
+
+def _corridors_mbank_revolut(
+    valuation_date: date,
+    mbank_pln_pool: pd.DataFrame,
+    mbank_eur_pool: pd.DataFrame,
+    revolut_pln_pool: pd.DataFrame,
+    revolut_eur_pool: pd.DataFrame,
+    warnings: list[str],
+) -> list[CorridorRow]:
+    """Pool↔pool: przelewy bankowe + doładowania kartą mBank ↔ Revolut (PLN i EUR)."""
+    specs = (
+        (
+            "mbank_revolut_pln",
+            "mBank ↔ Revolut PLN",
+            "PLN",
+            MBANK_PLN,
+            REVOLUT_PLN,
+            mbank_pln_pool,
+            revolut_pln_pool,
+            RECONCILE_TOLERANCE_PLN,
+        ),
+        (
+            "mbank_revolut_eur",
+            "mBank ↔ Revolut EUR",
+            "EUR",
+            MBANK_EUR,
+            REVOLUT_EUR,
+            mbank_eur_pool,
+            revolut_eur_pool,
+            RECONCILE_TOLERANCE_EUR,
+        ),
+    )
+    rows: list[CorridorRow] = []
+    for (
+        corridor_id,
+        corridor_label,
+        currency,
+        mbank_id,
+        revolut_id,
+        mbank_df,
+        revolut_df,
+        tol,
+    ) in specs:
+        side_a = _side(mbank_id, "|Revolut przelew/karta|")
+        side_b = _side(revolut_id, "|mBank przelew/karta|")
+        try:
+            legs_a = _legs_mbank_revolut(mbank_df, valuation_date)
+            legs_b = _legs_revolut_mbank(revolut_df, valuation_date)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"{corridor_label}: nie udało się policzyć funding: {exc}"
+            warnings.append(msg)
+            rows.append(
+                CorridorRow(
+                    corridor_id,
+                    currency,
+                    side_a,
+                    0.0,
+                    side_b,
+                    0.0,
+                    STATUS_ERROR,
+                    msg,
+                )
+            )
+            continue
+        rows.append(
+            _corridor_from_legs(
+                corridor_id=corridor_id,
+                corridor_label=corridor_label,
+                currency=currency,
+                side_a=side_a,
+                legs_a=legs_a,
+                side_b=side_b,
+                legs_b=legs_b,
+                tolerance=tol,
+            )
+        )
+    return rows
+
+
+def _legs_mbank_revolut(
+    pool_tx: pd.DataFrame, valuation_date: date | None
+) -> list[FlowLeg]:
+    """mBank: karta Revolut + przelewy z/do Revolut (bez venue DEGIRO/XTB)."""
+    if pool_tx is None or pool_tx.empty or AccountTx.AMOUNT not in pool_tx.columns:
+        return []
+    df = pool_tx
+    if valuation_date is not None and AccountTx.TRANSACTION_DATE in df.columns:
+        df = filter_excel_rows_on_or_before(df, AccountTx.TRANSACTION_DATE, valuation_date)
+    if df.empty:
+        return []
+    op = (
+        df[AccountTx.OPERATION_TYPE].astype(str)
+        if AccountTx.OPERATION_TYPE in df.columns
+        else pd.Series("", index=df.index)
+    )
+    title = (
+        df[AccountTx.TITLE].astype(str)
+        if AccountTx.TITLE in df.columns
+        else pd.Series("", index=df.index)
+    )
+    cp = (
+        df[AccountTx.COUNTERPARTY].astype(str)
+        if AccountTx.COUNTERPARTY in df.columns
+        else pd.Series("", index=df.index)
+    )
+    acc = (
+        df[AccountTx.ACCOUNT_NUMBER].astype(str)
+        if AccountTx.ACCOUNT_NUMBER in df.columns
+        else pd.Series("", index=df.index)
+    )
+    acc_norm = acc.str.replace(r"[\s']+", "", regex=True)
+    is_card = op.str.casefold() == _MBANK_CARD_OP.casefold()
+    title_revolut_card = title.str.contains(
+        _REVOLUT_CARD_TITLE, case=False, na=False, regex=True
+    )
+    card_mask = is_card & title_revolut_card
+    transfer_mask = (~is_card) & (
+        cp.str.contains(_REVOLUT_TOKEN, case=False, na=False, regex=True)
+        | title.str.contains(_MBANK_FROM_REVOLUT_TITLE, case=False, na=False, regex=True)
+        | acc_norm.str.contains(_REVOLUT_LT_IBAN, case=False, na=False, regex=True)
+        | acc_norm.str.contains(_REVOLUT_PL_ACCOUNT, case=False, na=False, regex=True)
+    )
+    # Venue funding already covered by dedicated corridors — skip XTB/DEGIRO.
+    venue_cp = cp.str.contains(
+        rf"(?:{MBANK_DEGIRO_COUNTERPARTY}|{_MBANK_XTB_COUNTERPARTY})",
+        case=False,
+        na=False,
+        regex=True,
+    )
+    venue_title = title.str.contains(_MBANK_XTB_TITLE, case=False, na=False, regex=True)
+    transfer_mask = transfer_mask & ~(venue_cp | venue_title)
+    return _legs_from_pool_mask(df, card_mask | transfer_mask)
+
+
+def _legs_revolut_mbank(
+    pool_tx: pd.DataFrame, valuation_date: date | None
+) -> list[FlowLeg]:
+    """Revolut: zasilenie z konta/karty + przelew na własne ROR (Malczak)."""
+    if pool_tx is None or pool_tx.empty or AccountTx.AMOUNT not in pool_tx.columns:
+        return []
+    df = pool_tx
+    if valuation_date is not None and AccountTx.TRANSACTION_DATE in df.columns:
+        df = filter_excel_rows_on_or_before(df, AccountTx.TRANSACTION_DATE, valuation_date)
+    if df.empty or AccountTx.TITLE not in df.columns:
+        return []
+    title = df[AccountTx.TITLE].astype(str)
+    mask = (
+        title.str.contains(_REVOLUT_BANK_TOPUP, case=False, na=False, regex=True)
+        | title.str.contains(_REVOLUT_CARD_TOPUP, case=False, na=False, regex=True)
+        | title.str.contains(_REVOLUT_TO_OWN_ROR, case=False, na=False, regex=True)
+    )
+    return _legs_from_pool_mask(df, mask)
 
 
 def _legs_pool_title(

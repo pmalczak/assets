@@ -30,6 +30,8 @@ _CORRIDOR_LABELS = {
     "xtb_adyen": "XTB Adyen (Revolut PLN)",
     "xtb_mbank": "XTB mBank",
     "traderepublic": "Trade Republic",
+    "mbank_revolut_pln": "mBank ↔ Revolut PLN",
+    "mbank_revolut_eur": "mBank ↔ Revolut EUR",
 }
 
 _STATUS_LABELS = {
@@ -127,17 +129,24 @@ def _details_frame(row: pd.Series) -> pd.DataFrame:
     rows = []
     for _, leg in matched.iterrows():
         skew = leg.get("date_skew_days")
+        if skew is None or (isinstance(skew, float) and pd.isna(skew)):
+            skew_val = pd.NA
+        else:
+            skew_val = int(skew)
         rows.append(
             {
                 "Data A": leg.get("date_a") or "",
                 "Kwota A": leg.get("amount_a"),
                 "Data B": leg.get("date_b") or "",
                 "Kwota B": leg.get("amount_b"),
-                "Δ dni": "" if skew is None or (isinstance(skew, float) and pd.isna(skew)) else int(skew),
+                "Δ dni": skew_val,
                 "Match": _MATCH_LABELS.get(str(leg.get("match", "")), str(leg.get("match", ""))),
             }
         )
-    return pd.DataFrame(rows, columns=_DETAILS_COLUMNS)
+    frame = pd.DataFrame(rows, columns=_DETAILS_COLUMNS)
+    # Jednolity typ dla Arrow (Streamlit): bez mieszanki int / "".
+    frame["Δ dni"] = frame["Δ dni"].astype("Int64")
+    return frame
 
 
 def _default_corridor_index(result: pd.DataFrame) -> int:
@@ -154,8 +163,9 @@ def _default_corridor_index(result: pd.DataFrame) -> int:
 def render_validate_cf() -> None:
     st.subheader("Walidacja CF")
     st.caption(
-        "Funding cash-pool ↔ venue (Σ, bez korekty NAV). "
-        "Korytarze: Robo, DEGIRO/XTB (Revolut + mBank), Trade Republic, Revolut savings. "
+        "Funding cash-pool ↔ venue oraz pool↔pool (Σ, bez korekty NAV). "
+        "Korytarze: Robo, DEGIRO/XTB (Revolut + mBank), Trade Republic, Revolut savings, "
+        "mBank ↔ Revolut (PLN/EUR, przelew + karta). "
         "Mismatch = możliwy bias Σ majątku przy lukach wyciągów."
     )
     valuation_date = st.date_input(
