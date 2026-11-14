@@ -149,6 +149,16 @@ def _details_frame(row: pd.Series) -> pd.DataFrame:
     return frame
 
 
+def _mismatch_amount_sum(result: pd.DataFrame) -> float:
+    """Σ Δ (kolumna ``diff``) po korytarzach ze statusem niezgodność."""
+    if result.empty or "status" not in result.columns or "diff" not in result.columns:
+        return 0.0
+    mask = result["status"].astype(str) == STATUS_MISMATCH
+    if not bool(mask.any()):
+        return 0.0
+    return float(pd.to_numeric(result.loc[mask, "diff"], errors="coerce").fillna(0.0).sum())
+
+
 def _default_corridor_index(result: pd.DataFrame) -> int:
     if result.empty:
         return 0
@@ -186,12 +196,12 @@ def render_validate_cf() -> None:
         int((result["status"] == STATUS_MISMATCH).sum()) if not result.empty else 0
     )
     n_error = int((result["status"] == STATUS_ERROR).sum()) if not result.empty else 0
-    n_b_only = int((result["status"] == STATUS_B_ONLY).sum()) if not result.empty else 0
+    mismatch_amount = _mismatch_amount_sum(result)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Korytarze", len(result))
     c2.metric("Niezgodności", n_mismatch)
-    c3.metric("Tylko B", n_b_only)
+    c3.metric("Kwota niezgodności", f"{mismatch_amount:,.2f}")
     c4.metric("Błędy", n_error)
 
     if n_error:
