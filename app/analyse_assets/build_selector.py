@@ -52,6 +52,7 @@ CATEGORY_MAP = {
     "INFLOW": AssetRw.CAT_INFLOW,
     "OUTFLOW": AssetRw.CAT_OUTFLOW,
     "CLOSING": AssetRw.CAT_CLOSING,
+    "DEINVESTMENT": AssetRw.CAT_CLOSING,
 }
 
 

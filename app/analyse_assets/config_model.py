@@ -117,11 +117,12 @@ CATEGORY_NAMES = {
     "REVENUES",
     "OPEX",
     "DIVESTMENT",
-    # aliasy starych nazw (normalize przy odczycie)
+    # aliasy starych nazw / literówek (normalize przy odczycie)
     "INVESTMENT",
     "INFLOW",
     "OUTFLOW",
     "CLOSING",
+    "DEINVESTMENT",
 }
 
 KNOWN_POOL_IDS = frozenset({MBANK_PLN, MBANK_EUR, REVOLUT_PLN, REVOLUT_EUR})

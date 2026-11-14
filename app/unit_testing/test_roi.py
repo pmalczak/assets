@@ -79,6 +79,135 @@ class ComputeRoiTests(unittest.TestCase):
         self.assertGreater(summary.xirr, 0.0)
         self.assertEqual(summary.evaluation_date, "2024-06-01")
 
+    def test_kiemliczow_3_excludes_opex_in_non_investment_window(self):
+        """kiemliczow_3: OPEX 2012-06-15…2020-08-30 poza ROI; CAPEX/REVENUES i OPEX poza oknem zostają."""
+        from roi.categories import REVENUES
+
+        events = pd.DataFrame(
+            [
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2012-05-28",
+                    CashFlowEvent.AMOUNT: -1000.0,
+                    CashFlowEvent.CATEGORY: CAPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "zakup",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2012-06-15",
+                    CashFlowEvent.AMOUNT: -500.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex start window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2018-01-01",
+                    CashFlowEvent.AMOUNT: -200.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex mid window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2019-06-01",
+                    CashFlowEvent.AMOUNT: 300.0,
+                    CashFlowEvent.CATEGORY: REVENUES,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "czynsz w oknie",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2020-08-30",
+                    CashFlowEvent.AMOUNT: -150.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex end window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_3",
+                    CashFlowEvent.DATE: "2020-08-31",
+                    CashFlowEvent.AMOUNT: -80.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex after window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+            ]
+        )
+        props = _open_property_sheet("kiemliczow_3", 100000.0, "2024-06-01")
+        with patch("roi.terminal_value.load_property_close_dates", return_value={}):
+            summary = compute_roi("kiemliczow_3", events, props, date(2026, 1, 1))
+
+        self.assertEqual(summary.capex, -1000.0)
+        self.assertEqual(summary.opex, -80.0)
+        self.assertEqual(summary.revenue, 300.0)
+        self.assertEqual(summary.roi_nominal, 100000.0 - 1000.0 - 80.0 + 300.0)
+
+    def test_kiemliczow_4_excludes_opex_in_non_investment_window(self):
+        """kiemliczow_4: OPEX 2000-03-01…2021-12-31 poza ROI; OPEX po oknie zostaje."""
+        events = pd.DataFrame(
+            [
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_4",
+                    CashFlowEvent.DATE: "2000-03-01",
+                    CashFlowEvent.AMOUNT: -400.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex start window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_4",
+                    CashFlowEvent.DATE: "2021-12-31",
+                    CashFlowEvent.AMOUNT: -250.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex end window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+                {
+                    CashFlowEvent.ASSET_ID: "kiemliczow_4",
+                    CashFlowEvent.DATE: "2022-01-01",
+                    CashFlowEvent.AMOUNT: -90.0,
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: "mbank_pln",
+                    CashFlowEvent.DESCRIPTION: "opex after window",
+                    CashFlowEvent.TITLE: "",
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                },
+            ]
+        )
+        props = _open_property_sheet("kiemliczow_4", 50000.0, "2024-06-01")
+        with patch("roi.terminal_value.load_property_close_dates", return_value={}):
+            summary = compute_roi("kiemliczow_4", events, props, date(2026, 1, 1))
+
+        self.assertEqual(summary.opex, -90.0)
+        self.assertEqual(summary.roi_nominal, 50000.0 - 90.0)
+
     def test_property_divestment_means_sold_even_with_nav_row(self):
         """Nieruchomość: DIVESTMENT = is_sold (brak częściowego zmniejszenia jak u obligacji)."""
         events = pd.DataFrame(

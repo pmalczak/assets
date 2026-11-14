@@ -83,7 +83,9 @@ OPERATORS_BY_FIELD: dict[str, frozenset[str]] = {
 }
 
 _NEGATIVE_MANUAL_CATEGORIES = frozenset({"CAPEX", "OPEX", "INVESTMENT", "OUTFLOW"})
-_POSITIVE_MANUAL_CATEGORIES = frozenset({"REVENUES", "DIVESTMENT", "INFLOW", "CLOSING"})
+_POSITIVE_MANUAL_CATEGORIES = frozenset(
+    {"REVENUES", "DIVESTMENT", "INFLOW", "CLOSING", "DEINVESTMENT"}
+)
 
 # Cyfry NRB / IBAN: CC + 2 cyfry kontrolne + BBAN (alfanumeryczny).
 _IBAN_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$")

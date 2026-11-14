@@ -156,6 +156,25 @@ Warstwa `roi/` (venue CF, cache w `snapshots/…/sN/`) = waluta natywna, bez FX 
 
 ---
 
+## Nieruchomości (`investment.property`)
+
+- Portfel: zawsze **`4 NIERUCHOMOSCI`**.
+- ID w `roi_def` (np. `kiemliczow_3`, `horbaczewskiego`) **nie muszą** być wierszami arkusza `assets` — tam rodzic `id=properties`, `RODZAJ*=assets.properties` / `assets.properties-wyceny`.
+- **DIVESTMENT** (bank lub manual) = sprzedaż / `is_sold` — bez częściowego „zmniejszenia zaangażowania”.
+- Terminal otwartej pozycji: ostatnia wycena z `asset-evaluation` ≤ data wyceny; po sprzedaży terminal unrealized = 0.
+- CF z `roi_rules` / `roi_manual` (pool zwykle `mbank_pln`): CAPEX = zakup; REVENUES / OPEX = `inflow_outflow`; sprzedaż = DIVESTMENT.
+
+### Okres bez charakteru inwestycyjnego
+
+Gdy nieruchomość we wskazanym okresie **nie miała charakteru inwestycyjnego**, **OPEX** z dat w tym okresie (granice włącznie) **nie wchodzi** do CF katalogu / ledgeru / XIRR / ROI. CAPEX i REVENUES bez zmian (nadal w serii).
+
+| `asset_id` | Okres (OPEX wyłączony) |
+|------------|-------------------------|
+| `kiemliczow_3` | 2012-06-15 … 2020-08-30 |
+| `kiemliczow_4` | 2000-03-01 … 2021-12-31 |
+
+---
+
 ## Mapowanie `typ` (kanoniczne)
 
 | Stare | Nowe |

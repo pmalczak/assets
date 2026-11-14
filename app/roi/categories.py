@@ -8,12 +8,13 @@ DIVESTMENT = "DIVESTMENT"
 
 ROI_CATEGORIES = (CAPEX, REVENUES, OPEX, DIVESTMENT)
 
-# Stare nazwy z a_config / cache → kanoniczne.
+# Stare nazwy / literówki z a_config / cache → kanoniczne.
 CATEGORY_ALIASES = {
     "INVESTMENT": CAPEX,
     "INFLOW": REVENUES,
     "OUTFLOW": OPEX,
     "CLOSING": DIVESTMENT,
+    "DEINVESTMENT": DIVESTMENT,
 }
 
 ASSET_RW_TO_ROI = {

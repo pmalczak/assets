@@ -13,6 +13,7 @@ from roi.config import read_analyse_config
 from roi.data_model import CashFlowEvent
 from nbp_pl_api.nbp_gold_repository import gold_price_as_of
 from roi.gold_terminal import is_gold_roi_asset
+from roi.property_opex_exclusions import exclude_non_investment_opex
 from roi.statement_valuation_date import attach_evaluation_date
 from roi.terminal_value import is_asset_sold, resolve_terminal_value
 from roi.xirr import cashflows_for_xirr, compute_xirr
@@ -46,21 +47,22 @@ def compute_roi(
     properties_sheet: pd.DataFrame | None,
     valuation_date: date,
 ) -> RoiSummary:
-    filtered = filter_excel_rows_on_or_before(cashflows, CashFlowEvent.DATE, valuation_date)
+    for_roi = exclude_non_investment_opex(asset_id, cashflows)
+    filtered = filter_excel_rows_on_or_before(for_roi, CashFlowEvent.DATE, valuation_date)
 
     capex = _aggregate_category(filtered, CAPEX)
     opex = _aggregate_category(filtered, OPEX)
     revenue = _aggregate_category(filtered, REVENUES)
     terminal_realized, terminal_unrealized, warnings = resolve_terminal_value(
         asset_id,
-        cashflows,
+        for_roi,
         properties_sheet,
         valuation_date,
     )
 
     flows_total = float(filtered[CashFlowEvent.AMOUNT].sum()) if not filtered.empty else 0.0
     roi_nominal = flows_total + terminal_unrealized
-    sold = is_asset_sold(asset_id, cashflows, valuation_date)
+    sold = is_asset_sold(asset_id, for_roi, valuation_date)
 
     xirr_dates, xirr_amounts = cashflows_for_xirr(filtered, valuation_date, terminal_unrealized)
     xirr = compute_xirr(xirr_dates, xirr_amounts)

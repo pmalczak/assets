@@ -27,6 +27,7 @@ from app_proc.snapshot_step import SNAPSHOTS_STEP, snapshot_prefix
 from roi.allocate import allocate_catalog, collect_pool_ids_from_rules
 from roi.config import get_config_file, read_analyse_config
 from roi.data_model import CashFlowEvent
+from roi.property_opex_exclusions import apply_non_investment_opex_exclusions
 
 # Cache venue ROI w tym samym drzewie co ledger/XIRR (``snapshots/{date}/sN/``).
 ROI_STEP = SNAPSHOTS_STEP
@@ -224,6 +225,7 @@ def _build_catalog_events(
 ) -> pd.DataFrame:
     config = read_analyse_config(source_file)
     events_by_asset, unallocated_by_pool = _build_allocation(config)
+    events_by_asset = apply_non_investment_opex_exclusions(events_by_asset)
 
     export_roi_product_excels(
         events_by_asset,
