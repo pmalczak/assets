@@ -13,7 +13,7 @@ from portfolio_cf.adapters.ike import adapt_ike_ledger
 from portfolio_cf.assemble import build_instrument_ledger
 from portfolio_cf.coverage import CoverageStatus
 from portfolio_cf.data_model import InstrumentCashFlow
-from roi.categories import CAPEX, DIVESTMENT
+from roi.categories import CAPEX, DIVESTMENT, OPEX
 from roi.data_model import CashFlowEvent
 from roi.ike_roi import build_ike_cashflows, load_ike_events_by_asset
 
@@ -21,17 +21,21 @@ _PRODUCT = "IKE mAkcji Poslkich (kat. a)"
 
 
 def _inv_frame(rows: list[tuple]) -> pd.DataFrame:
-    """(date, units, value) → inventory frame."""
-    data = [
-        {
-            IkeInventory.PRODUCT: _PRODUCT,
-            IkeInventory.DATE: d,
-            IkeInventory.UNITS: u,
-            IkeInventory.VALUE: v,
-            IkeInventory.CURRENCY: "PLN",
-        }
-        for d, u, v in rows
-    ]
+    """(date, units, value[, fee]) → inventory frame. Brak fee → 0."""
+    data = []
+    for row in rows:
+        d, u, v = row[0], row[1], row[2]
+        fee = row[3] if len(row) > 3 else 0.0
+        data.append(
+            {
+                IkeInventory.PRODUCT: _PRODUCT,
+                IkeInventory.DATE: d,
+                IkeInventory.UNITS: u,
+                IkeInventory.VALUE: v,
+                IkeInventory.CURRENCY: "PLN",
+                IkeInventory.FEE: fee,
+            }
+        )
     return pd.DataFrame(data)
 
 
@@ -86,6 +90,42 @@ class IkeCashflowTests(unittest.TestCase):
         self.assertAlmostEqual(float(events["pm_ike"].iloc[0][CashFlowEvent.AMOUNT]), -100.0)
         self.assertTrue(events["gm_ike"].empty)
 
+    def test_purchase_with_fee_emits_opex(self):
+        inv = _inv_frame([("2020-01-01", 10.0, 1000.0, 12.5)])
+        events = build_ike_cashflows(inv, "pm_ike")
+        self.assertEqual(len(events), 2)
+        by_cat = {
+            r[CashFlowEvent.CATEGORY]: r
+            for _, r in events.iterrows()
+        }
+        self.assertEqual(set(by_cat), {CAPEX, OPEX})
+        self.assertAlmostEqual(float(by_cat[CAPEX][CashFlowEvent.AMOUNT]), -1000.0)
+        self.assertAlmostEqual(float(by_cat[OPEX][CashFlowEvent.AMOUNT]), 12.5)
+        self.assertIn("prowizja", by_cat[OPEX][CashFlowEvent.DESCRIPTION])
+
+    def test_divestment_with_fee_emits_opex(self):
+        inv = _inv_frame([("2021-01-01", -2.0, -500.0, 7.0)])
+        events = build_ike_cashflows(inv, "gm_ike")
+        self.assertEqual(len(events), 2)
+        by_cat = {
+            r[CashFlowEvent.CATEGORY]: r
+            for _, r in events.iterrows()
+        }
+        self.assertEqual(set(by_cat), {DIVESTMENT, OPEX})
+        self.assertAlmostEqual(float(by_cat[DIVESTMENT][CashFlowEvent.AMOUNT]), 500.0)
+        self.assertAlmostEqual(float(by_cat[OPEX][CashFlowEvent.AMOUNT]), 7.0)
+
+    def test_zero_fee_skips_opex(self):
+        inv = _inv_frame(
+            [
+                ("2020-01-01", 10.0, 1000.0, 0.0),
+                ("2020-06-01", 5.0, 600.0),
+            ]
+        )
+        events = build_ike_cashflows(inv, "pm_ike")
+        self.assertEqual(len(events), 2)
+        self.assertTrue((events[CashFlowEvent.CATEGORY] == CAPEX).all())
+
 
 class IkeTerminalTests(unittest.TestCase):
     def test_qty_times_last_kurs(self):
@@ -116,6 +156,7 @@ class IkeTerminalTests(unittest.TestCase):
                     IkeInventory.UNITS: 10.0,
                     IkeInventory.VALUE: 100.0,
                     IkeInventory.CURRENCY: "PLN",
+                    IkeInventory.FEE: 0.0,
                 },
                 {
                     IkeInventory.PRODUCT: "A",
@@ -123,6 +164,7 @@ class IkeTerminalTests(unittest.TestCase):
                     IkeInventory.UNITS: 5.0,
                     IkeInventory.VALUE: 50.0,
                     IkeInventory.CURRENCY: "PLN",
+                    IkeInventory.FEE: 0.0,
                 },
                 {
                     IkeInventory.PRODUCT: "B",
@@ -130,6 +172,7 @@ class IkeTerminalTests(unittest.TestCase):
                     IkeInventory.UNITS: 2.0,
                     IkeInventory.VALUE: 80.0,
                     IkeInventory.CURRENCY: "PLN",
+                    IkeInventory.FEE: 0.0,
                 },
             ]
         )

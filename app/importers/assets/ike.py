@@ -39,9 +39,17 @@ class IkeInventoryCls(GenericStructureClass):
     UNITS = "Liczba jednostek"
     VALUE = "wartość"
     CURRENCY = "waluta"
+    FEE = "prowizja"
 
     def expected_columns(self) -> set:
-        return {self.PRODUCT, self.DATE, self.UNITS, self.VALUE, self.CURRENCY}
+        return {
+            self.PRODUCT,
+            self.DATE,
+            self.UNITS,
+            self.VALUE,
+            self.CURRENCY,
+            self.FEE,
+        }
 
 
 class IkeKursCls(GenericStructureClass):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CF IKE z arkuszy inventory (IKE-PM / IKE-GM) — CAPEX / DIVESTMENT."""
+"""CF IKE z arkuszy inventory (IKE-PM / IKE-GM) — CAPEX / DIVESTMENT / OPEX."""
 from __future__ import annotations
 
 from datetime import date
@@ -12,7 +12,7 @@ from importers.assets.ike import (
     asset_id_for_account,
     read_ike_inventory,
 )
-from roi.categories import CAPEX, DIVESTMENT
+from roi.categories import CAPEX, DIVESTMENT, OPEX
 from roi.data_model import CashFlowEvent
 
 VENUE = "ike"
@@ -25,6 +25,7 @@ def build_ike_cashflows(
     """Wiersze inventory → CashFlowEvent dla jednego konta IKE.
 
     wartość > 0 → CAPEX (−abs); wartość < 0 lub jednostki < 0 → DIVESTMENT (+abs).
+    Niezerowa ``prowizja`` → OPEX ze znakiem z arkusza (obok CAPEX/DIVESTMENT).
     """
     cols = list(CashFlowEvent.COLUMN_ORDER)
     if inventory is None or inventory.empty:
@@ -52,10 +53,11 @@ def build_ike_cashflows(
             category = CAPEX
             amount = -abs(value_f)
 
+        date_iso = event_date.isoformat()
         rows.append(
             {
                 CashFlowEvent.ASSET_ID: str(asset_id),
-                CashFlowEvent.DATE: event_date.isoformat(),
+                CashFlowEvent.DATE: date_iso,
                 CashFlowEvent.AMOUNT: amount,
                 CashFlowEvent.CATEGORY: category,
                 CashFlowEvent.SOURCE: VENUE,
@@ -65,6 +67,22 @@ def build_ike_cashflows(
                 CashFlowEvent.ACCOUNT_NUMBER: "",
             }
         )
+
+        fee = pd.to_numeric(row.get(IkeInventory.FEE), errors="coerce")
+        if pd.notna(fee) and abs(float(fee)) >= 1e-12:
+            rows.append(
+                {
+                    CashFlowEvent.ASSET_ID: str(asset_id),
+                    CashFlowEvent.DATE: date_iso,
+                    CashFlowEvent.AMOUNT: float(fee),
+                    CashFlowEvent.CATEGORY: OPEX,
+                    CashFlowEvent.SOURCE: VENUE,
+                    CashFlowEvent.DESCRIPTION: f"{product}; prowizja",
+                    CashFlowEvent.TITLE: product,
+                    CashFlowEvent.COUNTERPARTY: "",
+                    CashFlowEvent.ACCOUNT_NUMBER: "",
+                }
+            )
 
     if not rows:
         return pd.DataFrame(columns=cols)
