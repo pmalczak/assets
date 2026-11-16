@@ -1,0 +1,18 @@
+Rodzaj,Produkt,Data rozpoczęcia,Data zrealizowania,Opis,Kwota,Opłata,Waluta,State,Saldo
+Płatność kartą,Bieżące,2026-10-01 20:24:00,2026-10-02 06:05:09,Biedronka,-187.11,0.0,PLN,ZAKOŃCZONO,7988.8
+Płatność kartą,Bieżące,2026-10-01 19:12:19,2026-10-02 06:17:34,Centrum Medyczne OMNI Clinic,-450.0,0.0,PLN,ZAKOŃCZONO,7538.8
+Płatność kartą,Bieżące,2026-10-01 19:32:23,2026-10-02 06:20:01,Tchibo,-194.97,0.0,PLN,ZAKOŃCZONO,7343.83
+Płatność kartą,Bieżące,2026-10-03 13:23:22,2026-10-04 05:36:50,Berlin Doner Kebap,-47.4,0.0,PLN,ZAKOŃCZONO,7296.43
+Płatność kartą,Bieżące,2026-10-04 14:36:09,2026-10-05 05:48:03,Rondo Cafe,-16.0,0.0,PLN,ZAKOŃCZONO,7280.43
+Płatność kartą,Bieżące,2026-10-04 14:23:03,2026-10-05 15:50:14,U Musa,-186.0,0.0,PLN,ZAKOŃCZONO,7094.43
+Płatność kartą,Bieżące,2026-10-10 13:44:38,2026-10-11 06:02:23,T-Mobile,-699.0,0.0,PLN,ZAKOŃCZONO,6395.43
+Przelew,Bieżące,2026-10-12 12:41:08,2026-10-12 12:41:11,To Małgorzata Malczak,-6000.0,0.0,PLN,ZAKOŃCZONO,395.43
+Płatność kartą,Bieżące,2026-10-13 15:24:42,2026-10-14 05:41:25,"Stabłowicka. Apteka. Sędzik R., mgr",-8.29,0.0,PLN,ZAKOŃCZONO,387.14
+Płatność kartą,Bieżące,2026-10-13 15:05:39,2026-10-14 05:54:54,Cimone Piccolo,-338.0,0.0,PLN,ZAKOŃCZONO,49.14
+Wymiana,Bieżące,2026-10-22 12:08:59,2026-10-22 12:08:59,Wymiana na PLN,21800.0,0.0,PLN,ZAKOŃCZONO,21849.14
+Wymiana,Bieżące,2026-10-23 10:52:42,2026-10-23 10:52:42,Wymiana na PLN,43800.0,0.0,PLN,ZAKOŃCZONO,65649.14
+Wymiana,Bieżące,2026-10-23 17:02:33,2026-10-23 17:02:33,Wymiana na PLN,43900.0,0.0,PLN,ZAKOŃCZONO,109549.14
+Płatność kartą,Bieżące,2026-10-23 19:45:38,2026-10-24 10:38:37,Kaufland,-603.84,0.0,PLN,ZAKOŃCZONO,108945.3
+Opłata,Bieżące,2026-10-26 03:17:57,2026-10-26 03:17:57,Opłata za plan Metal,0.0,55.99,PLN,ZAKOŃCZONO,108889.31
+Płatność kartą,Bieżące,2026-10-30 11:30:57,2026-10-30 15:06:34,Xtb,-1000.0,0.0,PLN,ZAKOŃCZONO,107889.31
+Płatność kartą,Bieżące,2026-10-30 11:44:50,2026-10-30 15:06:34,Xtb,-66000.0,0.0,PLN,ZAKOŃCZONO,41889.31

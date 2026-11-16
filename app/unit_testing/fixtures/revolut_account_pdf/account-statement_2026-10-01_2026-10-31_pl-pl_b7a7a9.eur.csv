@@ -1,0 +1,7 @@
+Rodzaj,Produkt,Data rozpoczęcia,Data zrealizowania,Opis,Kwota,Opłata,Waluta,State,Saldo
+Przelew,Bieżące,2026-10-07 20:33:01,2026-10-07 20:33:01,To Robo portfolio,-5000.0,0.0,EUR,ZAKOŃCZONO,32043.05
+Wymiana,Bieżące,2026-10-22 12:08:59,2026-10-22 12:08:59,Wymiana na PLN,-5000.0,0.0,EUR,ZAKOŃCZONO,27043.05
+Wymiana,Bieżące,2026-10-23 10:52:42,2026-10-23 10:52:42,Wymiana na PLN,-10000.0,0.0,EUR,ZAKOŃCZONO,17043.05
+Wymiana,Bieżące,2026-10-23 17:02:33,2026-10-23 17:02:33,Wymiana na PLN,-10000.0,0.0,EUR,ZAKOŃCZONO,7043.05
+Zasilenie,Bieżące,2026-10-26 10:22:34,2026-10-26 10:22:34,Płatność od PIOTR MALCZAK,50000.0,0.0,EUR,ZAKOŃCZONO,57043.05
+Przelew,Bieżące,2026-10-30 16:40:03,2026-10-30 16:40:04,To Stichting DEGIRO,-29900.0,0.0,EUR,ZAKOŃCZONO,27143.05
