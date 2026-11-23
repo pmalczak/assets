@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from importers.revolut.account_data_model import RevolutAccountFile
-from maintenance.move_downloaded_results import ACTION_MOVED
+from maintenance.move_downloaded_results import ACTION_MOVED, ACTION_SKIPPED
 from maintenance.move_revolut_files import move_revolut_files
 
 ACCOUNT_HEADER = (
@@ -22,6 +23,13 @@ _MULTI_CURRENCY_CSV = (
     + "Płatność kartą,Bieżące,2026-10-01 20:24:00,2026-10-02 06:05:09,Biedronka,-187.11,0.00,PLN,ZAKOŃCZONO,7988.80\n"
     + "Płatność kartą,Bieżące,2026-10-01 19:12:19,2026-10-02 06:17:34,Centrum Medyczne OMNI Clinic,-450.00,0.00,PLN,ZAKOŃCZONO,7538.80\n"
     + "Wymiana,Bieżące,2026-10-22 12:08:59,2026-10-22 12:08:59,Wymiana na PLN,21800.00,0.00,PLN,ZAKOŃCZONO,21849.14\n"
+)
+
+_PDF_FIXTURE = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "revolut_account_pdf"
+    / "2026_11_01_account-statement_2026-10-01_2026-10-31_pl-pl_092cc2.pdf"
 )
 
 
@@ -82,6 +90,61 @@ class MoveAccountStatementTests(unittest.TestCase):
             self.assertEqual(
                 set(pln_df[RevolutAccountFile.CURRENCY].str.upper()), {"PLN"}
             )
+
+    def test_account_statement_pdf_converts_splits_and_archives(self):
+        self.assertTrue(_PDF_FIXTURE.is_file(), f"brak fixture PDF: {_PDF_FIXTURE}")
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            download = home / "Dropbox" / "INWESTYCJE" / "download" / "pm"
+            cash_pool = home / "Dropbox" / "INWESTYCJE" / "cash_pool"
+            download.mkdir(parents=True)
+            cash_pool.mkdir(parents=True)
+
+            src_pdf = download / _PDF_FIXTURE.name
+            shutil.copy2(_PDF_FIXTURE, src_pdf)
+            pdf_mtime = src_pdf.stat().st_mtime
+
+            with patch("pathlib.Path.home", return_value=home):
+                results = move_revolut_files(
+                    cash_pool, "p_re", assets_root=home / "assets"
+                )
+
+            moved = [r for r in results if r.action == ACTION_MOVED]
+            self.assertFalse(src_pdf.exists())
+            self.assertFalse(
+                (download / "account-statement_2026-10-01_2026-10-31_pl-pl_092cc2.csv").exists()
+            )
+
+            csv_name = "account-statement_2026-10-01_2026-10-31_pl-pl_092cc2.csv"
+            pln = cash_pool / "p_re_pln" / csv_name
+            eur = cash_pool / "p_re_eur" / csv_name
+            archived = cash_pool / "p_re" / _PDF_FIXTURE.name
+            self.assertTrue(pln.is_file())
+            self.assertTrue(eur.is_file())
+            self.assertTrue(archived.is_file())
+            self.assertEqual(len(pd.read_csv(pln)), 17)
+            self.assertEqual(len(pd.read_csv(eur)), 6)
+            self.assertAlmostEqual(pln.stat().st_mtime, pdf_mtime, delta=1.0)
+            self.assertAlmostEqual(eur.stat().st_mtime, pdf_mtime, delta=1.0)
+            self.assertTrue(any(r.destination == archived for r in moved))
+
+    def test_unknown_pdf_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            download = home / "Dropbox" / "INWESTYCJE" / "download" / "pm"
+            cash_pool = home / "Dropbox" / "INWESTYCJE" / "cash_pool"
+            download.mkdir(parents=True)
+            cash_pool.mkdir(parents=True)
+            other = download / "consolidated-statement-v2_x.pdf"
+            other.write_bytes(b"%PDF-1.4")
+
+            with patch("pathlib.Path.home", return_value=home):
+                results = move_revolut_files(
+                    cash_pool, "p_re", assets_root=home / "assets"
+                )
+
+            self.assertTrue(other.exists())
+            self.assertEqual(results[0].action, ACTION_SKIPPED)
 
 
 if __name__ == "__main__":

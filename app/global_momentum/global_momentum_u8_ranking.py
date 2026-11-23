@@ -4,6 +4,7 @@
 # ================================================================
 
 import io
+import operator
 
 import pandas as pd
 import requests
@@ -76,7 +77,8 @@ def with_partial_month_stub(
 def load_current_ranking_prices(
     _start,
     include_partial_month: bool = False,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return ``(monthly, daily)`` asset-keyed close frames for Universe 7."""
     tickers = list(RANKING_TICKERS.values())
     daily = download_yahoo(tickers, start=_start)
     missing_tickers = [
@@ -100,9 +102,9 @@ def load_current_ranking_prices(
     monthly["Poland"] = build_poland_execution_series(monthly["Poland"])
     completed = monthly.loc[monthly.index <= last_completed_month_end()]
     if not include_partial_month:
-        return completed
+        return completed, prices
     stubbed, _as_of = with_partial_month_stub(completed, prices)
-    return stubbed
+    return stubbed, prices
 
 
 def build_poland_execution_series(etf_monthly: pd.Series) -> pd.Series:
@@ -425,8 +427,180 @@ def annotate_asset_top3_drift(
     return annotated
 
 
+def scoring_lookback_offsets() -> list[int]:
+    """Offsets used by momentum_score (positional month shifts), descending."""
+    return sorted({0, *MOMENTUM_PERIODS}, reverse=True)
+
+
+def scoring_anchor_label(months_back: int) -> str:
+    return "t" if months_back == 0 else f"t-{months_back}"
+
+
+def scoring_signal_position(
+    monthly_index: pd.DatetimeIndex,
+    signal_date,
+) -> int:
+    """Index position of the signal row (same basis as prices.shift(n))."""
+    signal_ts = pd.Timestamp(signal_date)
+    if getattr(monthly_index, "tz", None) is not None:
+        if signal_ts.tzinfo is None:
+            signal_ts = signal_ts.tz_localize(monthly_index.tz)
+        else:
+            signal_ts = signal_ts.tz_convert(monthly_index.tz)
+    else:
+        signal_ts = signal_ts.tz_localize(None) if signal_ts.tzinfo is not None else signal_ts
+    if signal_ts not in monthly_index:
+        raise KeyError(f"Signal date {signal_date} not in monthly index.")
+    loc = monthly_index.get_loc(signal_ts)
+    try:
+        return operator.index(loc)
+    except TypeError as exc:
+        raise KeyError(
+            f"Signal date {signal_date} is not unique in monthly index."
+        ) from exc
+
+
+SCORING_CHART_BASE_MONTHS = 6
+
+
+def scoring_path_sample_index(month_ends: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """Month-ends from t-12→t plus midpoints (t-11.5, …, t-0.5)."""
+    if month_ends is None or len(month_ends) == 0:
+        return pd.DatetimeIndex([])
+    ordered = pd.DatetimeIndex(month_ends).sort_values()
+    dates: list[pd.Timestamp] = []
+    for i, ts in enumerate(ordered):
+        dates.append(pd.Timestamp(ts))
+        if i + 1 >= len(ordered):
+            continue
+        nxt = pd.Timestamp(ordered[i + 1])
+        dates.append(ts + (nxt - ts) / 2)
+    return pd.DatetimeIndex(dates)
+
+
+def _price_asof(series: pd.Series, when: pd.Timestamp) -> float:
+    values = pd.to_numeric(series, errors="coerce").dropna().sort_index()
+    if values.empty:
+        return float("nan")
+    ts = pd.Timestamp(when)
+    if getattr(values.index, "tz", None) is not None:
+        if ts.tzinfo is None:
+            ts = ts.tz_localize(values.index.tz)
+        else:
+            ts = ts.tz_convert(values.index.tz)
+    else:
+        ts = ts.tz_localize(None) if ts.tzinfo is not None else ts
+    prior = values.loc[:ts]
+    if prior.empty:
+        return float("nan")
+    return float(prior.iloc[-1])
+
+
+def build_scoring_normalized_paths(
+    monthly: pd.DataFrame,
+    *,
+    signal_date,
+    assets: list[str],
+    labels: dict[str, str] | None = None,
+    daily: pd.DataFrame | None = None,
+    base_level: float = 100.0,
+    base_months: int = SCORING_CHART_BASE_MONTHS,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Paths from t-12 → t (month-ends + half-month midpoints), normalized so
+    price at ``t-{base_months}`` equals ``base_level`` (default: t-6 = 100).
+
+    Scoring markers stay on month-end anchors (t-12 / t-6 / t-3 / t).
+    Half-month path samples use last daily close ≤ midpoint when ``daily``
+    is provided; otherwise fall back to month-end asof.
+
+    Returns ``(paths, points)`` long frames:
+    - paths: Date, Series, Level
+    - points: Date, Series, Level, Point
+    """
+    empty_paths = pd.DataFrame(columns=["Date", "Series", "Level"])
+    empty_points = pd.DataFrame(columns=["Date", "Series", "Level", "Point"])
+    if monthly is None or monthly.empty or not assets:
+        return empty_paths, empty_points
+
+    missing = [asset for asset in assets if asset not in monthly.columns]
+    if missing:
+        raise KeyError(f"Unknown scoring asset(s): {', '.join(missing)}")
+    if base_months < 0 or base_months not in scoring_lookback_offsets():
+        raise ValueError(
+            f"base_months must be a scoring anchor offset, got {base_months}."
+        )
+
+    pos = scoring_signal_position(monthly.index, signal_date)
+    lookback = max(MOMENTUM_PERIODS)
+    if pos < lookback:
+        return empty_paths, empty_points
+
+    window = monthly.iloc[pos - lookback : pos + 1][assets]
+    base = window.iloc[lookback - base_months]
+    valid_assets = [
+        asset
+        for asset in assets
+        if pd.notna(base[asset]) and float(base[asset]) != 0.0
+    ]
+    if not valid_assets:
+        return empty_paths, empty_points
+
+    sample_index = scoring_path_sample_index(window.index)
+    month_index = pd.DatetimeIndex(window.index)
+    path_values: dict[str, list[float]] = {asset: [] for asset in valid_assets}
+    for sample_ts in sample_index:
+        for asset in valid_assets:
+            if sample_ts in month_index:
+                level = window.loc[sample_ts, asset]
+                if isinstance(level, pd.Series):
+                    level = level.iloc[-1]
+                price = float(level) if pd.notna(level) else float("nan")
+            else:
+                price = float("nan")
+                if daily is not None and asset in daily.columns:
+                    price = _price_asof(daily[asset], sample_ts)
+                if pd.isna(price):
+                    price = _price_asof(window[asset], sample_ts)
+            path_values[asset].append(price)
+
+    path_frame = pd.DataFrame(path_values, index=sample_index)
+    normalized = path_frame.div(base[valid_assets], axis=1) * base_level
+    label_map = labels or {}
+    renamed = {
+        asset: label_map.get(asset, display_name(asset)) for asset in valid_assets
+    }
+    paths = (
+        normalized.rename(columns=renamed)
+        .reset_index(names="Date")
+        .melt(id_vars="Date", var_name="Series", value_name="Level")
+        .dropna(subset=["Level"])
+    )
+
+    point_rows: list[dict] = []
+    for months_back in scoring_lookback_offsets():
+        anchor_ts = monthly.index[pos - months_back]
+        point_label = scoring_anchor_label(months_back)
+        for asset in valid_assets:
+            raw = window.loc[anchor_ts, asset]
+            if isinstance(raw, pd.Series):
+                raw = raw.iloc[-1]
+            if pd.isna(raw) or float(base[asset]) == 0.0:
+                continue
+            point_rows.append(
+                {
+                    "Date": anchor_ts,
+                    "Series": renamed[asset],
+                    "Level": float(raw) / float(base[asset]) * base_level,
+                    "Point": point_label,
+                }
+            )
+    points = pd.DataFrame(point_rows, columns=["Date", "Series", "Level", "Point"])
+    return paths, points
+
+
 def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
-    monthly = load_current_ranking_prices(
+    monthly, daily = load_current_ranking_prices(
         START,
         include_partial_month=include_partial_month,
     )
@@ -444,6 +618,9 @@ def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
     )
     result["is_nowcast"] = include_partial_month
     result["no_common_close"] = no_common_close
+    if not monthly.empty:
+        result["monthly_prices"] = monthly[universe].copy()
+        result["daily_prices"] = daily[universe].copy()
     if include_partial_month and result["ready"]:
         official = compute_current_universe7_ranking(
             monthly.loc[monthly.index <= last_completed_month_end()],
@@ -528,7 +705,7 @@ def main() -> None:
     from app_proc.data_steps_root import init_app_data_step
 
     init_app_data_step()
-    monthly = load_current_ranking_prices(START)
+    monthly, _daily = load_current_ranking_prices(START)
     print_current_universe7_ranking(monthly, list(RANKING_TICKERS.keys()))
 
 

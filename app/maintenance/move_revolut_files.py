@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = "pmalczak@gmail.com"
 
+import os
 import re
 from pathlib import Path
 
@@ -8,6 +9,10 @@ import pandas as pd
 
 from app_proc.data_root import get_online_data_root
 from importers.revolut.account_data_model import RevolutAccountFile
+from importers.revolut.account_statement_pdf import (
+    convert_revolut_account_statement_pdf,
+    is_revolut_account_statement_pdf,
+)
 from importers.revolut.deposit_data_model import RevolutDepositFile
 from importers.revolut.savings_statement import (
     SAVINGS_STATEMENT_PREFIX,
@@ -56,6 +61,21 @@ def move_revolut_files(
     assets_root = assets_root or get_online_data_root()
 
     results: list[MoveResult] = []
+
+    # PDF account-statement najpierw → CSV w download, potem wspólna ścieżka CSV + archiwum PDF.
+    for file in sorted(download_assets.glob('*.pdf')):
+        if is_revolut_account_statement_pdf(file):
+            results.extend(_move_account_pdf(file, file_owner, dropbox_cash_pool))
+        else:
+            results.append(
+                MoveResult(
+                    source=file,
+                    destination=None,
+                    action=ACTION_SKIPPED,
+                    kind=KIND_REVOLUT,
+                )
+            )
+
     files = download_assets.glob('*.csv')
     for file in files:
         fname = file.stem.split('_')
@@ -80,6 +100,30 @@ def move_revolut_files(
                     kind=KIND_REVOLUT,
                 )
             )
+    return results
+
+
+def _move_account_pdf(
+    file: Path, file_owner: str, dropbox_cash_pool: Path
+) -> list[MoveResult]:
+    """PDF → CSV (mtime z PDF) → split jak CSV; PDF do cash_pool/{owner}/."""
+    csv_path = convert_revolut_account_statement_pdf(file, out_dir=file.parent)
+    results = _move_account_file(csv_path, file_owner, dropbox_cash_pool)
+
+    staging = Path(dropbox_cash_pool) / file_owner
+    staging.mkdir(parents=True, exist_ok=True)
+    pdf_dest = staging / file.name
+    if pdf_dest.exists():
+        pdf_dest.unlink()
+    file.rename(pdf_dest)
+    results.append(
+        MoveResult(
+            source=file,
+            destination=pdf_dest,
+            action=ACTION_MOVED,
+            kind=KIND_REVOLUT,
+        )
+    )
     return results
 
 
@@ -119,6 +163,7 @@ def _move_account_file(
     file: Path, file_owner: str, dropbox_cash_pool: Path
 ) -> list[MoveResult]:
     """Przenieś account-statement; przy wielu walutach — split do osobnych katalogów."""
+    mtime = file.stat().st_mtime
     df = pd.read_csv(file)
     check_df = df.copy()
     check_df[RevolutAccountFile.FILE_DATE] = ''
@@ -161,6 +206,7 @@ def _move_account_file(
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / file.name
         subset.to_csv(target, index=False)
+        os.utime(target, (mtime, mtime))
         results.append(
             MoveResult(
                 source=file,

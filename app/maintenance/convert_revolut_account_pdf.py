@@ -2,11 +2,9 @@
 """
 Konwersja nowego wyciągu konta Revolut (PDF) → CSV (schemat account-statement).
 
-Staging PDF: cash_pool/p_re oraz cash_pool/g_re (owner, bez waluty).
-Wynik: jeden CSV multi-Waluta obok PDF — do ręcznej weryfikacji, potem
-istniejący import (`move_revolut_files` → split *_pln / *_eur).
-
-Nie jest podpięte pod UI / move_downloaded.
+Główna ścieżka produkcyjna: PDF w download/pm|gm → Import wyciągów
+(`move_revolut_files`). Ten CLI zostaje do ręcznej konwersji / debug
+(np. PDF już w cash_pool/p_re|g_re).
 
 Użycie:
   cd app

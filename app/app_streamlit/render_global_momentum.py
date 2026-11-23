@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -16,15 +17,31 @@ from global_momentum.global_momentum_benchmarks import (
     run_benchmarks,
 )
 from global_momentum.global_momentum_common import format_metric_table
-from global_momentum.global_momentum_u8_ranking import run_u7_ranking
+from global_momentum.global_momentum_u8_ranking import (
+    RANKING_TICKERS,
+    SCORING_CHART_BASE_MONTHS,
+    build_scoring_normalized_paths,
+    run_u7_ranking,
+    scoring_anchor_label,
+    scoring_lookback_offsets,
+)
 
-_RANKING_SCHEMA = 5
-_RANKING_AS_TODAY_SCHEMA = 4
+_RANKING_SCHEMA = 7
+_RANKING_AS_TODAY_SCHEMA = 6
 _BENCHMARK_SCHEMA = 9
 _ALL_WORLD_LABEL = "All-World Buy & Hold"
 _SECTION_RANKING = "Ranking U7"
 _SECTION_RANKING_AS_TODAY = "as_today"
 _SECTION_BENCHMARK = "Benchmark"
+_SCORING_CHART_HEIGHT = 360
+_TICKER_TO_ASSET = {ticker: asset for asset, ticker in RANKING_TICKERS.items()}
+_SCORING_BASE_OPTIONS = [
+    scoring_anchor_label(months) for months in scoring_lookback_offsets()
+]
+_SCORING_BASE_MONTHS = {
+    scoring_anchor_label(months): months for months in scoring_lookback_offsets()
+}
+_SCORING_BASE_DEFAULT = scoring_anchor_label(SCORING_CHART_BASE_MONTHS)
 
 
 @st.cache_data(show_spinner=False)
@@ -169,6 +186,178 @@ def _render_ranking(*, as_today: bool = False) -> None:
         hide_index=True,
         column_config={"Weight": st.column_config.NumberColumn(format="percent")},
     )
+
+    _render_scoring_price_chart(result, as_today=as_today)
+
+
+def _render_scoring_price_chart(result: dict, *, as_today: bool) -> None:
+    monthly = result.get("monthly_prices")
+    daily = result.get("daily_prices")
+    ranking = result.get("ranking")
+    signal_date = result.get("signal_date")
+    if (
+        not isinstance(monthly, pd.DataFrame)
+        or monthly.empty
+        or not isinstance(ranking, pd.DataFrame)
+        or ranking.empty
+        or signal_date is None
+    ):
+        return
+
+    options: list[str] = []
+    label_to_asset: dict[str, str] = {}
+    for row in ranking.to_dict("records"):
+        label = str(row["Asset"])
+        asset = _TICKER_TO_ASSET.get(str(row.get("Ticker") or ""))
+        if asset is None:
+            continue
+        options.append(label)
+        label_to_asset[label] = asset
+
+    if not options:
+        return
+
+    default = [
+        str(row["Asset"])
+        for row in ranking.to_dict("records")
+        if bool(row.get("TOP3")) and str(row["Asset"]) in label_to_asset
+    ]
+    if not default:
+        default = options[: min(3, len(options))]
+
+    selected = st.multiselect(
+        "Walory na wykresie SCORING",
+        options=options,
+        default=default,
+        key=(
+            "gm_scoring_chart_assets_as_today"
+            if as_today
+            else "gm_scoring_chart_assets"
+        ),
+    )
+    base_label = st.radio(
+        "Punkt referencyjny = 100%",
+        options=_SCORING_BASE_OPTIONS,
+        index=_SCORING_BASE_OPTIONS.index(_SCORING_BASE_DEFAULT),
+        horizontal=True,
+        key=(
+            "gm_scoring_chart_base_as_today"
+            if as_today
+            else "gm_scoring_chart_base"
+        ),
+    )
+    if not selected:
+        st.caption("Wybierz co najmniej jeden walor, żeby zobaczyć ścieżkę t-12 → t.")
+        return
+
+    assets = [label_to_asset[label] for label in selected]
+    labels = {label_to_asset[label]: label for label in selected}
+    base_months = _SCORING_BASE_MONTHS[base_label]
+    daily_frame = daily if isinstance(daily, pd.DataFrame) and not daily.empty else None
+    try:
+        paths, points = build_scoring_normalized_paths(
+            monthly,
+            signal_date=signal_date,
+            assets=assets,
+            labels=labels,
+            daily=daily_frame,
+            base_months=base_months,
+        )
+    except KeyError as exc:
+        st.warning(f"Nie udało się zbudować wykresu SCORING: {exc}")
+        return
+
+    if paths.empty:
+        st.warning("Za mało historii miesięcznej do okna t-12 → t.")
+        return
+
+    st.markdown(f"**Zmiana cen w oknie SCORING ({base_label} = 100%)**")
+    st.caption(
+        "Ścieżka: month-end + połowy miesięcy (ostatni daily close ≤ t-0.5, t-1.5, …). "
+        f"Markery = t-12 / t-6 / t-3 / t z Score. Wspólna skala: close w {base_label} = 100%."
+    )
+    st.altair_chart(
+        _build_scoring_price_chart(paths, points, base_label=base_label),
+        width="stretch",
+    )
+
+
+def _scoring_month_start_grid(paths: pd.DataFrame) -> pd.DataFrame:
+    """Vertical grid dates: 1st of each month inside the chart window."""
+    empty = pd.DataFrame(columns=["Date"])
+    if paths.empty or "Date" not in paths.columns:
+        return empty
+    dates = pd.to_datetime(paths["Date"], errors="coerce").dropna()
+    if dates.empty:
+        return empty
+    start = dates.min().normalize()
+    end = dates.max().normalize()
+    month_starts = pd.date_range(start=start, end=end, freq="MS")
+    return pd.DataFrame({"Date": month_starts})
+
+
+def _build_scoring_price_chart(
+    paths: pd.DataFrame,
+    points: pd.DataFrame,
+    *,
+    base_label: str = _SCORING_BASE_DEFAULT,
+) -> alt.Chart:
+    baseline = (
+        alt.Chart(pd.DataFrame({"Level": [100.0]}))
+        .mark_rule(strokeWidth=3, color="#111111")
+        .encode(y="Level:Q")
+    )
+    month_grid = _scoring_month_start_grid(paths)
+    grid = (
+        alt.Chart(month_grid)
+        .mark_rule(strokeWidth=1, color="#B0B0B0", strokeDash=[4, 3])
+        .encode(x="Date:T")
+        if not month_grid.empty
+        else None
+    )
+    line = (
+        alt.Chart(paths)
+        .mark_line()
+        .encode(
+            x=alt.X("Date:T", title=None),
+            y=alt.Y(
+                "Level:Q",
+                title=f"Indeks ({base_label} = 100%)",
+                scale=alt.Scale(zero=False),
+            ),
+            color=alt.Color("Series:N", title="Walor"),
+            tooltip=[
+                alt.Tooltip("Date:T", title="Data"),
+                alt.Tooltip("Series:N", title="Walor"),
+                alt.Tooltip("Level:Q", title="Indeks", format=".1f"),
+            ],
+        )
+    )
+    layers: list[alt.Chart] = []
+    if grid is not None:
+        layers.append(grid)
+    layers.extend([baseline, line])
+    if not points.empty:
+        layers.append(
+            alt.Chart(points)
+            .mark_point(size=70, filled=True)
+            .encode(
+                x="Date:T",
+                y="Level:Q",
+                color=alt.Color("Series:N", title="Walor"),
+                shape=alt.Shape("Point:N", title="Punkt SCORING"),
+                tooltip=[
+                    alt.Tooltip("Date:T", title="Data"),
+                    alt.Tooltip("Series:N", title="Walor"),
+                    alt.Tooltip("Point:N", title="Punkt"),
+                    alt.Tooltip("Level:Q", title="Indeks", format=".1f"),
+                ],
+            )
+        )
+    chart = alt.layer(*layers).properties(height=_SCORING_CHART_HEIGHT)
+    if not points.empty:
+        chart = chart.resolve_scale(shape="independent")
+    return chart
 
 
 def _render_benchmarks() -> None:

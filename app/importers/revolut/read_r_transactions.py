@@ -47,6 +47,9 @@ def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame
         _extract_file_date(input_file)
         download_dates.append(iso_download_date(input_file))
         df = pd.read_csv(input_file)
+        # Dzień kalendarzowy przed dedupe — PDF (00:00:00) i CSV (pełny czas) muszą się schodzić.
+        df[RevolutAccountFile.INIT_DATE] = df[RevolutAccountFile.INIT_DATE].apply(_strip_date)
+        df[RevolutAccountFile.DATE] = df[RevolutAccountFile.DATE].apply(_strip_date)
 
         print(f'PLIK:{input_file} {len(df):>4} rekord/ów')
         records += [df]
@@ -59,10 +62,7 @@ def _read_revolut_account_transactions(source_file: Path = None) -> pd.DataFrame
 
         result = deduplicate_records(result, record, RevolutAccountFile.DATE, RevolutAccountFile.unique_key())
 
-    # result = pd.concat(result)
     result = result[result[RevolutAccountFile.STATE] == RevolutFileState.CLOSED]
-    result[RevolutAccountFile.INIT_DATE] = result[RevolutAccountFile.INIT_DATE].apply(_strip_date)
-    result[RevolutAccountFile.DATE] = result[RevolutAccountFile.DATE].apply(_strip_date)
     # data-wyciągu w jednym parquet = max dat pobrań (nie min końca okresu z nazwy).
     result[RevolutAccountFile.FILE_DATE] = max(download_dates) if download_dates else ''
     RevolutAccountFile.check_structure(result)
@@ -81,11 +81,12 @@ def _extract_file_date(input_file):
 
 
 def _strip_date(x):
-    if isinstance(x, float):
+    """Do ISO dnia `YYYY-MM-DD` (idempotentne dla już obciętych wartości)."""
+    if isinstance(x, float) or x is None or (isinstance(x, str) and not str(x).strip()):
         return ''
-    r = x.split(' ')
-    assert len(r) == 2
-    r = r[0]
-    t = r.split('-')
-    assert len(t) == 3
-    return r
+    s = str(x).strip()
+    day = s.split(' ')[0].split('T')[0]
+    parts = day.split('-')
+    if len(parts) != 3:
+        raise ValueError(f'Unexpected Revolut account date: {x!r}')
+    return day

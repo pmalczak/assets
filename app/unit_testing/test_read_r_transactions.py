@@ -2,7 +2,12 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from importers.revolut.read_r_transactions import _extract_file_date, _read_revolut_account_transactions
+from importers.revolut.account_data_model import RevolutAccountFile
+from importers.revolut.read_r_transactions import (
+    _extract_file_date,
+    _read_revolut_account_transactions,
+    _strip_date,
+)
 
 
 ACCOUNT_HEADER = "Rodzaj,Produkt,Data rozpoczęcia,Data zrealizowania,Opis,Kwota,Opłata,Waluta,State,Saldo\n"
@@ -62,6 +67,34 @@ class ExtractRevolutFileDateTests(unittest.TestCase):
             df = _read_revolut_account_transactions(root)
             self.assertEqual(len(df), 2)
             self.assertEqual(df["Opis"].tolist(), ["Early", "Late"])
+
+    def test_strip_date_idempotent(self):
+        self.assertEqual(_strip_date("2026-10-02 06:05:09"), "2026-10-02")
+        self.assertEqual(_strip_date("2026-10-02"), "2026-10-02")
+        self.assertEqual(_strip_date("2026-10-02T06:05:09Z"), "2026-10-02")
+
+    def test_pdf_and_csv_same_txn_dedupe_despite_timestamps(self):
+        """CSV z godzinami + PDF (00:00:00 / inny INIT) → jeden rekord, nie ValueError."""
+        csv_row = (
+            "Płatność kartą,Bieżące,2026-10-01 20:24:00,2026-10-02 06:05:09,"
+            "Biedronka,-187.11,0.0,PLN,ZAKOŃCZONO,7988.8\n"
+        )
+        pdf_row = (
+            "Płatność kartą,Bieżące,2026-10-02 00:00:00,2026-10-02 00:00:00,"
+            "Biedronka,-187.11,0.0,PLN,ZAKOŃCZONO,7988.8\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "account-statement_2026-08-01_2026-10-02_pl-pl_csv.csv").write_text(
+                ACCOUNT_HEADER + csv_row, encoding="utf-8"
+            )
+            (root / "account-statement_2026-10-01_2026-10-31_pl-pl_pdf.csv").write_text(
+                ACCOUNT_HEADER + pdf_row, encoding="utf-8"
+            )
+            df = _read_revolut_account_transactions(root)
+            self.assertEqual(len(df), 1)
+            self.assertEqual(df.iloc[0][RevolutAccountFile.DESCRIPTION], "Biedronka")
+            self.assertEqual(df.iloc[0][RevolutAccountFile.DATE], "2026-10-02")
 
 
 if __name__ == "__main__":

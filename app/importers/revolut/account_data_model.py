@@ -38,10 +38,11 @@ class RevolutAccountFileCls(GenericStructureClass):
         return result
 
     def unique_key(self) -> list:
+        # Bez INIT_DATE: PDF ma tylko dzień settle (00:00:00), CSV ma timestamp
+        # i często inny dzień rozpoczęcia (karty) — inaczej overlap PDF↔CSV = false conflict.
         result = [
             # self.KIND,
             self.PRODUCT,
-            self.INIT_DATE,
             self.DATE,
             self.DESCRIPTION,
             self.AMOUNT,

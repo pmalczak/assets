@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Parser nowego wyciągu konta Revolut (PDF multi-walutowy) → schemat CSV account-statement.
 
-Krok 1 (PDF→CSV); krok 2 = istniejący import CSV / split Waluta. Bez wiringu w move_downloaded.
-Wymaga pdfplumber (Linux + Windows).
+Krok 1 (PDF→CSV); krok 2 = istniejący import CSV / split Waluta
+(`move_revolut_files` w Import wyciągów). Wymaga pdfplumber (Linux + Windows).
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -77,6 +78,14 @@ def write_revolut_account_statement_csv(df: pd.DataFrame, out_path: Path | str) 
     return out_path
 
 
+def is_revolut_account_statement_pdf(path: Path | str) -> bool:
+    """True dla `account-statement_…pdf` oraz `YYYY_MM_DD_account-statement_…pdf`."""
+    path = Path(path)
+    if path.suffix.lower() != ".pdf":
+        return False
+    return bool(_PDF_PREFIX_RE.match(path.stem))
+
+
 def csv_name_from_pdf(pdf_path: Path | str) -> str:
     """`2026_11_01_account-statement_…_092cc2.pdf` → `account-statement_…_092cc2.csv`."""
     stem = Path(pdf_path).stem
@@ -89,13 +98,19 @@ def csv_name_from_pdf(pdf_path: Path | str) -> str:
 def convert_revolut_account_statement_pdf(
     pdf_path: Path | str,
     out_dir: Path | str | None = None,
+    *,
+    preserve_mtime: bool = True,
 ) -> Path:
-    """PDF → CSV obok pliku (lub w out_dir)."""
+    """PDF → CSV obok pliku (lub w out_dir). Domyślnie mtime CSV = mtime PDF (data wyciągu)."""
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir) if out_dir is not None else pdf_path.parent
     out_path = out_dir / csv_name_from_pdf(pdf_path)
     df = parse_revolut_account_statement_pdf(pdf_path)
-    return write_revolut_account_statement_csv(df, out_path)
+    write_revolut_account_statement_csv(df, out_path)
+    if preserve_mtime:
+        mtime = pdf_path.stat().st_mtime
+        os.utime(out_path, (mtime, mtime))
+    return out_path
 
 
 def _parse_page(page) -> list[dict]:
