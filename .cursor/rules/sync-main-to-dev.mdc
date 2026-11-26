@@ -1,0 +1,27 @@
+---
+description: SYNC — pull origin main, merge into dev, stay on dev
+alwaysApply: true
+---
+
+# SYNC — GitHub → `main` → `dev`
+
+Gdy użytkownik wydaje instrukcję **SYNC** (case-insensitive: `sync`, `SYNC`, `Sync`; także „zrób SYNC”), wykonaj poniższy ciąg **atomowo**. SYNC = wyraźna prośba o `pull`/`fetch` `main` z origin i merge do lokalnej `dev` (zgodnie z regułą sync-only-`main`).
+
+Odwrotność **SHIP**: nic nie commituj, nic nie pushuj; tylko ściągnij `main` i wlej do `dev`.
+
+## Sekwencja (kolejno)
+
+1. **Working tree** — jeśli niezacommitowane zmiany blokują `checkout` / merge: **STOP**, zgłoś status (nie commituj w ramach SYNC; do commitów jest SHIP).
+2. **Update `main`** — `git fetch origin main`, `git checkout main`, `git pull origin main` (zwykły pull; bez rebase, bez force).
+3. **Merge do `dev`** — `git checkout dev`, potem `git merge main` (zwykły merge, bez rebase, bez force).
+4. **Koniec** — zostań na `dev`.
+
+Po sukcesie: jedno zdanie — że `main` jest zsynchronizowane z origin, zmergowane do `dev`, i jesteś na `dev` (ew. krótki hash).
+
+## Stop przy pierwszym błędzie
+
+- Pierwszy non-zero exit, konflikt merge, brudne working tree blokujące checkout → **natychmiast STOP**.
+- Nie wykonuj kolejnych kroków.
+- Krótko: który krok padł i dlaczego (stderr / konflikt / `git status`).
+- W ramach SYNC **nie**: commit, push, naprawianie konfliktów, `reset --hard`, `push --force`, push/`pull` `dev`, twórz PR, ustawiaj upstream dla `dev`.
+- Po fail na `main` (np. konflikt pull): STOP w bieżącym stanie; nie zakładaj powrotu na `dev`.
