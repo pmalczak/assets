@@ -275,7 +275,7 @@ def _render_scoring_price_chart(result: dict, *, as_today: bool) -> None:
 
     st.markdown(f"**Zmiana cen w oknie SCORING ({base_label} = 100%)**")
     st.caption(
-        "Ścieżka: month-end + połowy miesięcy (ostatni daily close ≤ t-0.5, t-1.5, …). "
+        "Ścieżka: dzienne close w oknie t-12 → t (Yahoo / DATA_STEP). "
         f"Markery = t-12 / t-6 / t-3 / t z Score. Wspólna skala: close w {base_label} = 100%."
     )
     st.altair_chart(

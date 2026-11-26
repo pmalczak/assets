@@ -507,36 +507,32 @@ SCORING_CHART_BASE_MONTHS = 6
 
 
 def scoring_path_sample_index(month_ends: pd.DatetimeIndex) -> pd.DatetimeIndex:
-    """Month-ends from t-12→t plus midpoints (t-11.5, …, t-0.5)."""
+    """Month-ends from t-12→t (fallback when daily prices are unavailable)."""
     if month_ends is None or len(month_ends) == 0:
         return pd.DatetimeIndex([])
-    ordered = pd.DatetimeIndex(month_ends).sort_values()
-    dates: list[pd.Timestamp] = []
-    for i, ts in enumerate(ordered):
-        dates.append(pd.Timestamp(ts))
-        if i + 1 >= len(ordered):
-            continue
-        nxt = pd.Timestamp(ordered[i + 1])
-        dates.append(ts + (nxt - ts) / 2)
-    return pd.DatetimeIndex(dates)
+    return pd.DatetimeIndex(pd.DatetimeIndex(month_ends).sort_values())
 
 
-def _price_asof(series: pd.Series, when: pd.Timestamp) -> float:
-    values = pd.to_numeric(series, errors="coerce").dropna().sort_index()
-    if values.empty:
-        return float("nan")
-    ts = pd.Timestamp(when)
-    if getattr(values.index, "tz", None) is not None:
-        if ts.tzinfo is None:
-            ts = ts.tz_localize(values.index.tz)
-        else:
-            ts = ts.tz_convert(values.index.tz)
-    else:
-        ts = ts.tz_localize(None) if ts.tzinfo is not None else ts
-    prior = values.loc[:ts]
-    if prior.empty:
-        return float("nan")
-    return float(prior.iloc[-1])
+def scoring_path_daily_index(
+    daily: pd.DataFrame,
+    *,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    assets: list[str],
+) -> pd.DatetimeIndex:
+    """Trading days in ``[start, end]`` with at least one close among ``assets``."""
+    if daily is None or daily.empty or not assets:
+        return pd.DatetimeIndex([])
+    cols = [asset for asset in assets if asset in daily.columns]
+    if not cols:
+        return pd.DatetimeIndex([])
+    start_ts = pd.Timestamp(start)
+    end_ts = pd.Timestamp(end)
+    frame = daily[cols].sort_index().loc[start_ts:end_ts]
+    if frame.empty:
+        return pd.DatetimeIndex([])
+    numeric = frame.apply(pd.to_numeric, errors="coerce")
+    return pd.DatetimeIndex(numeric.dropna(how="all").index)
 
 
 def build_scoring_normalized_paths(
@@ -550,12 +546,11 @@ def build_scoring_normalized_paths(
     base_months: int = SCORING_CHART_BASE_MONTHS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Paths from t-12 → t (month-ends + half-month midpoints), normalized so
-    price at ``t-{base_months}`` equals ``base_level`` (default: t-6 = 100).
+    Paths from t-12 → t at daily close granularity when ``daily`` is provided
+    (else month-ends only), normalized so price at ``t-{base_months}`` equals
+    ``base_level`` (default: t-6 = 100).
 
     Scoring markers stay on month-end anchors (t-12 / t-6 / t-3 / t).
-    Half-month path samples use last daily close ≤ midpoint when ``daily``
-    is provided; otherwise fall back to month-end asof.
 
     Returns ``(paths, points)`` long frames:
     - paths: Date, Series, Level
@@ -589,25 +584,22 @@ def build_scoring_normalized_paths(
     if not valid_assets:
         return empty_paths, empty_points
 
-    sample_index = scoring_path_sample_index(window.index)
-    month_index = pd.DatetimeIndex(window.index)
-    path_values: dict[str, list[float]] = {asset: [] for asset in valid_assets}
-    for sample_ts in sample_index:
-        for asset in valid_assets:
-            if sample_ts in month_index:
-                level = window.loc[sample_ts, asset]
-                if isinstance(level, pd.Series):
-                    level = level.iloc[-1]
-                price = float(level) if pd.notna(level) else float("nan")
-            else:
-                price = float("nan")
-                if daily is not None and asset in daily.columns:
-                    price = _price_asof(daily[asset], sample_ts)
-                if pd.isna(price):
-                    price = _price_asof(window[asset], sample_ts)
-            path_values[asset].append(price)
+    sample_index = scoring_path_daily_index(
+        daily,
+        start=window.index.min(),
+        end=window.index.max(),
+        assets=valid_assets,
+    )
+    if len(sample_index) == 0:
+        sample_index = scoring_path_sample_index(window.index)
+        path_frame = window[valid_assets].reindex(sample_index)
+    else:
+        path_frame = (
+            daily[valid_assets]
+            .apply(pd.to_numeric, errors="coerce")
+            .reindex(sample_index)
+        )
 
-    path_frame = pd.DataFrame(path_values, index=sample_index)
     normalized = path_frame.div(base[valid_assets], axis=1) * base_level
     label_map = labels or {}
     renamed = {

@@ -14,6 +14,7 @@ from global_momentum.global_momentum_u8_ranking import (
     compute_current_universe7_ranking,
     last_common_close_date,
     scoring_anchor_label,
+    scoring_path_daily_index,
     scoring_path_sample_index,
     top3_drift_marker,
     weight_operation,
@@ -187,19 +188,27 @@ class ScoringNormalizedPathsTests(unittest.TestCase):
         self.assertEqual(scoring_anchor_label(0), "t")
         self.assertEqual(scoring_anchor_label(12), "t-12")
 
-    def test_path_includes_half_month_samples_from_daily(self):
+    def test_path_uses_daily_closes_in_scoring_window(self):
         monthly = _monthly_prices(months=24)
         asset = next(iter(RANKING_TICKERS))
         signal = monthly.index[-1]
         window = monthly.iloc[-13:]
-        sample_index = scoring_path_sample_index(window.index)
-        self.assertEqual(len(sample_index), 25)  # 13 month-ends + 12 midpoints
+        self.assertEqual(len(scoring_path_sample_index(window.index)), 13)
 
         daily_index = pd.date_range(window.index.min(), window.index.max(), freq="B")
         daily = pd.DataFrame(
             {asset: np.linspace(90.0, 130.0, len(daily_index))},
             index=daily_index,
         )
+        sample_index = scoring_path_daily_index(
+            daily,
+            start=window.index.min(),
+            end=window.index.max(),
+            assets=[asset],
+        )
+        self.assertGreater(len(sample_index), 13)
+        self.assertEqual(len(sample_index), len(daily_index))
+
         paths, points = build_scoring_normalized_paths(
             monthly,
             signal_date=signal,
@@ -208,14 +217,25 @@ class ScoringNormalizedPathsTests(unittest.TestCase):
             daily=daily,
         )
         path_dates = paths["Date"].drop_duplicates()
-        self.assertEqual(len(path_dates), 25)
+        self.assertEqual(len(path_dates), len(daily_index))
         self.assertEqual(set(points["Point"]), {"t-12", "t-6", "t-3", "t"})
-        mid = sample_index[1]
-        self.assertNotIn(mid, set(window.index))
+        mid = sample_index[len(sample_index) // 2]
         mid_level = float(paths.loc[paths["Date"] == mid, "Level"].iloc[0])
         base = float(window.iloc[6][asset])
-        expected = _price_asof_expected(daily[asset], mid) / base * 100.0
+        expected = float(daily.loc[mid, asset]) / base * 100.0
         self.assertAlmostEqual(mid_level, expected)
+
+    def test_path_falls_back_to_month_ends_without_daily(self):
+        monthly = _monthly_prices(months=24)
+        asset = next(iter(RANKING_TICKERS))
+        paths, points = build_scoring_normalized_paths(
+            monthly,
+            signal_date=monthly.index[-1],
+            assets=[asset],
+            labels={asset: "A"},
+        )
+        self.assertEqual(paths["Date"].nunique(), 13)
+        self.assertEqual(set(points["Point"]), {"t-12", "t-6", "t-3", "t"})
 
     def test_empty_when_history_shorter_than_lookback(self):
         monthly = _monthly_prices(months=8)
@@ -227,11 +247,6 @@ class ScoringNormalizedPathsTests(unittest.TestCase):
         )
         self.assertTrue(paths.empty)
         self.assertTrue(points.empty)
-
-
-def _price_asof_expected(series: pd.Series, when: pd.Timestamp) -> float:
-    prior = series.loc[:when].dropna()
-    return float(prior.iloc[-1])
 
 
 class Top3DriftMarkerTests(unittest.TestCase):
