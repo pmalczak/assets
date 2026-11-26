@@ -427,6 +427,49 @@ def annotate_asset_top3_drift(
     return annotated
 
 
+def weight_operation(*, previous: float, current: float, eps: float = 1e-9) -> str:
+    """Buy / Sell / blank from target weight change (official U7 → as_today)."""
+    if current > previous + eps:
+        return "Buy"
+    if current < previous - eps:
+        return "Sell"
+    return ""
+
+
+def _allocation_weights_by_ticker(allocation: pd.DataFrame) -> dict[str, float]:
+    return {
+        str(row["Ticker"]): float(row["Weight"])
+        for row in allocation.to_dict("records")
+    }
+
+
+def annotate_operations_vs_previous(
+    ranking: pd.DataFrame,
+    allocation: pd.DataFrame,
+    previous_allocation: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Tag ranking + allocation rows with Operation vs previous target weights."""
+    prev_w = _allocation_weights_by_ticker(previous_allocation)
+    curr_w = _allocation_weights_by_ticker(allocation)
+    ranked = ranking.copy()
+    ranked["Operation"] = [
+        weight_operation(
+            previous=prev_w.get(str(row["Ticker"]), 0.0),
+            current=curr_w.get(str(row["Ticker"]), 0.0),
+        )
+        for row in ranked.to_dict("records")
+    ]
+    allocated = allocation.copy()
+    allocated["Operation"] = [
+        weight_operation(
+            previous=prev_w.get(str(row["Ticker"]), 0.0),
+            current=float(row["Weight"]),
+        )
+        for row in allocated.to_dict("records")
+    ]
+    return ranked, allocated
+
+
 def scoring_lookback_offsets() -> list[int]:
     """Offsets used by momentum_score (positional month shifts), descending."""
     return sorted({0, *MOMENTUM_PERIODS}, reverse=True)
@@ -628,10 +671,16 @@ def run_u7_ranking(*, include_partial_month: bool = False) -> dict:
             as_of_limit=last_completed_month_end(),
         )
         if official["ready"]:
-            result["ranking"] = annotate_asset_top3_drift(
+            ranking, allocation = annotate_operations_vs_previous(
                 result["ranking"],
+                result["allocation"],
+                official["allocation"],
+            )
+            result["ranking"] = annotate_asset_top3_drift(
+                ranking,
                 official["ranking"],
             )
+            result["allocation"] = allocation
     return result
 
 
@@ -674,12 +723,16 @@ def print_current_universe7_ranking(
     print("CURRENT UNIVERSE 7 RANKING")
     print(f"Signal date: {result['signal_date']}")
     print("=" * 70)
-    print(
+    has_operation = "Operation" in ranking.columns
+    header = (
         f"{'Rank':<5} {'Asset':<{asset_width}} {'3M':>8} {'6M':>8} {'12M':>8} "
         f"{'Score':>8} {'Price':>10} {'SMA10':>10} {'Trend':>7} {'TOP3':>5}"
     )
+    if has_operation:
+        header += f" {'Operation':>9}"
+    print(header)
     for row in ranking.to_dict("records"):
-        print(
+        line = (
             f"{row['Rank']:<5} {row['Asset']:<{asset_width}} "
             f"{row['3M']:>8.2%} "
             f"{row['6M']:>8.2%} "
@@ -690,6 +743,9 @@ def print_current_universe7_ranking(
             f"{row['Trend']:>7} "
             f"{'*' if row['TOP3'] else '':>5}"
         )
+        if has_operation:
+            line += f" {row['Operation']:>9}"
+        print(line)
 
     print("\n")
     print("=" * 70)
@@ -697,8 +753,12 @@ def print_current_universe7_ranking(
     print("=" * 70)
     allocation = result["allocation"]
     allocation_width = max(asset_width, *(len(str(name)) for name in allocation["Asset"]))
+    alloc_has_op = "Operation" in allocation.columns
     for row in allocation.to_dict("records"):
-        print(f"{row['Asset']:<{allocation_width}} {row['Weight']:>8.2%}")
+        line = f"{row['Asset']:<{allocation_width}} {row['Weight']:>8.2%}"
+        if alloc_has_op:
+            line += f"  {row['Operation']}"
+        print(line)
 
 
 def main() -> None:

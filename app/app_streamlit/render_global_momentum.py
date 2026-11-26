@@ -27,7 +27,7 @@ from global_momentum.global_momentum_u8_ranking import (
 )
 
 _RANKING_SCHEMA = 7
-_RANKING_AS_TODAY_SCHEMA = 6
+_RANKING_AS_TODAY_SCHEMA = 7
 _BENCHMARK_SCHEMA = 9
 _ALL_WORLD_LABEL = "All-World Buy & Hold"
 _SECTION_RANKING = "Ranking U7"
@@ -135,7 +135,9 @@ def _render_ranking(*, as_today: bool = False) -> None:
         st.caption(
             "Nowcast MTD: ten sam ranking 3/6/12M + SMA10, ostatnia obserwacja = "
             "ostatni wspólny close ETF. To nie jest sygnał rebalance na nowy miesiąc. "
-            "Przy nazwie vs Ranking U7: * zostaje w TOP3, + weszło, - wypadło."
+            "Przy nazwie vs Ranking U7: * zostaje w TOP3, + weszło, - wypadło. "
+            "Operation = Buy/Sell vs alokacja oficjalnego U7 "
+            "(puste = bez zmiany wagi; TOP3+FAIL = Sell → Safe)."
         )
 
     if not result["ready"]:

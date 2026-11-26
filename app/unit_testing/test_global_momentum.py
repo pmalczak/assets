@@ -9,12 +9,14 @@ from global_momentum.global_momentum_u8_ranking import (
     RANKING_TICKERS,
     SAFE_RANKING_TICKER,
     annotate_asset_top3_drift,
+    annotate_operations_vs_previous,
     build_scoring_normalized_paths,
     compute_current_universe7_ranking,
     last_common_close_date,
     scoring_anchor_label,
     scoring_path_sample_index,
     top3_drift_marker,
+    weight_operation,
     with_partial_month_stub,
 )
 
@@ -257,6 +259,49 @@ class Top3DriftMarkerTests(unittest.TestCase):
             list(annotated["Asset"]),
             ["* USA", "- Europe", "+ Bonds", "- Japan", "Gold"],
         )
+
+
+class AllocationOperationTests(unittest.TestCase):
+    def test_weight_operation_truth_table(self):
+        self.assertEqual(weight_operation(previous=0.0, current=1 / 3), "Buy")
+        self.assertEqual(weight_operation(previous=1 / 3, current=0.0), "Sell")
+        self.assertEqual(weight_operation(previous=1 / 3, current=1 / 3), "")
+
+    def test_annotate_operations_vs_previous_weights(self):
+        previous_allocation = pd.DataFrame(
+            {
+                "Asset": ["PL", "SXRS", "Japan", "Safe"],
+                "Ticker": ["PL.WA", "SXRS.DE", "EUNN.DE", "EXVM.DE"],
+                "Weight": [1 / 3, 1 / 3, 1 / 3, 0.0],
+            }
+        )
+        allocation = pd.DataFrame(
+            {
+                "Asset": ["PL", "SXRS", "Europe", "Safe"],
+                "Ticker": ["PL.WA", "SXRS.DE", "EUNK.DE", "EXVM.DE"],
+                "Weight": [1 / 3, 0.0, 1 / 3, 1 / 3],
+            }
+        )
+        ranking = pd.DataFrame(
+            {
+                "Asset": ["PL", "SXRS", "Europe", "Japan", "USA"],
+                "Ticker": ["PL.WA", "SXRS.DE", "EUNK.DE", "EUNN.DE", "SXR8.DE"],
+                "TOP3": [True, True, True, False, False],
+            }
+        )
+        ranked, allocated = annotate_operations_vs_previous(
+            ranking,
+            allocation,
+            previous_allocation,
+        )
+        by_ticker = dict(zip(ranked["Ticker"], ranked["Operation"]))
+        self.assertEqual(by_ticker["PL.WA"], "")
+        self.assertEqual(by_ticker["SXRS.DE"], "Sell")
+        self.assertEqual(by_ticker["EUNK.DE"], "Buy")
+        self.assertEqual(by_ticker["EUNN.DE"], "Sell")
+        self.assertEqual(by_ticker["SXR8.DE"], "")
+        safe_op = allocated.loc[allocated["Ticker"] == "EXVM.DE", "Operation"].iloc[0]
+        self.assertEqual(safe_op, "Buy")
 
 
 class StrategyComparisonPrepareTests(unittest.TestCase):
